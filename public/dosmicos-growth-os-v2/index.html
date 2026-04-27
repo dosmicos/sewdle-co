@@ -1,0 +1,2783 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dosmicos · Growth OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Manrope:wght@300..800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F4ECD8;
+    --paper: #FBF6EB;
+    --ink: #1F1410;
+    --ink-soft: #4A3328;
+    --ink-mute: #8A6F5E;
+    --terracota: #C8553D;
+    --terracota-deep: #9C3E2C;
+    --bosque: #2D4A3E;
+    --bosque-deep: #1E342B;
+    --mostaza: #D89A3F;
+    --line: rgba(31, 20, 16, 0.14);
+    --line-soft: rgba(31, 20, 16, 0.07);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Manrope', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    pointer-events: none; z-index: 1000;
+    opacity: 0.28;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.08 0 0 0 0 0.06 0 0 0 0.5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    mix-blend-mode: multiply;
+  }
+
+  .deck {
+    position: relative;
+    width: 100vw; height: 100vh;
+    overflow: hidden;
+  }
+
+  .slide {
+    position: absolute; inset: 0;
+    padding: 110px 8vw 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    opacity: 0; pointer-events: none;
+    transform: translateY(16px);
+    transition: opacity 0.55s cubic-bezier(0.22, 1, 0.36, 1),
+                transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    overflow-y: auto;
+  }
+
+  .slide.dense {
+    justify-content: flex-start;
+    padding-top: 100px;
+  }
+
+  .slide.active {
+    opacity: 1; pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  .slide-inner {
+    width: 100%;
+    max-width: 1200px;
+  }
+
+  .slide.active .reveal { animation: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+  .slide.active .d1 { animation-delay: 0.08s; }
+  .slide.active .d2 { animation-delay: 0.18s; }
+  .slide.active .d3 { animation-delay: 0.28s; }
+  .slide.active .d4 { animation-delay: 0.38s; }
+  .slide.active .d5 { animation-delay: 0.48s; }
+  .slide.active .d6 { animation-delay: 0.58s; }
+  .slide.active .d7 { animation-delay: 0.68s; }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ─── Typography primitives ─── */
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--terracota);
+    margin-bottom: 28px;
+  }
+
+  .eyebrow.green { color: var(--bosque); }
+  .eyebrow.mute { color: var(--ink-mute); }
+
+  .title {
+    font-family: 'Manrope', sans-serif;
+    font-weight: 800;
+    font-size: clamp(2.4rem, 4.6vw, 4rem);
+    line-height: 1.04;
+    letter-spacing: -0.028em;
+    color: var(--ink);
+    max-width: 18ch;
+  }
+
+  .title em {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 400;
+    font-variation-settings: 'opsz' 144, 'SOFT' 100;
+    color: var(--terracota);
+    letter-spacing: -0.015em;
+    padding-right: 0.05em;
+  }
+
+  .title-sm {
+    font-size: clamp(2rem, 3.6vw, 3.2rem);
+    max-width: 20ch;
+  }
+
+  .quote {
+    border-left: 3px solid var(--terracota);
+    padding-left: 24px;
+    font-family: 'Manrope', sans-serif;
+    font-weight: 600;
+    font-size: clamp(1.15rem, 1.7vw, 1.5rem);
+    line-height: 1.32;
+    color: var(--ink);
+    margin: 32px 0;
+    max-width: 58ch;
+  }
+
+  .quote.italic {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 400;
+    font-variation-settings: 'opsz' 144, 'SOFT' 100;
+    font-size: clamp(1.3rem, 2vw, 1.8rem);
+    line-height: 1.25;
+  }
+
+  .body {
+    font-family: 'Manrope', sans-serif;
+    font-weight: 400;
+    font-size: 1.04rem;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    max-width: 56ch;
+    margin-top: 24px;
+  }
+
+  .body strong { color: var(--ink); font-weight: 600; }
+
+  /* ─── Tags / Pills ─── */
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 36px;
+  }
+
+  .tag {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 9px 18px;
+    font-family: 'Manrope', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--ink);
+    background: transparent;
+    transition: all 0.2s ease;
+    cursor: default;
+  }
+
+  .tag:hover {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+    transform: translateY(-1px);
+  }
+
+  .tag.solid {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+
+  .tag.solid:hover {
+    background: var(--terracota);
+    border-color: var(--terracota);
+  }
+
+  .tag.warm {
+    border-color: var(--terracota);
+    color: var(--terracota);
+  }
+
+  .tag.warm:hover {
+    background: var(--terracota);
+    color: var(--paper);
+  }
+
+  /* ─── Chrome ─── */
+
+  .chrome {
+    position: fixed;
+    left: 8vw; right: 8vw;
+    z-index: 50;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: none;
+  }
+
+  .chrome.top { top: 36px; }
+  .chrome.bottom { bottom: 36px; }
+
+  .chrome-mark {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--terracota);
+  }
+
+  .chrome-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.66rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+
+  .progress-bar {
+    position: fixed;
+    bottom: 0; left: 0;
+    height: 2px;
+    background: var(--terracota);
+    transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    z-index: 51;
+  }
+
+  .nav {
+    position: fixed;
+    bottom: 30px; right: 8vw;
+    display: flex;
+    gap: 6px;
+    z-index: 60;
+    pointer-events: auto;
+  }
+
+  .nav-btn {
+    width: 32px; height: 32px;
+    border: 1px solid var(--line);
+    background: transparent;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--ink);
+  }
+
+  .nav-btn:hover {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+
+  .nav-btn svg { width: 12px; height: 12px; }
+
+  /* ─── Cover specific ─── */
+
+  .cover {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cover-shapes {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;
+  }
+
+  .shape {
+    position: absolute;
+    border-radius: 50%;
+    opacity: 0.85;
+  }
+
+  .shape-1 {
+    width: 220px; height: 220px;
+    background: var(--terracota);
+    top: 14%; right: 10%;
+    animation: float 9s ease-in-out infinite;
+  }
+
+  .shape-2 {
+    width: 140px; height: 140px;
+    background: #C9B896;
+    bottom: 18%; right: 22%;
+    animation: float 11s ease-in-out infinite reverse;
+  }
+
+  .shape-3 {
+    width: 60px; height: 60px;
+    background: var(--mostaza);
+    top: 30%; right: 32%;
+    animation: float 7s ease-in-out infinite;
+    animation-delay: -2s;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(10px, -14px); }
+  }
+
+  .cover .slide-inner { position: relative; z-index: 2; }
+
+  .cover .title {
+    font-size: clamp(2.6rem, 5.4vw, 4.6rem);
+    max-width: 17ch;
+  }
+
+  /* ─── Hierarchy (Slide 03) ─── */
+
+  .hierarchy {
+    margin-top: 36px;
+    max-width: 720px;
+  }
+
+  .hier-row {
+    display: grid;
+    grid-template-columns: 50px 1fr;
+    align-items: baseline;
+    gap: 24px;
+    padding: 20px 0;
+    border-top: 1px solid var(--line);
+  }
+  .hier-row:last-child { border-bottom: 1px solid var(--line); }
+
+  .hier-num {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 1.4rem;
+    color: var(--terracota);
+    font-weight: 400;
+  }
+
+  .hier-name {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+  .hier-name span {
+    display: block;
+    font-weight: 400;
+    font-size: 0.9rem;
+    color: var(--ink-mute);
+    margin-top: 4px;
+  }
+
+  /* ─── Roles overview (Slide 05) ─── */
+
+  .roles-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 40px;
+    max-width: 1200px;
+  }
+
+  .role-card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 22px 18px;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: all 0.3s ease;
+    cursor: default;
+  }
+
+  .role-card:hover {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+    transform: translateY(-3px);
+  }
+  .role-card:hover .role-num { color: var(--mostaza); }
+  .role-card:hover .role-desc { color: rgba(251, 246, 235, 0.7); }
+
+  .role-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    color: var(--terracota);
+    transition: color 0.3s;
+  }
+
+  .role-name {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: inherit;
+    line-height: 1;
+    margin-top: 14px;
+  }
+
+  .role-desc {
+    font-size: 0.78rem;
+    color: var(--ink-mute);
+    line-height: 1.35;
+    margin-top: 8px;
+    transition: color 0.3s;
+  }
+
+  /* ─── Role detail (Slides 06–10) ─── */
+
+  .role-hero {
+    margin-bottom: 40px;
+  }
+
+  .role-content {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+    margin-top: 24px;
+    max-width: 1200px;
+  }
+
+  .role-content.two { grid-template-columns: repeat(2, 1fr); }
+
+  .role-block {
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+  }
+
+  .role-block .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--terracota);
+    margin-bottom: 14px;
+  }
+
+  .role-block ul {
+    list-style: none;
+  }
+
+  .role-block li {
+    color: var(--ink-soft);
+    font-size: 0.92rem;
+    line-height: 1.45;
+    padding: 4px 0 4px 16px;
+    position: relative;
+  }
+
+  .role-block li::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 12px;
+    width: 8px; height: 1px;
+    background: var(--terracota);
+  }
+
+  /* Weekly base sub-categories (Sebastián) */
+
+  .wb-cat {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--terracota);
+    margin: 14px 0 6px;
+  }
+  .wb-cat:first-of-type { margin-top: 0; }
+
+  .role-block ul.wb-list { margin: 0 0 4px; }
+  .role-block ul.wb-list li {
+    font-size: 0.86rem;
+    padding: 3px 0 3px 16px;
+    line-height: 1.35;
+  }
+
+  /* ─── Week overview (Slide 11) ─── */
+
+  .week-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-top: 36px;
+    max-width: 1200px;
+  }
+
+  .day-card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 22px 20px;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s;
+  }
+
+  .day-card:hover {
+    background: var(--ink); color: var(--paper);
+    border-color: var(--ink);
+    transform: translateY(-3px);
+  }
+  .day-card:hover .day-name { color: var(--paper); }
+  .day-card:hover .day-owner { color: var(--mostaza); }
+  .day-card:hover ul li { color: rgba(251, 246, 235, 0.75); }
+  .day-card:hover ul li::before { background: var(--mostaza); }
+
+  .day-name {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1;
+    transition: color 0.3s;
+  }
+
+  .day-owner {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    color: var(--terracota);
+    margin-top: 8px;
+    transition: color 0.3s;
+  }
+
+  .day-card ul {
+    list-style: none;
+    margin-top: 22px;
+    flex: 1;
+  }
+
+  .day-card ul li {
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    line-height: 1.4;
+    padding: 3px 0 3px 14px;
+    position: relative;
+    transition: color 0.3s;
+  }
+
+  .day-card ul li::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 11px;
+    width: 6px; height: 1px;
+    background: var(--terracota);
+    transition: background 0.3s;
+  }
+
+  /* ─── Lunes blocks (Slide 12) ─── */
+
+  .blocks {
+    margin-top: 24px;
+    max-width: 1200px;
+  }
+
+  .block-row {
+    display: grid;
+    grid-template-columns: 50px 280px 80px 1fr;
+    align-items: baseline;
+    gap: 24px;
+    padding: 16px 0;
+    border-top: 1px solid var(--line);
+    transition: padding 0.2s;
+  }
+  .block-row:last-child { border-bottom: 1px solid var(--line); }
+
+  .block-row.zero {
+    background: rgba(45, 74, 62, 0.06);
+    margin: 0 -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .block-num {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 1.4rem;
+    color: var(--terracota);
+  }
+  .block-row.zero .block-num { color: var(--bosque); }
+
+  .block-name {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+  .block-name span {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-top: 4px;
+  }
+
+  .block-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    color: var(--ink-mute);
+  }
+
+  .block-desc {
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+    line-height: 1.45;
+  }
+
+  .block-output {
+    margin-top: 24px;
+    padding: 16px 20px;
+    background: var(--paper);
+    border-left: 3px solid var(--terracota);
+    font-size: 0.92rem;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    max-width: 1200px;
+  }
+
+  .block-output strong { color: var(--ink); font-weight: 600; }
+
+  /* ─── Block 0 deep dive (Slide 13) ─── */
+
+  .b0-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    margin-top: 28px;
+    max-width: 1200px;
+  }
+
+  .b0-col {
+    border-top: 2px solid var(--bosque);
+    padding-top: 18px;
+  }
+
+  .b0-col .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--bosque);
+    margin-bottom: 16px;
+  }
+
+  .b0-col ul { list-style: none; }
+
+  .b0-col li {
+    color: var(--ink-soft);
+    font-size: 0.94rem;
+    line-height: 1.5;
+    padding: 6px 0 6px 18px;
+    position: relative;
+  }
+
+  .b0-col li::before {
+    content: '→';
+    position: absolute; left: 0;
+    color: var(--bosque);
+    font-weight: 600;
+  }
+
+  .b0-col li.q::before { content: '?'; color: var(--terracota); font-weight: 700; }
+
+  /* ─── VoC (Slide 14) ─── */
+
+  .voc-flow {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 24px;
+    margin-top: 28px;
+    align-items: start;
+    max-width: 1200px;
+  }
+
+  .voc-side {
+    border-top: 2px solid var(--terracota);
+    padding-top: 18px;
+  }
+
+  .voc-side.outputs { border-color: var(--bosque); }
+
+  .voc-side .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--terracota);
+    margin-bottom: 16px;
+  }
+  .voc-side.outputs .label { color: var(--bosque); }
+
+  .voc-side ul { list-style: none; }
+
+  .voc-side li {
+    color: var(--ink-soft);
+    font-size: 0.92rem;
+    line-height: 1.5;
+    padding: 5px 0 5px 16px;
+    position: relative;
+  }
+
+  .voc-side li::before {
+    content: '·';
+    position: absolute; left: 4px;
+    color: var(--terracota);
+    font-weight: 800;
+    top: 1px;
+  }
+  .voc-side.outputs li::before { color: var(--bosque); }
+
+  .voc-arrow {
+    align-self: center;
+    padding-top: 32px;
+    color: var(--terracota);
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 1.4rem;
+  }
+
+  .voc-example {
+    margin-top: 28px;
+    padding: 24px 28px;
+    background: var(--ink);
+    color: var(--paper);
+    max-width: 1100px;
+  }
+
+  .voc-example .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--mostaza);
+    margin-bottom: 12px;
+  }
+
+  .voc-example .voc-quote {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 1.2rem;
+    line-height: 1.4;
+    color: var(--paper);
+    margin-bottom: 16px;
+  }
+
+  .voc-example .splits {
+    display: flex; flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .voc-example .splits span {
+    border: 1px solid rgba(251, 246, 235, 0.3);
+    color: var(--paper);
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+  }
+
+  /* ─── Lanes (Slide 15) ─── */
+
+  .lanes-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-top: 32px;
+    max-width: 1200px;
+  }
+
+  .lane-card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 24px 22px;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s;
+    position: relative;
+  }
+
+  .lane-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+
+  .lane-card:nth-child(1)::before { background: var(--bosque); }
+  .lane-card:nth-child(2)::before { background: var(--terracota); }
+  .lane-card:nth-child(3)::before { background: var(--mostaza); }
+  .lane-card:nth-child(4)::before { background: var(--ink); }
+
+  .lane-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 40px -20px rgba(31, 20, 16, 0.18);
+  }
+
+  .lane-num {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 1.3rem;
+    color: var(--terracota);
+    margin-top: 6px;
+  }
+  .lane-card:nth-child(1) .lane-num { color: var(--bosque); }
+  .lane-card:nth-child(3) .lane-num { color: var(--mostaza); }
+  .lane-card:nth-child(4) .lane-num { color: var(--ink); }
+
+  .lane-name {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-top: 4px;
+    line-height: 1.2;
+    color: var(--ink);
+  }
+
+  .lane-name small {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-top: 6px;
+  }
+
+  .lane-goal {
+    font-family: 'Manrope', sans-serif;
+    font-size: 0.84rem;
+    color: var(--ink-soft);
+    line-height: 1.45;
+    margin-top: 14px;
+  }
+
+  .lane-card ul {
+    list-style: none;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .lane-card ul li {
+    font-size: 0.78rem;
+    color: var(--ink-mute);
+    line-height: 1.45;
+    padding: 2px 0 2px 12px;
+    position: relative;
+  }
+
+  .lane-card ul li::before {
+    content: '·';
+    position: absolute; left: 0;
+    color: var(--terracota);
+    font-weight: 800;
+  }
+
+  /* ─── Mix bars (Slide 16) ─── */
+
+  .mix-bars {
+    display: flex; flex-direction: column;
+    gap: 14px;
+    margin-top: 32px;
+    max-width: 980px;
+  }
+
+  .mix-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 240px;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .mix-pct {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--terracota);
+  }
+
+  .mix-bar {
+    height: 28px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mix-bar-fill {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    background: var(--terracota);
+    width: 0;
+    transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .slide.active .mix-bar-fill { width: var(--w); }
+
+  .mix-row:nth-child(2) .mix-bar-fill { background: var(--bosque); }
+  .mix-row:nth-child(3) .mix-bar-fill { background: var(--mostaza); }
+  .mix-row:nth-child(4) .mix-bar-fill { background: var(--ink); }
+  .mix-row:nth-child(5) .mix-bar-fill { background: var(--terracota-deep); }
+
+  .mix-label {
+    font-family: 'Manrope', sans-serif;
+    font-weight: 600;
+    color: var(--ink);
+    font-size: 0.95rem;
+    line-height: 1.3;
+  }
+  .mix-label small {
+    display: block;
+    font-weight: 400;
+    font-size: 0.74rem;
+    color: var(--ink-mute);
+    margin-top: 2px;
+  }
+
+  /* ─── Series (Slide 17) ─── */
+
+  .series-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 32px;
+    max-width: 1200px;
+  }
+
+  .serie-card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 22px 24px;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    transition: all 0.3s;
+  }
+
+  .serie-card:hover {
+    background: var(--ink);
+    color: var(--paper);
+    transform: scale(1.02);
+  }
+  .serie-card:hover .serie-num,
+  .serie-card:hover .serie-goal { color: var(--mostaza); }
+
+  .serie-num {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 1.2rem;
+    color: var(--terracota);
+  }
+
+  .serie-title {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.25;
+    margin-top: auto;
+    padding-top: 14px;
+    color: inherit;
+  }
+
+  .serie-goal {
+    font-size: 0.8rem;
+    color: var(--ink-mute);
+    margin-top: 8px;
+    line-height: 1.4;
+  }
+
+  /* ─── UGC tiers (Slide 18) ─── */
+
+  .tiers-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 32px;
+    max-width: 1100px;
+  }
+
+  .tier-card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 32px 28px;
+    min-height: 240px;
+    transition: all 0.3s;
+  }
+
+  .tier-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 40px -20px rgba(31, 20, 16, 0.18);
+  }
+
+  .tier-letter {
+    font-family: 'Fraunces', serif;
+    font-size: 4.5rem;
+    line-height: 0.85;
+    color: var(--terracota);
+    font-weight: 400;
+  }
+
+  .tier-card:nth-child(2) .tier-letter { color: var(--mostaza); }
+  .tier-card:nth-child(3) .tier-letter { color: var(--bosque); }
+
+  .tier-name {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-top: 14px;
+  }
+
+  .tier-desc {
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-top: 10px;
+  }
+
+  /* ─── CMD (Slide 19) ─── */
+
+  .cmd-layout {
+    display: grid;
+    grid-template-columns: 1fr 1.4fr;
+    gap: 50px;
+    margin-top: 28px;
+    max-width: 1200px;
+  }
+
+  .cmd-section h4 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--terracota);
+    margin-bottom: 16px;
+  }
+
+  .cmd-model {
+    display: grid; gap: 10px;
+    font-size: 0.96rem;
+    color: var(--ink-soft);
+  }
+
+  .cmd-model strong {
+    color: var(--ink);
+    font-weight: 700;
+  }
+
+  .cmd-loop {
+    list-style: none;
+    counter-reset: l;
+    display: grid;
+    gap: 8px;
+    margin-top: 28px;
+  }
+
+  .cmd-loop li {
+    counter-increment: l;
+    padding-left: 28px;
+    position: relative;
+    color: var(--ink-soft);
+    font-size: 0.92rem;
+    line-height: 1.4;
+  }
+
+  .cmd-loop li::before {
+    content: counter(l);
+    position: absolute; left: 0;
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    color: var(--terracota);
+    font-size: 1rem;
+  }
+
+  .cmd-numbers {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+
+  .cmd-stat {
+    border-top: 1px solid var(--line);
+    padding-top: 12px;
+  }
+
+  .cmd-num {
+    font-family: 'Manrope', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--terracota);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  .cmd-label {
+    color: var(--ink-soft);
+    font-size: 0.8rem;
+    margin-top: 6px;
+    line-height: 1.3;
+  }
+
+  .cmd-note {
+    margin-top: 22px;
+    padding: 14px 18px;
+    border-left: 2px solid var(--mostaza);
+    font-size: 0.82rem;
+    color: var(--ink-mute);
+    line-height: 1.5;
+  }
+
+  /* ─── Tracker (Slide 20) ─── */
+
+  .tracker {
+    margin-top: 24px;
+    max-width: 1200px;
+  }
+
+  .tracker-row {
+    margin-bottom: 14px;
+  }
+
+  .tracker-row .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--terracota);
+    margin-bottom: 6px;
+  }
+
+  .tracker-row .label.green { color: var(--bosque); }
+  .tracker-row .label.amber { color: var(--mostaza); }
+
+  .tracker-cells {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+  }
+
+  .tracker-cell {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 10px 8px;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    min-height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center;
+    transition: all 0.2s;
+    line-height: 1.2;
+  }
+
+  .tracker-cell:hover {
+    background: var(--terracota);
+    color: var(--paper);
+    border-color: var(--terracota);
+  }
+
+  .tracker-cell.green {
+    background: var(--bosque);
+    color: var(--paper);
+    border-color: var(--bosque);
+    font-weight: 600;
+  }
+  .tracker-cell.green:hover { background: var(--bosque-deep); }
+
+  .tracker-cell.amber {
+    background: var(--mostaza);
+    color: var(--ink);
+    border-color: var(--mostaza);
+    font-weight: 600;
+  }
+
+  /* ─── Reglas (Slide 21) ─── */
+
+  .reglas-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 50px;
+    margin-top: 24px;
+    max-width: 1200px;
+  }
+
+  .reglas-col h4 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--terracota);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--terracota);
+  }
+
+  .reglas-col.kill h4 {
+    color: var(--bosque);
+    border-color: var(--bosque);
+  }
+
+  .regla {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.92rem;
+    line-height: 1.45;
+    color: var(--ink-soft);
+  }
+
+  .regla strong { color: var(--ink); font-weight: 700; }
+
+  .regla::before {
+    content: '→ ';
+    color: var(--terracota);
+    font-weight: 600;
+  }
+
+  .reglas-col.kill .regla::before { color: var(--bosque); }
+
+  /* ─── Agentes (Slide 22) ─── */
+
+  .agents-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+    margin-top: 28px;
+    max-width: 1200px;
+  }
+
+  .agent {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 16px;
+    padding: 16px 18px;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    transition: all 0.25s;
+    align-items: start;
+  }
+
+  .agent:hover {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+
+  .agent:hover .agent-num { color: var(--mostaza); }
+  .agent:hover .agent-name { color: var(--paper); }
+  .agent:hover .agent-desc { color: rgba(251, 246, 235, 0.7); }
+
+  .agent-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--terracota);
+    margin-top: 2px;
+  }
+
+  .agent-name {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+
+  .agent-desc {
+    font-size: 0.82rem;
+    color: var(--ink-mute);
+    margin-top: 4px;
+    line-height: 1.45;
+  }
+
+  /* ─── Riesgos (Slide 23) ─── */
+
+  .riesgos-list {
+    margin-top: 24px;
+    max-width: 1200px;
+  }
+
+  .riesgo {
+    display: grid;
+    grid-template-columns: 50px 1fr 1.4fr;
+    gap: 28px;
+    padding: 16px 0;
+    border-top: 1px solid var(--line);
+    align-items: baseline;
+  }
+  .riesgo:last-child { border-bottom: 1px solid var(--line); }
+
+  .riesgo-num {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 1.3rem;
+    color: var(--terracota);
+  }
+
+  .riesgo-name {
+    font-family: 'Manrope', sans-serif;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.3;
+  }
+
+  .riesgo-fix {
+    font-size: 0.88rem;
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+
+  .riesgo-fix::before {
+    content: 'Mitigación · ';
+    color: var(--terracota);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.66rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  /* ─── Rollout (Slide 24) ─── */
+
+  .rollout-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-top: 32px;
+    max-width: 1200px;
+  }
+
+  .phase {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 26px 24px;
+    transition: all 0.3s;
+  }
+
+  .phase.now {
+    border-color: var(--terracota);
+    border-width: 1px 1px 1px 4px;
+  }
+
+  .phase-when {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+  }
+
+  .phase.now .phase-when { color: var(--terracota); }
+
+  .phase-title {
+    font-family: 'Manrope', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-top: 6px;
+    margin-bottom: 16px;
+    line-height: 1.2;
+  }
+
+  .phase ul {
+    list-style: none;
+  }
+
+  .phase ul li {
+    font-size: 0.86rem;
+    color: var(--ink-soft);
+    line-height: 1.45;
+    padding: 4px 0 4px 16px;
+    position: relative;
+  }
+
+  .phase ul li::before {
+    content: '→';
+    position: absolute; left: 0;
+    color: var(--terracota);
+  }
+  .phase.next ul li::before { color: var(--mostaza); }
+  .phase.later ul li::before { color: var(--bosque); }
+
+  /* ─── 90 days (Slide 25) ─── */
+
+  .ninety {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 32px;
+    margin-top: 24px;
+    max-width: 1200px;
+  }
+
+  .ninety-item {
+    padding: 10px 0 10px 24px;
+    border-bottom: 1px solid var(--line-soft);
+    position: relative;
+    font-size: 0.92rem;
+    color: var(--ink-soft);
+    line-height: 1.4;
+  }
+
+  .ninety-item::before {
+    content: '✓';
+    position: absolute; left: 0;
+    color: var(--terracota);
+    font-weight: 700;
+  }
+
+  .ninety-item strong { color: var(--ink); font-weight: 700; }
+
+  /* ─── Final slide (Slide 26) ─── */
+
+  .final {
+    background: var(--ink);
+    color: var(--paper);
+    text-align: left;
+  }
+
+  .final .slide-inner { max-width: 1100px; }
+
+  .final .eyebrow { color: var(--mostaza); }
+
+  .final .title {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 400;
+    font-variation-settings: 'opsz' 144, 'SOFT' 100;
+    font-size: clamp(1.6rem, 2.6vw, 2.4rem);
+    line-height: 1.3;
+    color: var(--paper);
+    max-width: 50ch;
+    letter-spacing: -0.01em;
+  }
+
+  .final .title em {
+    color: var(--mostaza);
+  }
+
+  .final-sig {
+    margin-top: 60px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(251, 246, 235, 0.55);
+  }
+
+  /* ─── Flow diagram (Slide 02) ─── */
+
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 32px;
+    align-items: center;
+    max-width: 1200px;
+  }
+
+  .flow-step {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 10px 16px;
+    font-family: 'Manrope', sans-serif;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--ink);
+    transition: all 0.2s;
+    border-radius: 4px;
+  }
+
+  .flow-step:hover {
+    background: var(--terracota);
+    color: var(--paper);
+    border-color: var(--terracota);
+  }
+
+  .flow-arrow {
+    color: var(--ink-mute);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+  }
+
+  .flow-loop {
+    color: var(--terracota);
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-size: 0.95rem;
+    margin-left: 6px;
+  }
+
+  /* ─── Help overlay ─── */
+
+  .help-overlay {
+    position: fixed; inset: 0;
+    background: rgba(31, 20, 16, 0.95);
+    color: var(--paper);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 200;
+    padding: 8vh;
+  }
+
+  .help-overlay.show { display: flex; }
+
+  .help-card { max-width: 520px; }
+
+  .help-card h3 {
+    font-family: 'Manrope', sans-serif;
+    font-weight: 700;
+    font-size: 1.6rem;
+    margin-bottom: 28px;
+    color: var(--mostaza);
+  }
+
+  .help-card .key-row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(251, 246, 235, 0.15);
+    font-size: 0.92rem;
+  }
+
+  .help-card kbd {
+    font-family: 'JetBrains Mono', monospace;
+    background: rgba(251, 246, 235, 0.08);
+    padding: 5px 10px;
+    border-radius: 3px;
+    font-size: 0.74rem;
+    border: 1px solid rgba(251, 246, 235, 0.18);
+  }
+
+  /* ─── Hide chrome on cover ─── */
+
+  .slide.cover ~ .chrome.top { display: flex; }
+
+  /* ─── Responsive ─── */
+
+  @media (max-width: 1100px) {
+    .roles-grid { grid-template-columns: repeat(3, 1fr); }
+    .role-content { grid-template-columns: 1fr 1fr; }
+    .role-content.two { grid-template-columns: 1fr; }
+    .week-grid { grid-template-columns: repeat(3, 1fr); }
+    .lanes-grid { grid-template-columns: repeat(2, 1fr); }
+    .series-grid { grid-template-columns: repeat(2, 1fr); }
+    .rollout-grid { grid-template-columns: 1fr; }
+    .b0-grid, .voc-flow, .reglas-grid, .ninety { grid-template-columns: 1fr; }
+    .voc-arrow { display: none; }
+    .agents-grid { grid-template-columns: 1fr; }
+    .cmd-layout { grid-template-columns: 1fr; }
+    .tracker-cells { grid-template-columns: repeat(3, 1fr); }
+    .block-row { grid-template-columns: 40px 1fr 70px; }
+    .block-row .block-desc { grid-column: 1 / -1; padding-left: 56px; padding-top: 4px; }
+    .riesgo { grid-template-columns: 40px 1fr; }
+    .riesgo .riesgo-fix { grid-column: 2 / 3; }
+  }
+
+  @media (max-width: 700px) {
+    .slide { padding: 90px 6vw 80px; }
+    .roles-grid, .week-grid, .lanes-grid, .series-grid, .tiers-grid { grid-template-columns: 1fr; }
+    .role-content { grid-template-columns: 1fr; }
+    .mix-row { grid-template-columns: 50px 1fr; }
+    .mix-row .mix-label { grid-column: 1 / -1; }
+    .tracker-cells { grid-template-columns: repeat(2, 1fr); }
+    .cmd-numbers { grid-template-columns: 1fr 1fr; }
+    .ninety { grid-template-columns: 1fr; }
+    .chrome { left: 6vw; right: 6vw; }
+    .nav { right: 6vw; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Chrome -->
+<div class="chrome top">
+  <span class="chrome-mark">Dosmicos</span>
+  <span class="chrome-meta"><span id="chrome-cur">01</span> &nbsp;/&nbsp; 26</span>
+</div>
+
+<div class="chrome bottom">
+  <span class="chrome-meta">Abril 2026</span>
+  <span class="chrome-meta">Documento interno · Growth OS v1.0</span>
+</div>
+
+<div class="progress-bar" id="progress"></div>
+
+<div class="nav">
+  <button class="nav-btn" id="btn-help" title="Atajos (?)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+  </button>
+  <button class="nav-btn" id="btn-prev" title="Anterior (←)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+  </button>
+  <button class="nav-btn" id="btn-next" title="Siguiente (→)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+  </button>
+</div>
+
+<div class="help-overlay" id="help-overlay">
+  <div class="help-card">
+    <h3>Cómo navegar</h3>
+    <div class="key-row"><kbd>→ / Espacio</kbd><span>Siguiente slide</span></div>
+    <div class="key-row"><kbd>←</kbd><span>Slide anterior</span></div>
+    <div class="key-row"><kbd>Inicio / Fin</kbd><span>Primera / última</span></div>
+    <div class="key-row"><kbd>F</kbd><span>Pantalla completa</span></div>
+    <div class="key-row"><kbd>?</kbd><span>Mostrar esta ayuda</span></div>
+  </div>
+</div>
+
+<div class="deck" id="deck">
+
+  <!-- 01 COVER -->
+  <section class="slide cover active" data-i="1">
+    <div class="cover-shapes">
+      <div class="shape shape-1"></div>
+      <div class="shape shape-2"></div>
+      <div class="shape shape-3"></div>
+    </div>
+    <div class="slide-inner">
+      <div class="eyebrow reveal d1">Plan operativo · Equipo de growth</div>
+      <h1 class="title reveal d2">Convertir contenido en un <em>sistema de crecimiento</em>.</h1>
+      <div class="quote reveal d3">Dosmicos no vende solo ropa infantil. Vende infancia protegida, bonita, cómoda y memorable.</div>
+      <div class="tags reveal d4">
+        <span class="tag">Marca</span>
+        <span class="tag">Contenido orgánico</span>
+        <span class="tag">UGC</span>
+        <span class="tag">Afiliadas CMD</span>
+        <span class="tag">Email</span>
+        <span class="tag">Pauta</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 IDEA CENTRAL -->
+  <section class="slide dense" data-i="2">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">La idea central</div>
+      <h1 class="title reveal d1">Marketing como un sistema semanal repetible.</h1>
+      <div class="body reveal d2">El equipo no opera como "hagamos posts". Opera como un loop que aprende cada semana:</div>
+      <div class="flow reveal d3">
+        <span class="flow-step">Negocio</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">Voz del cliente</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">Investigación</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">Ideas</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">Producción</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">Publicación</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">Medición</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">UGC · Email · Pauta</span>
+        <span class="flow-arrow">→</span>
+        <span class="flow-step">Aprendizaje</span>
+        <span class="flow-loop">↻</span>
+      </div>
+      <div class="quote italic reveal d4">La pregunta no es "¿qué publicamos?". Es: ¿qué aprendimos, qué se repite, qué se mata, qué viaja al resto del sistema?</div>
+    </div>
+  </section>
+
+  <!-- 03 PRINCIPIO CLAVE -->
+  <section class="slide dense" data-i="3">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Principio clave</div>
+      <h1 class="title reveal d1">No todas las métricas <em>valen lo mismo</em>.</h1>
+      <div class="body reveal d2">Reach, saves y clicks sirven. Pero hay un orden que define qué es ganador de verdad.</div>
+      <div class="hierarchy">
+        <div class="hier-row reveal d3">
+          <span class="hier-num">i</span>
+          <div class="hier-name">Contribution Margin<span>Lo que queda después de costo, fulfillment y comisiones</span></div>
+        </div>
+        <div class="hier-row reveal d3">
+          <span class="hier-num">ii</span>
+          <div class="hier-name">MER · AMER · CAC<span>Eficiencia del marketing total, no solo de Meta</span></div>
+        </div>
+        <div class="hier-row reveal d4">
+          <span class="hier-num">iii</span>
+          <div class="hier-name">Revenue por producto<span>Qué SKUs movió el contenido, no solo cuánto vendió</span></div>
+        </div>
+        <div class="hier-row reveal d4">
+          <span class="hier-num">iv</span>
+          <div class="hier-name">ROAS por canal<span>Meta, Google, TikTok — cada uno con su umbral</span></div>
+        </div>
+        <div class="hier-row reveal d5">
+          <span class="hier-num">v</span>
+          <div class="hier-name">Métricas de contenido<span>Reach, saves, comentarios, ER, clicks</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 NORTE DE MARCA -->
+  <section class="slide" data-i="4">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Norte de marca</div>
+      <h1 class="title reveal d1">Lo que <em>sí</em> vendemos.</h1>
+      <div class="quote reveal d2">Dosmicos no vende solo ropa infantil. Vende infancia protegida, bonita, cómoda y memorable.</div>
+      <div class="tags reveal d3">
+        <span class="tag">Infancia protegida</span>
+        <span class="tag">Comodidad</span>
+        <span class="tag">Abrigo</span>
+        <span class="tag">Ternura</span>
+        <span class="tag">Recuerdos</span>
+        <span class="tag">Nombres</span>
+        <span class="tag">Animales</span>
+        <span class="tag">Momentos reales de mamá</span>
+      </div>
+      <div class="quote italic reveal d4" style="margin-top: 50px;">Premium sí. Fría o no humana, no.</div>
+    </div>
+  </section>
+
+  <!-- 05 ROLES OVERVIEW -->
+  <section class="slide dense" data-i="5">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Acto II · Roles</div>
+      <h1 class="title reveal d1">Cinco roles, <em>un solo sistema</em>.</h1>
+      <div class="body reveal d2">Cada quien con un mandato claro. Si el sistema falla es porque alguien está cargando lo que no le toca, o ejecutando sin pensar.</div>
+      <div class="roles-grid">
+        <div class="role-card reveal d3">
+          <div class="role-num">01</div>
+          <div>
+            <div class="role-name">Julián</div>
+            <div class="role-desc">Estrategia, negocio y decisiones</div>
+          </div>
+        </div>
+        <div class="role-card reveal d3">
+          <div class="role-num">02</div>
+          <div>
+            <div class="role-name">Ana María</div>
+            <div class="role-desc">Investigación, ideas, hooks y dirección</div>
+          </div>
+        </div>
+        <div class="role-card reveal d4">
+          <div class="role-num">03</div>
+          <div>
+            <div class="role-name">Angie</div>
+            <div class="role-desc">Operación, calendario y tracker</div>
+          </div>
+        </div>
+        <div class="role-card reveal d4">
+          <div class="role-num">04</div>
+          <div>
+            <div class="role-name">Sebastián</div>
+            <div class="role-desc">UGC, afiliadas, email y voz del cliente</div>
+          </div>
+        </div>
+        <div class="role-card reveal d5">
+          <div class="role-num">05</div>
+          <div>
+            <div class="role-name">Invade</div>
+            <div class="role-desc">Sistema visual y premium perception</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 JULIÁN -->
+  <section class="slide dense" data-i="6">
+    <div class="slide-inner">
+      <div class="role-hero">
+        <div class="eyebrow reveal">Rol 01 · Estrategia y decisiones</div>
+        <h1 class="title reveal d1">Julián.</h1>
+        <div class="quote reveal d2">No carga la operación diaria. Conecta el sistema con el negocio: margen, MER, CAC, inventario, cash. Decide qué se escala y qué se mata.</div>
+      </div>
+      <div class="role-content two">
+        <div class="role-block reveal d3">
+          <div class="label">Responsabilidades</div>
+          <ul>
+            <li>Llevar datos del Growth Manager al lunes</li>
+            <li>Definir prioridades de negocio</li>
+            <li>Decidir qué se escala y qué se mata</li>
+            <li>Conectar marketing con pauta, inventario y cash</li>
+            <li>Liderar la revisión del lunes</li>
+            <li>Proteger la dirección de marca</li>
+          </ul>
+        </div>
+        <div class="role-block reveal d4">
+          <div class="label">Decisiones de la semana</div>
+          <ul>
+            <li>Qué producto empujar</li>
+            <li>Qué winner de pauta necesita apoyo orgánico</li>
+            <li>Qué ángulo se vuelve email</li>
+            <li>Qué idea se manda a UGC</li>
+            <li>Qué se convierte en reto CMD</li>
+            <li>Qué no vale la pena producir aunque sea "bonito"</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 ANA MARÍA -->
+  <section class="slide dense" data-i="7">
+    <div class="slide-inner">
+      <div class="role-hero">
+        <div class="eyebrow reveal">Rol 02 · Investigación, ideas y dirección</div>
+        <h1 class="title reveal d1">Ana María.</h1>
+        <div class="quote reveal d2">No produce volumen infinito. Trae pensamiento creativo de calidad. La IA genera opciones; ella cura, escoge y afina.</div>
+      </div>
+      <div class="role-content">
+        <div class="role-block reveal d3">
+          <div class="label">Carga semanal</div>
+          <ul>
+            <li>2–3 referencias</li>
+            <li>3–5 ideas fuertes</li>
+            <li>6–10 hooks o primeros frames</li>
+            <li>1–2 conceptos de carrusel</li>
+            <li>1–2 conceptos de reel</li>
+            <li>1 hipótesis creativa principal</li>
+          </ul>
+        </div>
+        <div class="role-block reveal d4">
+          <div class="label">Inputs para sus ideas</div>
+          <ul>
+            <li>Bloque 0 del lunes (negocio)</li>
+            <li>Voice of Customer del viernes</li>
+            <li>Comentarios y DMs</li>
+            <li>Tendencias y referencias</li>
+            <li>Marca con Invade</li>
+            <li>Paid winners de la semana</li>
+          </ul>
+        </div>
+        <div class="role-block reveal d5">
+          <div class="label">KPIs</div>
+          <ul>
+            <li>Calidad de ideas</li>
+            <li>Hooks testeados</li>
+            <li>Saves y comentarios generados</li>
+            <li>Series creadas</li>
+            <li>Consistencia visual</li>
+            <li>Mejora del estándar creativo</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 08 ANGIE -->
+  <section class="slide dense" data-i="8">
+    <div class="slide-inner">
+      <div class="role-hero">
+        <div class="eyebrow reveal">Rol 03 · Operación y ejecución</div>
+        <h1 class="title reveal d1">Angie.</h1>
+        <div class="quote reveal d2">Dueña de que el sistema se mueva. No carga la estrategia creativa. Convierte ideas en operación, mide, recoge inputs reales del público.</div>
+      </div>
+      <div class="role-content">
+        <div class="role-block reveal d3">
+          <div class="label">Responsabilidades</div>
+          <ul>
+            <li>Calendario semanal</li>
+            <li>Producción y coordinación</li>
+            <li>Publicación y scheduling</li>
+            <li>Tracker actualizado</li>
+            <li>Recoger comentarios y DMs</li>
+            <li>Alimentar aprendizajes al lunes</li>
+          </ul>
+        </div>
+        <div class="role-block reveal d4">
+          <div class="label">Flujo por pieza</div>
+          <ul>
+            <li>Idea</li>
+            <li>Brief</li>
+            <li>Producción</li>
+            <li>Edición</li>
+            <li>Programación</li>
+            <li>Publicación</li>
+            <li>Medición y decisión</li>
+          </ul>
+        </div>
+        <div class="role-block reveal d5">
+          <div class="label">KPIs</div>
+          <ul>
+            <li>Posts publicados vs planeados</li>
+            <li>Tracker completo</li>
+            <li>Cumplimiento de calendario</li>
+            <li>Velocidad de producción</li>
+            <li>Calidad de seguimiento</li>
+            <li>Inputs reales recogidos</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09 SEBASTIÁN -->
+  <section class="slide dense" data-i="9">
+    <div class="slide-inner">
+      <div class="role-hero">
+        <div class="eyebrow reveal">Rol 04 · Loop externo + voz del cliente</div>
+        <h1 class="title reveal d1">Sebastián.</h1>
+        <div class="quote reveal d2">Convierte ganadores orgánicos en email. Ganadores de pauta en briefs UGC. Lidera el ritual de Voice of Customer del viernes.</div>
+      </div>
+      <div class="role-content two">
+        <div class="role-block reveal d3">
+          <div class="label">Responsabilidades</div>
+          <ul>
+            <li>Buscar y contactar creadoras</li>
+            <li>Manejar pipeline UGC</li>
+            <li>Activar mamás CMD + reto semanal</li>
+            <li>Clasificar UGC A / B / C</li>
+            <li>Coordinar permisos / whitelisting</li>
+            <li>Mantener scoreboard afiliado</li>
+            <li>Convertir ganadores orgánicos en email</li>
+            <li>Liderar Voice of Customer del viernes</li>
+          </ul>
+        </div>
+        <div class="role-block reveal d4">
+          <div class="label">Base semanal · entregables</div>
+          <div class="wb-cat">Pipeline de creadoras</div>
+          <ul class="wb-list">
+            <li>Pipeline con 25 prospectos calificados</li>
+            <li>12–20 creadoras contactadas</li>
+            <li>3–5 conversaciones activas avanzadas</li>
+          </ul>
+          <div class="wb-cat">UGC</div>
+          <ul class="wb-list">
+            <li>2–3 briefs UGC enviados</li>
+            <li>2+ piezas UGC recibidas o avanzadas</li>
+            <li>Todo UGC clasificado A / B / C</li>
+            <li>1 candidata para partnership ad / whitelisting</li>
+          </ul>
+          <div class="wb-cat">CMD / afiliadas</div>
+          <ul class="wb-list">
+            <li>8–12 mamás CMD activadas o reactivadas</li>
+            <li>Reto CMD + reminder a mitad de semana</li>
+            <li>Scoreboard: clicks, órdenes, revenue, comisión</li>
+          </ul>
+          <div class="wb-cat">Email + Voice of Customer</div>
+          <ul class="wb-list">
+            <li>1 email · winner, objeción, paid creative o prioridad</li>
+            <li>Pack Voice of Customer del viernes</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 INVADE -->
+  <section class="slide dense" data-i="10">
+    <div class="slide-inner">
+      <div class="role-hero">
+        <div class="eyebrow reveal">Rol 05 · Sistema visual y premium</div>
+        <h1 class="title reveal d1">Invade.</h1>
+        <div class="quote reveal d2">No maneja el día a día. Eleva la marca: dirección visual, tono, templates, reglas. Lineamientos para que Ana María opere semanalmente.</div>
+      </div>
+      <div class="role-content two">
+        <div class="role-block reveal d3">
+          <div class="label">Entrega</div>
+          <ul>
+            <li>Dirección visual</li>
+            <li>Tono de voz</li>
+            <li>Templates reutilizables</li>
+            <li>Reglas de marca</li>
+            <li>Do / Don't claros</li>
+            <li>Estética premium</li>
+          </ul>
+        </div>
+        <div class="role-block reveal d4">
+          <div class="label">Guardrail</div>
+          <ul>
+            <li>Premium pero no perfeccionista</li>
+            <li>Premium lane (cuidada) separada de social-native lane (rápida, real)</li>
+            <li>No queremos una marca perfecta y fría</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11 RITMO SEMANAL -->
+  <section class="slide dense" data-i="11">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Acto III · Ritmo semanal</div>
+      <h1 class="title reveal d1">Cinco días, <em>cinco modos</em>.</h1>
+      <div class="body reveal d2">Cada día tiene un dueño y un objetivo claro. Sin esto, la semana se vuelve reactiva.</div>
+      <div class="week-grid">
+        <div class="day-card reveal d3">
+          <div class="day-name">Lunes</div>
+          <div class="day-owner">Julián lidera</div>
+          <ul>
+            <li>Block 0: negocio</li>
+            <li>VoC carry-over</li>
+            <li>Scoreboard</li>
+            <li>Winners / losers</li>
+            <li>Compromisos</li>
+          </ul>
+        </div>
+        <div class="day-card reveal d3">
+          <div class="day-name">Lun · Mar</div>
+          <div class="day-owner">Ana María</div>
+          <ul>
+            <li>Investigación</li>
+            <li>Ideas curadas</li>
+            <li>Hooks</li>
+            <li>Hipótesis principal</li>
+            <li>Equipo escoge 3–5 piezas</li>
+          </ul>
+        </div>
+        <div class="day-card reveal d4">
+          <div class="day-name">Martes</div>
+          <div class="day-owner">Angie + Sebastián</div>
+          <ul>
+            <li>Calendario y briefs</li>
+            <li>Tareas y dueños</li>
+            <li>Creator briefs</li>
+            <li>Email angle</li>
+            <li>CMD prompt</li>
+          </ul>
+        </div>
+        <div class="day-card reveal d4">
+          <div class="day-name">Mié · Jue</div>
+          <div class="day-owner">Producción batch</div>
+          <ul>
+            <li>3 carruseles</li>
+            <li>2 producto / interactivo</li>
+            <li>2 reels social-native</li>
+            <li>1 BTS premium</li>
+            <li>Stories diarios</li>
+          </ul>
+        </div>
+        <div class="day-card reveal d5">
+          <div class="day-name">Viernes</div>
+          <div class="day-owner">Sebastián lidera</div>
+          <ul>
+            <li>Voice of Customer</li>
+            <li>Frase de la semana</li>
+            <li>Top objeciones</li>
+            <li>Top preguntas</li>
+            <li>Input para próximo lunes</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 LUNES BLOCKS -->
+  <section class="slide dense" data-i="12">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Lunes · 50 minutos</div>
+      <h1 class="title reveal d1">Siete bloques. <em>Un output</em> por bloque.</h1>
+      <div class="blocks">
+        <div class="block-row zero reveal d2">
+          <div class="block-num">0</div>
+          <div class="block-name">Business Layer<span>Julián · Growth Manager</span></div>
+          <div class="block-time">5 min</div>
+          <div class="block-desc">CM, MER, CAC, ROAS, paid winners. Anclar la conversación creativa al negocio antes de hablar de contenido.</div>
+        </div>
+        <div class="block-row reveal d2">
+          <div class="block-num">1</div>
+          <div class="block-name">Voice of Customer<span>Sebastián · carry-over</span></div>
+          <div class="block-time">5 min</div>
+          <div class="block-desc">Frase de la semana, objeciones, preguntas, lenguaje literal del cliente.</div>
+        </div>
+        <div class="block-row reveal d3">
+          <div class="block-num">2</div>
+          <div class="block-name">Scoreboard<span>Angie · contenido</span></div>
+          <div class="block-time">5 min</div>
+          <div class="block-desc">Posts publicados vs planeados, reach, saves, comentarios, ER, clicks.</div>
+        </div>
+        <div class="block-row reveal d3">
+          <div class="block-num">3</div>
+          <div class="block-name">Winners<span>Equipo</span></div>
+          <div class="block-time">10 min</div>
+          <div class="block-desc">¿Por qué funcionó? ¿Conecta con prioridad de negocio? ¿Repetir, UGC, email, pauta o CMD?</div>
+        </div>
+        <div class="block-row reveal d4">
+          <div class="block-num">4</div>
+          <div class="block-name">Losers<span>Equipo</span></div>
+          <div class="block-time">10 min</div>
+          <div class="block-desc">¿Hook, formato, producto, edición o tema sin conexión económica? Decisión: matar o iterar.</div>
+        </div>
+        <div class="block-row reveal d4">
+          <div class="block-num">5</div>
+          <div class="block-name">Brand quality<span>Equipo · con Invade</span></div>
+          <div class="block-time">5 min</div>
+          <div class="block-desc">¿Se ve premium? ¿Se siente humano? ¿Invade está elevando o enfriando?</div>
+        </div>
+        <div class="block-row reveal d5">
+          <div class="block-num">6</div>
+          <div class="block-name">UGC + email + CMD<span>Sebastián</span></div>
+          <div class="block-time">5 min</div>
+          <div class="block-desc">Qué llegó, qué CMD estuvo activa, qué pasa a email, brief externo o prompt CMD.</div>
+        </div>
+        <div class="block-row reveal d5">
+          <div class="block-num">7</div>
+          <div class="block-name">Compromisos<span>Equipo</span></div>
+          <div class="block-time">5 min</div>
+          <div class="block-desc">3 cosas a repetir · 2–3 experimentos · 1 que se mata · 1 pieza premium · 1 brief UGC · 1 email · 1 prompt CMD.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 BLOCK 0 DEEP DIVE -->
+  <section class="slide dense" data-i="13">
+    <div class="slide-inner">
+      <div class="eyebrow green reveal">Block 0 · keystone del lunes</div>
+      <h1 class="title reveal d1">Antes de contenido, <em>negocio</em>.</h1>
+      <div class="body reveal d2">Cinco minutos al inicio del lunes. Sin esto, el equipo discute likes 45 minutos y nadie pregunta si la semana fue rentable. <strong>Es el cambio que convierte content team en growth team.</strong></div>
+      <div class="b0-grid">
+        <div class="b0-col reveal d3">
+          <div class="label">Inputs · Growth Manager</div>
+          <ul>
+            <li>Contribution Margin</li>
+            <li>MER · AMER</li>
+            <li>CAC / CPA</li>
+            <li>ROAS Meta · Google · TikTok</li>
+            <li>Paid creative winners y losers</li>
+            <li>Qué movió revenue esta semana</li>
+            <li>Restricciones de inventario y producto</li>
+          </ul>
+        </div>
+        <div class="b0-col reveal d4">
+          <div class="label">Preguntas obligatorias</div>
+          <ul>
+            <li class="q">¿El negocio está más eficiente o menos?</li>
+            <li class="q">¿Qué creatives movieron revenue?</li>
+            <li class="q">¿Qué productos están validados económicamente?</li>
+            <li class="q">¿Qué tuvo reach pero no convirtió?</li>
+            <li class="q">¿Qué winner de pauta necesita apoyo orgánico?</li>
+            <li class="q">¿Qué ángulo NO merece más esfuerzo porque margen está mal?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="block-output reveal d5"><strong>Output del bloque:</strong> 1–3 prioridades de negocio que mandan sobre toda la conversación creativa de hoy.</div>
+    </div>
+  </section>
+
+  <!-- 14 VOICE OF CUSTOMER -->
+  <section class="slide dense" data-i="14">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Viernes · 30 minutos</div>
+      <h1 class="title reveal d1">Voice of <em>Customer</em>.</h1>
+      <div class="body reveal d2">Lo lidera Sebastián, no Ana María. La mejor materia prima creativa no son las marcas que admiramos — es lo que nuestras propias clientas ya están diciendo.</div>
+      <div class="voc-flow">
+        <div class="voc-side reveal d3">
+          <div class="label">Inputs</div>
+          <ul>
+            <li>Top reviews de la semana</li>
+            <li>Preguntas a Alejandra / soporte</li>
+            <li>DMs entrantes</li>
+            <li>Comentarios destacados</li>
+            <li>Objeciones</li>
+            <li>Dudas de tallas, envíos, pagos, producto</li>
+            <li>Replies de creadoras y afiliadas</li>
+          </ul>
+        </div>
+        <div class="voc-arrow">↦</div>
+        <div class="voc-side outputs reveal d4">
+          <div class="label">Outputs</div>
+          <ul>
+            <li>3 preguntas frecuentes</li>
+            <li>3 objeciones principales</li>
+            <li>3 frases literales de cliente</li>
+            <li>1 frase de la semana</li>
+            <li>1 idea para contenido / email / UGC</li>
+          </ul>
+        </div>
+      </div>
+      <div class="voc-example reveal d5">
+        <div class="label">Ejemplo · una frase, todo el sistema</div>
+        <div class="voc-quote">"Mi bebé siempre se destapa a las 3am y me da miedo que pase frío."</div>
+        <div class="splits">
+          <span>→ reel</span>
+          <span>→ carrusel</span>
+          <span>→ email</span>
+          <span>→ UGC brief</span>
+          <span>→ pauta</span>
+          <span>→ CMD prompt</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 15 CONTENT LANES -->
+  <section class="slide dense" data-i="15">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Acto IV · Sistema de contenido</div>
+      <h1 class="title reveal d1">No todo el contenido <em>hace lo mismo</em>.</h1>
+      <div class="body reveal d2">Cuatro carriles, cada uno con un objetivo distinto. Un buen sistema balancea los cuatro.</div>
+      <div class="lanes-grid">
+        <div class="lane-card reveal d3">
+          <div class="lane-num">i</div>
+          <div class="lane-name">Brand world<small>Premium perception</small></div>
+          <div class="lane-goal">Que Dosmicos se vea más valioso.</div>
+          <ul>
+            <li>Colecciones</li>
+            <li>Bordado · nombres</li>
+            <li>Detalles de producto</li>
+            <li>Proceso de diseño</li>
+          </ul>
+        </div>
+        <div class="lane-card reveal d3">
+          <div class="lane-num">ii</div>
+          <div class="lane-name">Social native<small>Reach engine</small></div>
+          <div class="lane-goal">Conectar y generar conversación.</div>
+          <ul>
+            <li>Mamá real</li>
+            <li>Bogotá / frío</li>
+            <li>Bebé que se destapa</li>
+            <li>Humor de papás</li>
+          </ul>
+        </div>
+        <div class="lane-card reveal d4">
+          <div class="lane-num">iii</div>
+          <div class="lane-name">Performance<small>Ads engine</small></div>
+          <div class="lane-goal">Vender y testear claims.</div>
+          <ul>
+            <li>UGC problema-solución</li>
+            <li>Testimonios</li>
+            <li>Oferta · drop</li>
+            <li>TOG education</li>
+          </ul>
+        </div>
+        <div class="lane-card reveal d4">
+          <div class="lane-num">iv</div>
+          <div class="lane-name">Creator + lifecycle<small>Una idea viaja</small></div>
+          <div class="lane-goal">Que un ganador llegue a todos lados.</div>
+          <ul>
+            <li>Brief UGC</li>
+            <li>Email</li>
+            <li>Pauta</li>
+            <li>Prompt CMD</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 16 MIX -->
+  <section class="slide dense" data-i="16">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Mix de contenido · 30 días</div>
+      <h1 class="title reveal d1">La <em>mezcla</em> que construye marca y vende.</h1>
+      <div class="body reveal d2">La data actual muestra que carruseles funcionan mejor que reels en reach, saves y engagement. Esa es la base.</div>
+      <div class="mix-bars">
+        <div class="mix-row reveal d3">
+          <span class="mix-pct">35%</span>
+          <div class="mix-bar"><div class="mix-bar-fill" style="--w: 100%;"></div></div>
+          <div class="mix-label">Carruseles emocionales<small>"Para la mamá que hoy…", maternidad, ternura</small></div>
+        </div>
+        <div class="mix-row reveal d3">
+          <span class="mix-pct">25%</span>
+          <div class="mix-bar"><div class="mix-bar-fill" style="--w: 71%;"></div></div>
+          <div class="mix-label">Carruseles interactivos<small>Animales, nombres, votaciones</small></div>
+        </div>
+        <div class="mix-row reveal d4">
+          <span class="mix-pct">20%</span>
+          <div class="mix-bar"><div class="mix-bar-fill" style="--w: 57%;"></div></div>
+          <div class="mix-label">Reels de mamá real<small>Humor, frío, sueño, caos cotidiano</small></div>
+        </div>
+        <div class="mix-row reveal d4">
+          <span class="mix-pct">10%</span>
+          <div class="mix-bar"><div class="mix-bar-fill" style="--w: 28%;"></div></div>
+          <div class="mix-label">Educativo<small>TOG, tallas, sueño, clima</small></div>
+        </div>
+        <div class="mix-row reveal d5">
+          <span class="mix-pct">10%</span>
+          <div class="mix-bar"><div class="mix-bar-fill" style="--w: 28%;"></div></div>
+          <div class="mix-label">Venta directa<small>Lanzamientos, drops, urgencia</small></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 17 SERIES BASE -->
+  <section class="slide dense" data-i="17">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Series base</div>
+      <h1 class="title reveal d1">Seis <em>moldes</em> repetibles.</h1>
+      <div class="body reveal d2">Series son contenedores: el mismo formato vuelve cada cierto tiempo y construye expectativa.</div>
+      <div class="series-grid">
+        <div class="serie-card reveal d3">
+          <div class="serie-num">i</div>
+          <div>
+            <div class="serie-title">Para la mamá que hoy…</div>
+            <div class="serie-goal">Carrusel emocional. Saves, shares, comentarios.</div>
+          </div>
+        </div>
+        <div class="serie-card reveal d3">
+          <div class="serie-num">ii</div>
+          <div>
+            <div class="serie-title">Mamá de Bogotá starter pack</div>
+            <div class="serie-goal">Frío, lluvia, finca, parque, carro, colegio.</div>
+          </div>
+        </div>
+        <div class="serie-card reveal d4">
+          <div class="serie-num">iii</div>
+          <div>
+            <div class="serie-title">Otra vez se destapó a las 3am</div>
+            <div class="serie-goal">Sleeping bag, walker, TOG, sueño, seguridad.</div>
+          </div>
+        </div>
+        <div class="serie-card reveal d4">
+          <div class="serie-num">iv</div>
+          <div>
+            <div class="serie-title">¿Cuál animalito es tu hijo?</div>
+            <div class="serie-goal">Carrusel interactivo. Producto como personaje.</div>
+          </div>
+        </div>
+        <div class="serie-card reveal d5">
+          <div class="serie-num">v</div>
+          <div>
+            <div class="serie-title">El nombre que cuenta una historia</div>
+            <div class="serie-goal">Bordado como memoria, no como personalización.</div>
+          </div>
+        </div>
+        <div class="serie-card reveal d5">
+          <div class="serie-num">vi</div>
+          <div>
+            <div class="serie-title">Detrás de Dosmicos</div>
+            <div class="serie-goal">Invade, muestras, errores, decisiones, proceso.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 18 UGC TIERS -->
+  <section class="slide dense" data-i="18">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">UGC · clasificación</div>
+      <h1 class="title reveal d1">No aceptar todo. Cada pieza recibe <em>una letra</em>.</h1>
+      <div class="body reveal d2">No todo UGC sirve para feed. La clasificación define dónde vive cada pieza.</div>
+      <div class="tiers-grid">
+        <div class="tier-card reveal d3">
+          <div class="tier-letter">A</div>
+          <div class="tier-name">Feed / collab</div>
+          <div class="tier-desc">Construye marca. Se ve bien. Tiene social proof. No baja percepción premium. Va como collab o repost.</div>
+        </div>
+        <div class="tier-card reveal d4">
+          <div class="tier-letter">B</div>
+          <div class="tier-name">Re-edit Dosmicos</div>
+          <div class="tier-desc">Buena idea, producto se ve bien — pero falla hook, portada o edición. Se publica desde Dosmicos.</div>
+        </div>
+        <div class="tier-card reveal d5">
+          <div class="tier-letter">C</div>
+          <div class="tier-name">Ads only</div>
+          <div class="tier-desc">Vende pero no eleva feed. Funciona mejor como dark post o pauta directa.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 19 CMD AFILIADAS -->
+  <section class="slide dense" data-i="19">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">CMD · afiliadas</div>
+      <h1 class="title reveal d1">No "personas con link". <em>Comunidad creadora</em>.</h1>
+      <div class="cmd-layout">
+        <div class="cmd-section reveal d2">
+          <h4>Modelo actual</h4>
+          <div class="cmd-model">
+            <div><strong>12%</strong> comisión para mamá</div>
+            <div><strong>5%</strong> descuento para cliente</div>
+            <div><strong>Link único</strong> + dashboard público</div>
+          </div>
+          <h4 style="margin-top: 28px;">Loop semanal</h4>
+          <ol class="cmd-loop">
+            <li>Sebastián manda reto</li>
+            <li>Mamás publican</li>
+            <li>Se miden clicks, órdenes, revenue</li>
+            <li>Se reconocen top creadoras</li>
+            <li>Ganadores alimentan briefs siguientes</li>
+          </ol>
+        </div>
+        <div class="cmd-section reveal d3">
+          <h4>Objetivos · 30 días</h4>
+          <div class="cmd-numbers">
+            <div class="cmd-stat"><div class="cmd-num">90</div><div class="cmd-label">CMD con link activo</div></div>
+            <div class="cmd-stat"><div class="cmd-num">40</div><div class="cmd-label">Creadoras / mes</div></div>
+            <div class="cmd-stat"><div class="cmd-num">20</div><div class="cmd-label">Activas / semana</div></div>
+            <div class="cmd-stat"><div class="cmd-num">120</div><div class="cmd-label">Piezas UGC / mes</div></div>
+            <div class="cmd-stat"><div class="cmd-num">25+</div><div class="cmd-label">Órdenes atribuidas</div></div>
+            <div class="cmd-stat"><div class="cmd-num">10+</div><div class="cmd-label">Creadoras con venta</div></div>
+            <div class="cmd-stat"><div class="cmd-num">$6M</div><div class="cmd-label">Revenue · base</div></div>
+            <div class="cmd-stat"><div class="cmd-num">$10M</div><div class="cmd-label">Revenue · stretch</div></div>
+          </div>
+          <div class="cmd-note">No premiar solo ventas. Premiar también creación de contenido para evitar churn temprano.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 20 TRACKER -->
+  <section class="slide dense" data-i="20">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Tracker obligatorio</div>
+      <h1 class="title reveal d1">Cada pieza, una <em>fila completa</em>.</h1>
+      <div class="body reveal d2">Los campos en <strong style="color: var(--bosque);">verde</strong> son financieros y vienen del Growth Manager. Los <strong style="color: var(--mostaza);">amarillos</strong> son decisiones del lunes.</div>
+      <div class="tracker">
+        <div class="tracker-row reveal d3">
+          <div class="label">Identidad</div>
+          <div class="tracker-cells">
+            <div class="tracker-cell">ID</div>
+            <div class="tracker-cell">Fecha</div>
+            <div class="tracker-cell">Owner</div>
+            <div class="tracker-cell">Formato</div>
+            <div class="tracker-cell">Lane</div>
+            <div class="tracker-cell">Tema</div>
+          </div>
+        </div>
+        <div class="tracker-row reveal d4">
+          <div class="label">Concepto creativo</div>
+          <div class="tracker-cells">
+            <div class="tracker-cell">Hipótesis</div>
+            <div class="tracker-cell">Hook</div>
+            <div class="tracker-cell">Primer frame</div>
+            <div class="tracker-cell">CTA</div>
+            <div class="tracker-cell">Producto</div>
+            <div class="tracker-cell">Frase de cliente</div>
+          </div>
+        </div>
+        <div class="tracker-row reveal d4">
+          <div class="label">Métricas de contenido</div>
+          <div class="tracker-cells">
+            <div class="tracker-cell">Reach</div>
+            <div class="tracker-cell">Saves</div>
+            <div class="tracker-cell">Comments</div>
+            <div class="tracker-cell">Shares</div>
+            <div class="tracker-cell">Profile visits</div>
+            <div class="tracker-cell">Link clicks</div>
+          </div>
+        </div>
+        <div class="tracker-row reveal d5">
+          <div class="label green">Capa financiera</div>
+          <div class="tracker-cells">
+            <div class="tracker-cell green">Orders</div>
+            <div class="tracker-cell green">CPA</div>
+            <div class="tracker-cell green">MER</div>
+            <div class="tracker-cell green">CAC</div>
+            <div class="tracker-cell green">CM</div>
+            <div class="tracker-cell green">ROAS</div>
+          </div>
+        </div>
+        <div class="tracker-row reveal d5">
+          <div class="label amber">Decisión + reuso</div>
+          <div class="tracker-cells">
+            <div class="tracker-cell amber">Repeat</div>
+            <div class="tracker-cell amber">Iterate</div>
+            <div class="tracker-cell amber">Kill</div>
+            <div class="tracker-cell amber">Ads-only</div>
+            <div class="tracker-cell amber">→ Email</div>
+            <div class="tracker-cell amber">→ UGC brief</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 21 REGLAS -->
+  <section class="slide dense" data-i="21">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Reglas de decisión</div>
+      <h1 class="title reveal d1">Cómo <em>responder</em> a cada señal.</h1>
+      <div class="reglas-grid">
+        <div class="reglas-col">
+          <h4>Repetir / escalar</h4>
+          <div class="regla reveal d2">Saves &gt;100 → considerar serie, <strong>solo si conecta con prioridad de negocio</strong>.</div>
+          <div class="regla reveal d2">Comments &gt;20 → follow-up en 72h.</div>
+          <div class="regla reveal d3">Reach &gt;10K o &gt;2× baseline → variantes <strong>solo si conecta</strong> con producto, email o pauta.</div>
+          <div class="regla reveal d3">Paid winner → orgánico, UGC, CMD o email.</div>
+          <div class="regla reveal d4">Frase fuerte de cliente → hook.</div>
+          <div class="regla reveal d4">UGC fuerte → repost, brief o ad test.</div>
+        </div>
+        <div class="reglas-col kill">
+          <h4>Iterar / matar</h4>
+          <div class="regla reveal d2">Reel bajo dos veces → rehacer hook o premisa.</div>
+          <div class="regla reveal d2">Promo · bordado bajo → reencuadrar como historia, no descuento.</div>
+          <div class="regla reveal d3">Vende pero no eleva feed → pauta o email, no feed.</div>
+          <div class="regla reveal d3">Bonito pero sin señal → no repetir igual.</div>
+          <div class="regla reveal d4">Reach sin conexión a negocio → entretenimiento, <strong>no growth lever</strong>.</div>
+          <div class="regla reveal d4">Producto con mal CM · CAC · ROAS → no forzar contenido.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 22 AGENTES -->
+  <section class="slide dense" data-i="22">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Sistema de agentes IA</div>
+      <h1 class="title reveal d1">Volumen lo da la <em>máquina</em>. Criterio lo da el equipo.</h1>
+      <div class="body reveal d2">Ocho agentes especializados que alimentan los rituales del lunes y viernes. <strong>No reemplazan al equipo — le devuelven horas para curar y decidir.</strong></div>
+      <div class="agents-grid">
+        <div class="agent reveal d3">
+          <div class="agent-num">00</div>
+          <div>
+            <div class="agent-name">Growth Manager / Prophit</div>
+            <div class="agent-desc">Corre antes del lunes. Output: realidad de negocio + 1–3 prioridades + paid winners.</div>
+          </div>
+        </div>
+        <div class="agent reveal d3">
+          <div class="agent-num">01</div>
+          <div>
+            <div class="agent-name">Social Analytics</div>
+            <div class="agent-desc">Analiza social_posts en Sewdle (7/30 días). Winners, losers, mejores hooks.</div>
+          </div>
+        </div>
+        <div class="agent reveal d4">
+          <div class="agent-num">02</div>
+          <div>
+            <div class="agent-name">Content Strategist</div>
+            <div class="agent-desc">8–12 opciones AI → shortlist 3–5. Apoyo para que Ana María cure.</div>
+          </div>
+        </div>
+        <div class="agent reveal d4">
+          <div class="agent-num">03</div>
+          <div>
+            <div class="agent-name">Script + Hook</div>
+            <div class="agent-desc">Variantes de hook, primer frame, caption y CTA desde customer language.</div>
+          </div>
+        </div>
+        <div class="agent reveal d5">
+          <div class="agent-num">04</div>
+          <div>
+            <div class="agent-name">UGC Triage</div>
+            <div class="agent-desc">Clasifica automáticamente: A feed · B re-edit · C ads-only.</div>
+          </div>
+        </div>
+        <div class="agent reveal d5">
+          <div class="agent-num">05</div>
+          <div>
+            <div class="agent-name">Email Marketing</div>
+            <div class="agent-desc">Ángulo semanal, subject lines, copy desde ganadores orgánicos.</div>
+          </div>
+        </div>
+        <div class="agent reveal d6">
+          <div class="agent-num">06</div>
+          <div>
+            <div class="agent-name">Affiliate Growth</div>
+            <div class="agent-desc">Weekly CMD push, ranking, incentive tests, revenue reports.</div>
+          </div>
+        </div>
+        <div class="agent reveal d6">
+          <div class="agent-num">07</div>
+          <div>
+            <div class="agent-name">Voice of Customer</div>
+            <div class="agent-desc">Reviews + Alejandra + DMs → frase de la semana, top objeciones.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 23 RIESGOS -->
+  <section class="slide dense" data-i="23">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Acto V · Riesgos</div>
+      <h1 class="title reveal d1">Lo que <em>rompe</em> el sistema.</h1>
+      <div class="riesgos-list">
+        <div class="riesgo reveal d2">
+          <div class="riesgo-num">i</div>
+          <div class="riesgo-name">Ana María queda sobrecargada</div>
+          <div class="riesgo-fix">Carga curada, no volumen bruto. AI genera opciones; ella selecciona y calibra.</div>
+        </div>
+        <div class="riesgo reveal d2">
+          <div class="riesgo-num">ii</div>
+          <div class="riesgo-name">Angie termina haciendo estrategia creativa</div>
+          <div class="riesgo-fix">Angie ejecuta, mide y coordina. Ana María lidera ideas, hooks y dirección.</div>
+        </div>
+        <div class="riesgo reveal d3">
+          <div class="riesgo-num">iii</div>
+          <div class="riesgo-name">Sebastián queda aislado</div>
+          <div class="riesgo-fix">UGC, email, CMD y Voice of Customer entran al lunes formalmente.</div>
+        </div>
+        <div class="riesgo reveal d3">
+          <div class="riesgo-num">iv</div>
+          <div class="riesgo-name">Invade enfría la marca</div>
+          <div class="riesgo-fix">Premium lane separada de social-native lane. Premium sí, fría no.</div>
+        </div>
+        <div class="riesgo reveal d4">
+          <div class="riesgo-num">v</div>
+          <div class="riesgo-name">Se optimiza por contenido y no por negocio</div>
+          <div class="riesgo-fix">Block 0 obligatorio. Margen, MER, CAC, ROAS antes que likes.</div>
+        </div>
+        <div class="riesgo reveal d4">
+          <div class="riesgo-num">vi</div>
+          <div class="riesgo-name">Se pierde la voz real del cliente</div>
+          <div class="riesgo-fix">Voice of Customer todos los viernes, liderado por Sebastián.</div>
+        </div>
+        <div class="riesgo reveal d5">
+          <div class="riesgo-num">vii</div>
+          <div class="riesgo-name">Meter demasiadas capas desde kickoff</div>
+          <div class="riesgo-fix">Kickoff = operación + Block 0 + VoC. Retención y rebalanceo profundo van en mes 2–3.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 24 ROLLOUT -->
+  <section class="slide dense" data-i="24">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Rollout · 90 días</div>
+      <h1 class="title reveal d1">No todo al tiempo. <em>Por capas</em>.</h1>
+      <div class="rollout-grid">
+        <div class="phase now reveal d2">
+          <div class="phase-when">Mes 1 · Kickoff</div>
+          <div class="phase-title">Fundación</div>
+          <ul>
+            <li>Block 0 todos los lunes</li>
+            <li>Voice of Customer todos los viernes</li>
+            <li>5 roles redefinidos</li>
+            <li>Mix de contenido + 6 series base</li>
+            <li>Tracker reducido a campos esenciales</li>
+            <li>Reglas de decisión activas</li>
+          </ul>
+        </div>
+        <div class="phase next reveal d3">
+          <div class="phase-when">Mes 2 · Conexión</div>
+          <div class="phase-title">Stack de IA</div>
+          <ul>
+            <li>Content Strategist + Script Agents activos</li>
+            <li>UGC Triage Agent en producción</li>
+            <li>Email + Affiliate agents conectados</li>
+            <li>Protocolo paid → orgánico documentado</li>
+            <li>Audit profundo del tracker</li>
+          </ul>
+        </div>
+        <div class="phase later reveal d4">
+          <div class="phase-when">Mes 3 · Capas nuevas</div>
+          <div class="phase-title">Expansión</div>
+          <ul>
+            <li>Pillar de retención por talla</li>
+            <li>Animales como IP — primera serie piloto</li>
+            <li>Rebalanceo profundo de roles si aplica</li>
+            <li>US como track separado evaluado</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 25 ÉXITO 90 DÍAS -->
+  <section class="slide dense" data-i="25">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Éxito a 90 días</div>
+      <h1 class="title reveal d1">Cómo sabremos que <em>funcionó</em>.</h1>
+      <div class="ninety">
+        <div class="ninety-item reveal d2"><strong>5+</strong> posts por semana, constantes</div>
+        <div class="ninety-item reveal d2"><strong>3+</strong> series funcionando</div>
+        <div class="ninety-item reveal d2">Carruseles con saves y reach fuertes</div>
+        <div class="ninety-item reveal d2">Reels mejorando baseline</div>
+        <div class="ninety-item reveal d3">Marca visualmente más premium</div>
+        <div class="ninety-item reveal d3">Lunes funcionando con <strong>Block 0</strong></div>
+        <div class="ninety-item reveal d3">Viernes funcionando con <strong>Voice of Customer</strong></div>
+        <div class="ninety-item reveal d3">Paid winners alimentando orgánico, UGC y email</div>
+        <div class="ninety-item reveal d4">Orgánico alimentando pauta</div>
+        <div class="ninety-item reveal d4">CMD generando contenido, clicks y ventas</div>
+        <div class="ninety-item reveal d4">UGC clasificado A / B / C</div>
+        <div class="ninety-item reveal d4">Email usando hooks ganadores</div>
+        <div class="ninety-item reveal d5">Decisiones conectadas a <strong>CM, MER, CAC y ROAS</strong></div>
+        <div class="ninety-item reveal d5"><strong>Equipo operando como sistema</strong>, no como lista de tareas</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 26 CIERRE -->
+  <section class="slide final" data-i="26">
+    <div class="slide-inner">
+      <div class="eyebrow reveal">Mensaje al equipo</div>
+      <h1 class="title reveal d1">Vamos a operar como un growth team. Cada lunes empezamos con negocio. Cada viernes escuchamos al cliente. <em>Cada pieza debe enseñarnos algo o mover algo. Si no, no es sistema — es solo un post.</em></h1>
+      <div class="final-sig reveal d3">— Julián · Dosmicos · Growth OS v1.0</div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let current = 0;
+
+  const progress = document.getElementById('progress');
+  const chromeCur = document.getElementById('chrome-cur');
+
+  function go(idx) {
+    if (idx < 0 || idx >= total) return;
+    slides[current].classList.remove('active');
+    current = idx;
+    slides[current].classList.add('active');
+    progress.style.width = `${((current + 1) / total) * 100}%`;
+    chromeCur.textContent = String(current + 1).padStart(2, '0');
+    slides[current].scrollTop = 0;
+  }
+
+  function next() { go(Math.min(current + 1, total - 1)); }
+  function prev() { go(Math.max(current - 1, 0)); }
+
+  document.addEventListener('keydown', (e) => {
+    if (document.getElementById('help-overlay').classList.contains('show') && e.key !== '?' && e.key !== 'Escape') return;
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); next(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
+    else if (e.key === 'Home') { e.preventDefault(); go(0); }
+    else if (e.key === 'End') { e.preventDefault(); go(total - 1); }
+    else if (e.key === 'f' || e.key === 'F') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    } else if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+      document.getElementById('help-overlay').classList.toggle('show');
+    } else if (e.key === 'Escape') {
+      document.getElementById('help-overlay').classList.remove('show');
+    }
+  });
+
+  document.getElementById('btn-next').addEventListener('click', next);
+  document.getElementById('btn-prev').addEventListener('click', prev);
+  document.getElementById('btn-help').addEventListener('click', () => {
+    document.getElementById('help-overlay').classList.toggle('show');
+  });
+  document.getElementById('help-overlay').addEventListener('click', () => {
+    document.getElementById('help-overlay').classList.remove('show');
+  });
+
+  document.getElementById('deck').addEventListener('click', (e) => {
+    if (e.target.closest('.role-card, .day-card, .lane-card, .serie-card, .tier-card, .riesgo, .agent, .phase, .tracker-cell, .nav-btn, .help-overlay, .b0-col, .voc-side, .flow-step, .tag, .nav, .ninety-item')) return;
+    const x = e.clientX;
+    const w = window.innerWidth;
+    if (x > w * 0.7) next();
+    else if (x < w * 0.3) prev();
+  });
+
+  let touchStartX = 0;
+  document.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+  document.addEventListener('touchend', (e) => {
+    const diff = e.changedTouches[0].screenX - touchStartX;
+    if (Math.abs(diff) < 50) return;
+    if (diff < 0) next(); else prev();
+  });
+
+  progress.style.width = `${(1 / total) * 100}%`;
+</script>
+
+</body>
+</html>
