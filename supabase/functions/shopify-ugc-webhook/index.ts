@@ -205,6 +205,9 @@ async function triggerAffiliateDopamineNotification(attributedOrderId: string) {
         action: 'notify_order',
         attributedOrderId,
         dryRun: false,
+        // Shopify attribution is the trusted purchase trigger; Julian approved
+        // automatic Club de Mamás sale notifications on 2026-04-28.
+        authorized: true,
       }),
     });
 
