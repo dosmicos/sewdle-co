@@ -52,10 +52,10 @@ const RANK_PROXIMITY_MAX_GAP_COP = 50_000;
 const TEMPLATE_DEFAULTS: Record<NotificationType, Setting> = {
   sale: {
     notification_type: 'sale',
-    template_name: 'dosmicos_club_mamas_sale_v1',
+    template_name: 'dosmicos_club_mamas_sale_monthly_v1',
     template_language: DEFAULT_LANGUAGE,
     is_enabled: false,
-    sample_message: '💛 Club de Mamás Dosmicos: ¡vendiste con tu link, {{1}}! Acabas de ganar {{2}}. Tu saldo acumulado va en {{3}} y estás en el puesto #{{4}} esta semana. Sube en este link todo el contenido que hayas creado sobre Dosmicos: {{5}}. Queremos ver lo que creaste 💛',
+    sample_message: '💛 Club de Mamás Dosmicos: ¡vendiste con tu link, {{1}}! Acabas de ganar {{2}}. Tu saldo acumulado va en {{3}} y estás en el puesto #{{4}} del ranking mensual. Sube en este link todo el contenido que hayas creado sobre Dosmicos: {{5}}. Queremos ver lo que creaste 💛',
   },
   first_sale: {
     notification_type: 'first_sale',
@@ -66,17 +66,17 @@ const TEMPLATE_DEFAULTS: Record<NotificationType, Setting> = {
   },
   rank_top5: {
     notification_type: 'rank_top5',
-    template_name: 'dosmicos_club_mamas_rank_top5_v1',
+    template_name: 'dosmicos_club_mamas_rank_top5_monthly_v1',
     template_language: DEFAULT_LANGUAGE,
     is_enabled: false,
-    sample_message: '🏆 Club de Mamás Dosmicos: {{1}}, estás en el top 5 esta semana. Vas en el puesto #{{2}} con {{3}} en comisión. Sube aquí tu mejor contenido de esta semana: {{4}}. Queremos ver lo que creaste 💛',
+    sample_message: '🏆 Club de Mamás Dosmicos: {{1}}, estás en el top 5 del ranking mensual. Vas en el puesto #{{2}} con {{3}} en comisión. Sube aquí tu mejor contenido de esta semana: {{4}}. Queremos ver lo que creaste 💛',
   },
   rank_proximity: {
     notification_type: 'rank_proximity',
-    template_name: 'dosmicos_club_mamas_rank_proximity_v1',
+    template_name: 'dosmicos_club_mamas_rank_proximity_monthly_v1',
     template_language: DEFAULT_LANGUAGE,
     is_enabled: false,
-    sample_message: '👀 Club de Mamás Dosmicos: {{1}}, estás en el puesto #{{2}} esta semana. Te faltan aprox. {{3}} para entrar al top 5 y ya llevas {{4}} en comisión. Sube contenido nuevo aquí: {{5}}. Queremos ver lo que creaste 💛',
+    sample_message: '👀 Club de Mamás Dosmicos: {{1}}, estás en el puesto #{{2}} del ranking mensual. Te faltan aprox. {{3}} para entrar al top 5 y ya llevas {{4}} en comisión mensual. Sube contenido nuevo aquí: {{5}}. Queremos ver lo que creaste 💛',
   },
   weekly_challenge: {
     notification_type: 'weekly_challenge',
@@ -98,6 +98,7 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const action = body.action || 'dry_run';
     const dryRun = body.dryRun !== false || action === 'dry_run';
+    const authorized = body.authorized === true || body.sendAuthorized === true;
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -106,17 +107,17 @@ serve(async (req) => {
     );
 
     if (action === 'notify_order') {
-      const result = await notifyOrder(supabase, body, dryRun);
+      const result = await notifyOrder(supabase, body, dryRun, authorized);
       return json(result);
     }
 
     if (action === 'send_weekly_challenge') {
-      const result = await sendWeeklyChallenge(supabase, body, dryRun);
+      const result = await sendWeeklyChallenge(supabase, body, dryRun, authorized);
       return json(result);
     }
 
     if (action === 'test_template') {
-      const result = await sendTestTemplate(supabase, body, dryRun);
+      const result = await sendTestTemplate(supabase, body, dryRun, authorized);
       return json(result);
     }
 
@@ -127,7 +128,7 @@ serve(async (req) => {
   }
 });
 
-async function notifyOrder(supabase: any, body: any, dryRun: boolean) {
+async function notifyOrder(supabase: any, body: any, dryRun: boolean, authorized: boolean) {
   const order = await fetchAttributedOrder(supabase, body.attributedOrderId, body.shopifyOrderId);
   if (!order) return { ok: false, reason: 'order_not_found' };
 
@@ -141,7 +142,10 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean) {
   const totalOrders = await countCreatorOrders(supabase, creator.id);
   const notificationType: NotificationType = totalOrders <= 1 ? 'first_sale' : 'sale';
 
-  const ranking = await computeWeeklyRanking(supabase, order.organization_id, creator.id);
+  const [ranking, weeklyProgress] = await Promise.all([
+    computeMonthlyRanking(supabase, order.organization_id, creator.id),
+    computeWeeklyProgress(supabase, order.organization_id, creator.id),
+  ]);
   const creatorLink = buildCreatorLink(link);
   const uploadLink = await getOrCreateUploadLink(supabase, creator);
   const pendingBalance = formatCOP(numberValue(link.total_commission) - numberValue(link.total_paid_out));
@@ -160,6 +164,7 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean) {
     params: primaryParams,
     preview: primaryPreview,
     dryRun,
+    authorized,
     attributedOrderId: order.id,
     metadata: {
       shopify_order_id: order.shopify_order_id,
@@ -168,6 +173,12 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean) {
       commission_amount: numberValue(order.commission_amount),
       upload_link: uploadLink,
       creator_link: creatorLink,
+      monthly_rank: ranking.creatorRank,
+      monthly_commission: ranking.creatorMonthlyCommission,
+      monthly_period_start: ranking.periodStart,
+      weekly_orders: weeklyProgress.weeklyOrders,
+      weekly_commission: weeklyProgress.weeklyCommission,
+      weekly_period_start: weeklyProgress.weekStart,
     },
   });
 
@@ -177,6 +188,7 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean) {
     link,
     ranking,
     dryRun,
+    authorized,
     attributedOrderId: order.id,
   });
 
@@ -187,12 +199,26 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean) {
     notificationType,
     primary,
     rankNotification,
+    ranking,
+    weeklyProgress,
   };
 }
 
-async function sendWeeklyChallenge(supabase: any, body: any, dryRun: boolean) {
+async function sendWeeklyChallenge(supabase: any, body: any, dryRun: boolean, authorized: boolean) {
   const org = await fetchOrganization(supabase, body.organizationId, body.organizationSlug || 'dosmicos-org');
   if (!org) return { ok: false, reason: 'organization_not_found' };
+
+  if (!dryRun && !authorized) {
+    return {
+      ok: true,
+      dryRun,
+      organizationId: org.id,
+      status: 'skipped_authorization_required',
+      reason: 'Explicit authorization is required before sending WhatsApp messages',
+      candidates: 0,
+      results: [],
+    };
+  }
 
   const setting = await fetchSetting(supabase, org.id, 'weekly_challenge');
   if (!dryRun && !setting.is_enabled) {
@@ -230,6 +256,7 @@ async function sendWeeklyChallenge(supabase: any, body: any, dryRun: boolean) {
       params,
       preview,
       dryRun,
+      authorized,
       periodStart,
       metadata: { challengeTitle, challengePrompt, upload_link: uploadLink, creator_link: creatorLink },
     });
@@ -245,7 +272,7 @@ async function sendWeeklyChallenge(supabase: any, body: any, dryRun: boolean) {
   };
 }
 
-async function sendTestTemplate(supabase: any, body: any, dryRun: boolean) {
+async function sendTestTemplate(supabase: any, body: any, dryRun: boolean, authorized: boolean) {
   const org = await fetchOrganization(supabase, body.organizationId, body.organizationSlug || 'dosmicos-org');
   if (!org) return { ok: false, reason: 'organization_not_found' };
 
@@ -261,6 +288,10 @@ async function sendTestTemplate(supabase: any, body: any, dryRun: boolean) {
 
   if (dryRun || !setting.is_enabled) {
     return { ok: true, dryRun, status: dryRun ? 'dry_run' : 'skipped_disabled', type, phone, templateName: setting.template_name, params, preview };
+  }
+
+  if (!authorized) {
+    return { ok: true, dryRun, status: 'skipped_authorization_required', type, phone, templateName: setting.template_name, params, preview };
   }
 
   const channel = await fetchWhatsAppChannel(supabase, org.id);
@@ -284,18 +315,19 @@ async function maybeSendRankNotification(supabase: any, args: {
   organizationId: string;
   creator: Creator;
   link: DiscountLink;
-  ranking: { creatorRank: number | null; creatorWeekCommission: number; top5Gap: number | null; weekStart: string };
+  ranking: { creatorRank: number | null; creatorMonthlyCommission: number; top5Gap: number | null; periodStart: string };
   dryRun: boolean;
+  authorized: boolean;
   attributedOrderId?: string;
 }) {
-  const { creatorRank, creatorWeekCommission, top5Gap, weekStart } = args.ranking;
+  const { creatorRank, creatorMonthlyCommission, top5Gap, periodStart } = args.ranking;
   if (!creatorRank) return { status: 'skipped_no_rank' };
 
   const creatorLink = buildCreatorLink(args.link);
   const uploadLink = await getOrCreateUploadLink(supabase, args.creator);
 
   if (creatorRank <= 5) {
-    const params = [args.creator.name, String(creatorRank), formatCOP(creatorWeekCommission), uploadLink];
+    const params = [args.creator.name, String(creatorRank), formatCOP(creatorMonthlyCommission), uploadLink];
     const preview = fillSample(TEMPLATE_DEFAULTS.rank_top5.sample_message || '', params);
     return maybeSendNotification(supabase, {
       organizationId: args.organizationId,
@@ -305,15 +337,16 @@ async function maybeSendRankNotification(supabase: any, args: {
       params,
       preview,
       dryRun: args.dryRun,
+      authorized: args.authorized,
       attributedOrderId: args.attributedOrderId,
-      periodStart: weekStart,
+      periodStart,
       rank: creatorRank,
-      metadata: { week_commission: creatorWeekCommission, upload_link: uploadLink, creator_link: creatorLink },
+      metadata: { monthly_commission: creatorMonthlyCommission, upload_link: uploadLink, creator_link: creatorLink },
     });
   }
 
   if (top5Gap !== null && top5Gap > 0 && top5Gap <= RANK_PROXIMITY_MAX_GAP_COP) {
-    const params = [args.creator.name, String(creatorRank), formatCOP(top5Gap), formatCOP(creatorWeekCommission), uploadLink];
+    const params = [args.creator.name, String(creatorRank), formatCOP(top5Gap), formatCOP(creatorMonthlyCommission), uploadLink];
     const preview = fillSample(TEMPLATE_DEFAULTS.rank_proximity.sample_message || '', params);
     return maybeSendNotification(supabase, {
       organizationId: args.organizationId,
@@ -323,10 +356,11 @@ async function maybeSendRankNotification(supabase: any, args: {
       params,
       preview,
       dryRun: args.dryRun,
+      authorized: args.authorized,
       attributedOrderId: args.attributedOrderId,
-      periodStart: weekStart,
+      periodStart,
       rank: creatorRank,
-      metadata: { week_commission: creatorWeekCommission, gap_to_top5: top5Gap, upload_link: uploadLink, creator_link: creatorLink },
+      metadata: { monthly_commission: creatorMonthlyCommission, gap_to_top5: top5Gap, upload_link: uploadLink, creator_link: creatorLink },
     });
   }
 
@@ -341,6 +375,7 @@ async function maybeSendNotification(supabase: any, args: {
   params: string[];
   preview: string;
   dryRun: boolean;
+  authorized: boolean;
   attributedOrderId?: string;
   periodStart?: string;
   rank?: number;
@@ -372,6 +407,10 @@ async function maybeSendNotification(supabase: any, args: {
   if (args.dryRun) {
     const inserted = await insertNotificationLog(supabase, { ...baseLog, status: 'dry_run' });
     return { status: 'dry_run', notificationId: inserted?.id, preview: args.preview };
+  }
+
+  if (!args.authorized) {
+    return { status: 'skipped_authorization_required', reason: 'Explicit authorization is required before sending WhatsApp messages', preview: args.preview };
   }
 
   if (!setting.is_enabled) {
@@ -633,14 +672,14 @@ async function countCreatorOrders(supabase: any, creatorId: string): Promise<num
   return count || 0;
 }
 
-async function computeWeeklyRanking(supabase: any, organizationId: string, creatorId: string): Promise<{
+async function computeMonthlyRanking(supabase: any, organizationId: string, creatorId: string): Promise<{
   creatorRank: number | null;
-  creatorWeekCommission: number;
+  creatorMonthlyCommission: number;
   top5Gap: number | null;
-  weekStart: string;
+  periodStart: string;
 }> {
-  const weekStart = getBogotaWeekStartDate();
-  const weekStartIso = `${weekStart}T05:00:00.000Z`;
+  const periodStart = getBogotaMonthStartDate();
+  const periodStartIso = `${periodStart}T05:00:00.000Z`;
 
   const { data: links } = await supabase
     .from('ugc_discount_links')
@@ -654,7 +693,7 @@ async function computeWeeklyRanking(supabase: any, organizationId: string, creat
     .from('ugc_attributed_orders')
     .select('creator_id, commission_amount')
     .eq('organization_id', organizationId)
-    .gte('order_date', weekStartIso);
+    .gte('order_date', periodStartIso);
 
   const commissionByCreator = new Map<string, number>();
   for (const id of activeCreatorIds) commissionByCreator.set(id, 0);
@@ -665,15 +704,49 @@ async function computeWeeklyRanking(supabase: any, organizationId: string, creat
 
   const ranked = Array.from(commissionByCreator.entries())
     .map(([id, commission]) => ({ id, commission }))
-    .sort((a, b) => b.commission - a.commission);
+    .filter((row) => row.commission > 0)
+    .sort((a, b) => b.commission - a.commission || a.id.localeCompare(b.id));
 
-  const index = ranked.findIndex((r) => r.id === creatorId);
-  const creatorWeekCommission = index >= 0 ? ranked[index].commission : 0;
-  const creatorRank = index >= 0 ? index + 1 : null;
-  const top5Commission = ranked[4]?.commission ?? null;
-  const top5Gap = top5Commission === null ? null : Math.max(0, top5Commission - creatorWeekCommission + 1);
+  let rank = 0;
+  let previousCommission: number | null = null;
+  const rankedWithTies = ranked.map((row, index) => {
+    if (previousCommission === null || row.commission < previousCommission) {
+      rank = index + 1;
+      previousCommission = row.commission;
+    }
+    return { ...row, rank };
+  });
 
-  return { creatorRank, creatorWeekCommission, top5Gap, weekStart };
+  const creatorRow = rankedWithTies.find((r) => r.id === creatorId);
+  const creatorMonthlyCommission = creatorRow?.commission || 0;
+  const creatorRank = creatorRow?.rank || null;
+  const top5Commission = rankedWithTies.find((r) => r.rank === 5)?.commission ?? rankedWithTies[4]?.commission ?? null;
+  const top5Gap = top5Commission === null || creatorMonthlyCommission <= 0
+    ? null
+    : Math.max(0, top5Commission - creatorMonthlyCommission + 1);
+
+  return { creatorRank, creatorMonthlyCommission, top5Gap, periodStart };
+}
+
+async function computeWeeklyProgress(supabase: any, organizationId: string, creatorId: string): Promise<{
+  weekStart: string;
+  weeklyOrders: number;
+  weeklyCommission: number;
+}> {
+  const weekStart = getBogotaWeekStartDate();
+  const weekStartIso = `${weekStart}T05:00:00.000Z`;
+
+  const { data: orders } = await supabase
+    .from('ugc_attributed_orders')
+    .select('commission_amount')
+    .eq('organization_id', organizationId)
+    .eq('creator_id', creatorId)
+    .gte('order_date', weekStartIso);
+
+  const weeklyOrders = (orders || []).length;
+  const weeklyCommission = (orders || []).reduce((sum: number, order: any) => sum + numberValue(order.commission_amount), 0);
+
+  return { weekStart, weeklyOrders, weeklyCommission };
 }
 
 async function fetchCmdCreatorsWithLinks(supabase: any, organizationId: string, maxSend: number): Promise<Array<{ creator: Creator; link: DiscountLink }>> {
@@ -813,6 +886,13 @@ function sampleParamsFor(type: NotificationType): string[] {
     case 'rank_proximity': return ['Ana', '6', '$8.000', '$40.000', 'https://upload.dosmicos.com/upload/demo'];
     case 'weekly_challenge': return ['Ana', '3 historias reales usando Dosmicos', 'Muestra cómo usas Dosmicos en la vida real y súbelo en tu link.', 'https://upload.dosmicos.com/upload/demo'];
   }
+}
+
+function getBogotaMonthStartDate(): string {
+  const bogotaNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Bogota' }));
+  bogotaNow.setDate(1);
+  bogotaNow.setHours(0, 0, 0, 0);
+  return `${bogotaNow.getFullYear()}-${String(bogotaNow.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
 function getBogotaWeekStartDate(): string {
