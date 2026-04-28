@@ -29,6 +29,24 @@ const getOperationalStatusFromTags = (
   return currentStatus;
 };
 
+type ShopifyOrderForPicking = {
+  shopify_order_id: number;
+  order_number: string;
+  fulfillment_status?: string | null;
+  cancelled_at?: string | null;
+  tags?: string | null;
+};
+
+const getInitialOperationalStatus = (order: ShopifyOrderForPicking): OperationalStatus => {
+  const tags = (order.tags || '').toLowerCase();
+
+  if (order.cancelled_at) return 'pending';
+  if (order.fulfillment_status === 'fulfilled') return 'shipped';
+  if (tags.includes('empacado')) return 'ready_to_ship';
+
+  return 'pending';
+};
+
 export interface PickingOrder {
   id: string;
   shopify_order_id: number;
@@ -143,6 +161,77 @@ export const usePickingOrders = () => {
     }
   };
 
+  const ensurePickingOrdersForSearch = async (searchTerm: string) => {
+    if (!currentOrganization?.id || !searchTerm.trim()) return;
+
+    const { data: matchingShopifyOrders, error: shopifyError } = await supabase
+      .from('shopify_orders')
+      .select('shopify_order_id, order_number, fulfillment_status, cancelled_at, tags')
+      .eq('organization_id', currentOrganization.id)
+      .ilike('order_number', `%${searchTerm.trim()}%`)
+      .limit(25);
+
+    if (shopifyError) {
+      logger.error('[PickingOrders] Error buscando órdenes Shopify para inicializar', shopifyError);
+      return;
+    }
+
+    if (!matchingShopifyOrders || matchingShopifyOrders.length === 0) return;
+
+    const shopifyOrderIds = matchingShopifyOrders.map(order => order.shopify_order_id);
+    const { data: existingPicking, error: pickingError } = await supabase
+      .from('picking_packing_orders')
+      .select('shopify_order_id, order_number')
+      .eq('organization_id', currentOrganization.id)
+      .in('shopify_order_id', shopifyOrderIds);
+
+    if (pickingError) {
+      logger.error('[PickingOrders] Error revisando picking orders existentes', pickingError);
+      return;
+    }
+
+    const existingByShopifyId = new Map(
+      (existingPicking || []).map(order => [order.shopify_order_id, order])
+    );
+
+    const toInitialize = matchingShopifyOrders
+      .filter(order => !existingByShopifyId.has(order.shopify_order_id))
+      .map(order => ({
+        shopify_order_id: order.shopify_order_id,
+        organization_id: currentOrganization.id,
+        operational_status: getInitialOperationalStatus(order as ShopifyOrderForPicking),
+        order_number: order.order_number
+      }));
+
+    if (toInitialize.length > 0) {
+      const { error: insertError } = await supabase
+        .from('picking_packing_orders')
+        .upsert(toInitialize, {
+          onConflict: 'organization_id,shopify_order_id',
+          ignoreDuplicates: true
+        });
+
+      if (insertError) {
+        logger.error('[PickingOrders] Error inicializando picking orders desde búsqueda', insertError);
+      }
+    }
+
+    const staleOrderNumbers = matchingShopifyOrders.filter(order => {
+      const existing = existingByShopifyId.get(order.shopify_order_id);
+      return existing && existing.order_number !== order.order_number;
+    });
+
+    if (staleOrderNumbers.length > 0) {
+      await Promise.all(staleOrderNumbers.map(order =>
+        supabase
+          .from('picking_packing_orders')
+          .update({ order_number: order.order_number })
+          .eq('organization_id', currentOrganization.id)
+          .eq('shopify_order_id', order.shopify_order_id)
+      ));
+    }
+  };
+
   const fetchOrders = async (filters?: {
     searchTerm?: string;
     operationalStatuses?: string[];
@@ -173,6 +262,10 @@ export const usePickingOrders = () => {
         filters,
         page
       });
+
+      if (filters?.searchTerm) {
+        await ensurePickingOrdersForSearch(filters.searchTerm);
+      }
       
       // Build optimized query with DB-level filters
       let query = supabase
