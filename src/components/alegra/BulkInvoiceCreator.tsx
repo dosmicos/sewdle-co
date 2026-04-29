@@ -1002,21 +1002,25 @@ const BulkInvoiceCreator = () => {
   // Helper to get effective totals based on active line_items
   // Shopify doesn't update subtotal_price/total_price when items are deleted
   const getEffectiveOrderTotals = (order: any): { subtotal: number; shipping: number; total: number; hasDeletedItems: boolean } => {
-    // Calculate actual subtotal from current line_items
+    // Calculate actual subtotal from current line_items (gross, before discounts)
     const calculatedSubtotal = (order.line_items || []).reduce(
       (sum: number, item: any) => sum + (Number(item.price) * item.quantity), 0
     );
-    
+
     // Get shipping from reliable source
     const shipping = getShippingFromOrder(order);
-    
+
+    // Order-level discounts (e.g. discount codes) live on order.total_discounts;
+    // line_items[].total_discount only carries line-level discounts.
+    const totalDiscounts = Number(order.total_discounts || 0);
+
     // Detect deleted items: Shopify subtotal > calculated from line_items
     const hasDeletedItems = (order.subtotal_price || 0) > calculatedSubtotal + 100; // $100 tolerance
-    
+
     return {
       subtotal: calculatedSubtotal,
       shipping,
-      total: calculatedSubtotal + shipping,
+      total: calculatedSubtotal - totalDiscounts + shipping,
       hasDeletedItems
     };
   };

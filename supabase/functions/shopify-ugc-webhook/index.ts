@@ -119,7 +119,7 @@ async function processOrder(body: string) {
   });
 
   // Insert attributed order
-  const { error: insertError } = await supabaseAdmin
+  const { data: insertedOrder, error: insertError } = await supabaseAdmin
     .from('ugc_attributed_orders')
     .insert({
       organization_id: link.organization_id,
@@ -131,7 +131,9 @@ async function processOrder(body: string) {
       discount_amount: discountAmount,
       commission_amount: commissionAmount,
       order_date: order.created_at || new Date().toISOString(),
-    });
+    })
+    .select('id')
+    .single();
 
   if (insertError) {
     log("Insert error", { error: insertError.message });
@@ -169,9 +171,53 @@ async function processOrder(body: string) {
 
   log("Attribution complete", {
     orderId: shopifyOrderId,
+    attributedOrderId: insertedOrder?.id,
     orderRevenue,
     commission: commissionAmount,
     commissionRate: link.commission_rate,
     creatorId: link.creator_id,
   });
+
+  // Phase 1 dopamine loop: notify the creator via Club de Mamás Dosmicos WhatsApp templates.
+  // The notification function is safe to call before Meta templates are enabled: it logs
+  // skipped_disabled/dry-run states instead of sending if settings are disabled.
+  if (insertedOrder?.id) {
+    await triggerAffiliateDopamineNotification(insertedOrder.id);
+  }
+}
+
+async function triggerAffiliateDopamineNotification(attributedOrderId: string) {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    if (!supabaseUrl || !serviceRole) {
+      log("Skipping affiliate notification — missing Supabase env");
+      return;
+    }
+
+    const resp = await fetch(`${supabaseUrl}/functions/v1/send-ugc-affiliate-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceRole}`,
+      },
+      body: JSON.stringify({
+        action: 'notify_order',
+        attributedOrderId,
+        dryRun: false,
+        // Shopify attribution is the trusted purchase trigger; Julian approved
+        // automatic Club de Mamás sale notifications on 2026-04-28.
+        authorized: true,
+      }),
+    });
+
+    const data = await resp.json().catch(() => null);
+    if (!resp.ok) {
+      log("Affiliate notification failed", { status: resp.status, data });
+    } else {
+      log("Affiliate notification processed", { data });
+    }
+  } catch (error: any) {
+    log("Affiliate notification error", { error: error.message });
+  }
 }
