@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.50.0'
 import { corsHeaders } from '../_shared/cors.ts'
 import { validateCityDepartment } from '../_shared/colombian-geography.ts'
+import { normalizeColombianPhone } from '../_shared/phone-utils.ts'
 
 // Helper function to verify Shopify webhook signature
 async function verifyShopifyWebhook(body: string, signature: string, secret: string): Promise<boolean> {
@@ -986,6 +987,138 @@ async function checkAutoInvoiceEligibility(order: any, supabase: any, organizati
 // DEPRECATED: triggerAutoInvoice removed - now using cron batch processing
 // El cron cada 2 minutos busca pedidos pendientes y los procesa secuencialmente
 
+// =====================================================================
+// Cart recovery: upsert checkout payload into shopify_carts
+// =====================================================================
+async function upsertShopifyCart(checkout: any, supabase: any, shopDomain: string) {
+  if (!checkout?.token) {
+    console.log('🛒 Checkout sin token, ignorando');
+    return { skipped: true, reason: 'no_token' };
+  }
+
+  const organizationId = await resolveOrganizationId(supabase, shopDomain);
+  if (!organizationId) {
+    throw new Error(`No se pudo resolver organizationId para ${shopDomain}`);
+  }
+
+  const rawPhone =
+    checkout.phone ||
+    checkout.customer?.phone ||
+    checkout.shipping_address?.phone ||
+    checkout.billing_address?.phone ||
+    null;
+  const normalizedPhone = rawPhone ? normalizeColombianPhone(rawPhone) : null;
+
+  const lineItems = Array.isArray(checkout.line_items)
+    ? checkout.line_items.map((li: any) => ({
+        title: li.title,
+        variant_title: li.variant_title,
+        quantity: li.quantity,
+        price: li.price,
+        image: li.image_url || li.image || null,
+        product_id: li.product_id,
+        variant_id: li.variant_id,
+      }))
+    : null;
+
+  const cartRow = {
+    shopify_cart_token: checkout.token,
+    organization_id: organizationId,
+    email: checkout.email || checkout.customer?.email || null,
+    phone: normalizedPhone,
+    customer_first_name: checkout.customer?.first_name || null,
+    currency: checkout.currency || 'COP',
+    subtotal_price: checkout.subtotal_price ? parseFloat(checkout.subtotal_price) : null,
+    total_price: checkout.total_price ? parseFloat(checkout.total_price) : null,
+    recovery_url: checkout.abandoned_checkout_url || null,
+    line_items: lineItems,
+    shopify_created_at: checkout.created_at || null,
+    is_abandoned: false,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase
+    .from('shopify_carts')
+    .upsert(cartRow, { onConflict: 'shopify_cart_token,organization_id' });
+
+  if (error) {
+    console.error('❌ Error upserting shopify_carts:', error);
+    throw new Error(`Error upserting cart: ${error.message}`);
+  }
+
+  console.log(`🛒 Carrito ${checkout.token} upserted (org ${organizationId}, phone=${normalizedPhone ? 'sí' : 'no'})`);
+  return { ok: true, organizationId };
+}
+
+async function resolveOrganizationId(supabase: any, shopDomain: string): Promise<string | null> {
+  if (!shopDomain) return null;
+  const { data } = await supabase
+    .from('organizations')
+    .select('id')
+    .eq('shopify_store_url', `https://${shopDomain}`)
+    .maybeSingle();
+  return data?.id || null;
+}
+
+// Tras procesar orders/create, intentar matchear contra un cart abandonado
+// y marcarlo como recuperado para que el cron deje de enviar mensajes.
+async function markCartRecovered(order: any, supabase: any, organizationId: string) {
+  if (!organizationId) return;
+
+  const cartToken = order.cart_token || null;
+  const email = order.email || order.customer?.email || null;
+  const rawPhone = order.customer?.phone || order.shipping_address?.phone || order.billing_address?.phone || null;
+  const phone = rawPhone ? normalizeColombianPhone(rawPhone) : null;
+
+  // Necesitamos al menos un identificador
+  if (!cartToken && !email && !phone) return;
+
+  // Buscar el shopify_orders.id recién creado para enlazar
+  const { data: orderRow } = await supabase
+    .from('shopify_orders')
+    .select('id')
+    .eq('shopify_order_id', order.id)
+    .maybeSingle();
+  const recoveryOrderId = orderRow?.id || null;
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const filters: string[] = [];
+  if (cartToken) filters.push(`shopify_cart_token.eq.${cartToken}`);
+  if (email) filters.push(`email.eq.${email}`);
+  if (phone) filters.push(`phone.eq.${phone}`);
+
+  const { data: matches, error: findError } = await supabase
+    .from('shopify_carts')
+    .select('id, shopify_cart_token')
+    .eq('organization_id', organizationId)
+    .is('recovered_at', null)
+    .gte('created_at', sevenDaysAgo)
+    .or(filters.join(','));
+
+  if (findError) {
+    console.error('⚠️ Error buscando carts a marcar recovered:', findError);
+    return;
+  }
+
+  if (!matches || matches.length === 0) return;
+
+  const ids = matches.map((m: any) => m.id);
+  const { error: updateError } = await supabase
+    .from('shopify_carts')
+    .update({
+      recovered_at: new Date().toISOString(),
+      recovery_order_id: recoveryOrderId,
+    })
+    .in('id', ids);
+
+  if (updateError) {
+    console.error('⚠️ Error marcando carts como recovered:', updateError);
+    return;
+  }
+
+  console.log(`✅ ${matches.length} carrito(s) marcado(s) recovered por orden ${order.order_number}`);
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -1088,6 +1221,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Handle checkout webhooks (carrito abandonado upsert)
+    if (topic === 'checkouts/create' || topic === 'checkouts/update') {
+      const result = await upsertShopifyCart(parsedBody, supabase, shopDomain);
+      return new Response(
+        JSON.stringify({ success: true, topic, result }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Process only order creation and update webhooks
     const order = parsedBody;
     if (topic !== 'orders/create' && topic !== 'orders/update' && topic !== 'orders/updated') {
@@ -1122,6 +1264,15 @@ Deno.serve(async (req) => {
     let result;
     if (topic === 'orders/create') {
       result = await processSingleOrder(order, supabase, shopDomain);
+      // Tras crear la orden, intentar matchear con un carrito abandonado y marcarlo como recuperado
+      try {
+        const orgIdForRecovery = await resolveOrganizationId(supabase, shopDomain);
+        if (orgIdForRecovery) {
+          await markCartRecovered(order, supabase, orgIdForRecovery);
+        }
+      } catch (recoveryErr) {
+        console.error('⚠️ markCartRecovered falló (no detiene flujo):', recoveryErr);
+      }
     } else if (topic === 'orders/update' || topic === 'orders/updated') {
       result = await updateExistingOrder(order, supabase, shopDomain);
     }

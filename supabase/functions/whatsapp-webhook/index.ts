@@ -1736,6 +1736,46 @@ serve(async (req) => {
                 console.log('Message saved to database');
               }
 
+              // ========== CART RECOVERY OPT-OUT ==========
+              // Si el cliente respondió STOP/BAJA/NO MAS y le habíamos enviado un cart_recovery,
+              // lo marcamos opted_out en todos sus carts para que el cron no le siga escribiendo.
+              if (messageType === 'text' && content) {
+                const optOutNormalized = content
+                  .toLowerCase()
+                  .normalize('NFD')
+                  .replace(/[̀-ͯ]/g, '')
+                  .trim();
+                const optOutPhrases = ['stop', 'baja', 'no mas', 'no me escriban', 'unsubscribe'];
+                const isOptOut = optOutPhrases.some(p => optOutNormalized === p || optOutNormalized.startsWith(p + ' '));
+
+                if (isOptOut) {
+                  // Sólo aplica si recibió un cart_recovery reciente — evita opt-outs accidentales
+                  // de clientes respondiendo "no" en otros contextos (confirmación de orden, etc.)
+                  const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+                  const { data: recentRecovery } = await supabase
+                    .from('shopify_carts')
+                    .select('id')
+                    .eq('phone', senderPhone)
+                    .not('last_message_sent_at', 'is', null)
+                    .gte('last_message_sent_at', fortyEightHoursAgo)
+                    .limit(1);
+
+                  if (recentRecovery && recentRecovery.length > 0) {
+                    const { error: optOutError } = await supabase
+                      .from('shopify_carts')
+                      .update({ opted_out: true })
+                      .eq('phone', senderPhone);
+
+                    if (optOutError) {
+                      console.error('❌ Error marcando opt-out:', optOutError);
+                    } else {
+                      console.log(`🚫 Cart recovery opt-out aplicado para ${senderPhone}`);
+                    }
+                  }
+                }
+              }
+              // ========== END CART RECOVERY OPT-OUT ==========
+
               // ========== IMAGE RECEIPT CONFIRMATION ==========
               // Send immediate confirmation when an image is received, before AI debounce
               if (messageType === 'image' && mediaUrl && conversation?.id) {
