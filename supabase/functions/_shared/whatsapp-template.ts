@@ -11,7 +11,8 @@ export async function sendWhatsAppTemplate(
   languageCode: string,
   bodyParameters: Array<{ type: 'text'; text: string }>,
   buttonParameters?: Array<{ type: 'payload' | 'text'; payload?: string; text?: string }>,
-  headerParameters?: Array<{ type: 'image' | 'video' | 'document'; image?: { link: string }; video?: { link: string }; document?: { link: string } }>
+  headerParameters?: Array<{ type: 'image' | 'video' | 'document'; image?: { link: string }; video?: { link: string }; document?: { link: string } }>,
+  buttonSubType: 'quick_reply' | 'url' = 'quick_reply'
 ): Promise<{ ok: boolean; messageId?: string; error?: any }> {
   try {
     const components: any[] = [];
@@ -32,12 +33,12 @@ export async function sendWhatsAppTemplate(
       });
     }
 
-    // Add button parameters if any (for quick reply buttons)
+    // Add button parameters if any (quick reply or url)
     if (buttonParameters && buttonParameters.length > 0) {
       buttonParameters.forEach((btn, index) => {
         components.push({
           type: 'button',
-          sub_type: 'quick_reply',
+          sub_type: buttonSubType,
           index: index.toString(),
           parameters: [btn],
         });
