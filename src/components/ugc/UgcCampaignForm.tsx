@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { UgcCampaignFormData } from '@/types/ugc';
+import type { UgcCampaign, UgcCampaignFormData } from '@/types/ugc';
 
 interface UgcCampaignFormProps {
   open: boolean;
@@ -13,6 +13,7 @@ interface UgcCampaignFormProps {
   creatorName: string;
   onSubmit: (data: UgcCampaignFormData) => void;
   isLoading?: boolean;
+  campaign?: UgcCampaign | null; // if provided → edit mode
 }
 
 export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
@@ -21,26 +22,27 @@ export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
   creatorName,
   onSubmit,
   isLoading,
+  campaign,
 }) => {
+  const isEditing = !!campaign;
+
   const [name, setName] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
   const [videos, setVideos] = useState('1');
   const [paymentType, setPaymentType] = useState<'producto' | 'efectivo' | 'mixto'>('producto');
   const [payment, setPayment] = useState('');
-  
   const [notes, setNotes] = useState('');
 
   React.useEffect(() => {
     if (open) {
-      setName('');
-      setOrderNumber('');
-      setVideos('1');
-      setPaymentType('producto');
-      setPayment('');
-      
-      setNotes('');
+      setName(campaign?.name ?? '');
+      setOrderNumber(campaign?.order_number ?? '');
+      setVideos(String(campaign?.agreed_videos ?? 1));
+      setPaymentType(campaign?.payment_type ?? 'producto');
+      setPayment(campaign?.agreed_payment ? String(campaign.agreed_payment) : '');
+      setNotes(campaign?.notes ?? '');
     }
-  }, [open]);
+  }, [open, campaign]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +53,6 @@ export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
       agreed_videos: parseInt(videos) || 1,
       payment_type: paymentType,
       agreed_payment: payment ? parseFloat(payment) : undefined,
-      
       notes: notes.trim() || undefined,
     });
   };
@@ -60,7 +61,9 @@ export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Nueva Campaña — {creatorName}</DialogTitle>
+          <DialogTitle>
+            {isEditing ? `Editar Campaña — ${creatorName}` : `Nueva Campaña — ${creatorName}`}
+          </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -69,7 +72,7 @@ export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
           </div>
           <div className="space-y-2">
             <Label htmlFor="order-number">Número de pedido</Label>
-            <Input id="order-number" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="Ej: #1234, se crea cuando envíes el producto" />
+            <Input id="order-number" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="Ej: #1234" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -103,7 +106,7 @@ export const UgcCampaignForm: React.FC<UgcCampaignFormProps> = ({
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="submit" disabled={isLoading || !name.trim()}>
-              {isLoading ? 'Creando...' : 'Crear Campaña'}
+              {isLoading ? (isEditing ? 'Guardando...' : 'Creando...') : (isEditing ? 'Guardar Cambios' : 'Crear Campaña')}
             </Button>
           </DialogFooter>
         </form>

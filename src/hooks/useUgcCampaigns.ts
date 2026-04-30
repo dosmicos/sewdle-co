@@ -74,5 +74,42 @@ export const useUgcCampaigns = (creatorId?: string | null) => {
     onError: (err: Error) => toast.error(`Error: ${err.message}`),
   });
 
-  return { campaigns, isLoading, createCampaign, updateCampaignStatus };
+  const updateCampaign = useMutation({
+    mutationFn: async ({ id, ...formData }: UgcCampaignFormData & { id: string }) => {
+      const { data, error } = await supabase
+        .from('ugc_campaigns')
+        .update({
+          name: formData.name,
+          order_number: formData.order_number || null,
+          agreed_videos: formData.agreed_videos || 1,
+          agreed_payment: formData.agreed_payment || 0,
+          payment_type: formData.payment_type || 'producto',
+          notes: formData.notes || null,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ugc-campaigns'] });
+      toast.success('Campaña actualizada');
+    },
+    onError: (err: Error) => toast.error(`Error: ${err.message}`),
+  });
+
+  const deleteCampaign = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('ugc_campaigns').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ugc-campaigns'] });
+      toast.success('Campaña eliminada');
+    },
+    onError: (err: Error) => toast.error(`Error al eliminar: ${err.message}`),
+  });
+
+  return { campaigns, isLoading, createCampaign, updateCampaign, deleteCampaign, updateCampaignStatus };
 };

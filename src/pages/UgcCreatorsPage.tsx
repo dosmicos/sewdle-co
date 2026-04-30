@@ -39,13 +39,14 @@ const UgcCreatorsPage: React.FC = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [campaignFormOpen, setCampaignFormOpen] = useState(false);
   const [campaignCreatorId, setCampaignCreatorId] = useState<string | null>(null);
+  const [editingCampaign, setEditingCampaign] = useState<UgcCampaign | null>(null);
   const [videoFormOpen, setVideoFormOpen] = useState(false);
   const [videoCampaignId, setVideoCampaignId] = useState<string | null>(null);
   const [pickingOrderId, setPickingOrderId] = useState<string | null>(null);
   const [pickingModalOpen, setPickingModalOpen] = useState(false);
 
   const { creators, isLoading: creatorsLoading, createCreator, updateCreator, updateCreatorStatus, deleteCreator } = useUgcCreators();
-  const { campaigns, isLoading: campaignsLoading, createCampaign, updateCampaignStatus } = useUgcCampaigns();
+  const { campaigns, isLoading: campaignsLoading, createCampaign, updateCampaign, deleteCampaign, updateCampaignStatus } = useUgcCampaigns();
   const { videos, createVideo, updateVideoStatus, updateVideoPublication } = useUgcVideos();
   const { getTagsForCreator } = useAllUgcCreatorTagAssignments();
 
@@ -141,6 +142,12 @@ const UgcCreatorsPage: React.FC = () => {
   };
 
   const handleCampaignSubmit = (data: any) => {
+    if (editingCampaign) {
+      updateCampaign.mutate({ ...data, id: editingCampaign.id }, {
+        onSuccess: () => { setCampaignFormOpen(false); setEditingCampaign(null); },
+      });
+      return;
+    }
     if (!campaignCreatorId) return;
     const creatorIdSnapshot = campaignCreatorId;
     createCampaign.mutate({ ...data, creatorId: creatorIdSnapshot }, {
@@ -155,6 +162,15 @@ const UgcCreatorsPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleEditCampaign = (campaign: UgcCampaign) => {
+    setEditingCampaign(campaign);
+    setCampaignFormOpen(true);
+  };
+
+  const handleDeleteCampaign = (campaignId: string) => {
+    deleteCampaign.mutate(campaignId);
   };
 
   const handleNewVideo = (campaignId: string) => {
@@ -350,15 +366,21 @@ const UgcCreatorsPage: React.FC = () => {
         onVideoStatusChange={handleVideoStatusChange}
         onVideoPublicationChange={handleVideoPublicationChange}
         onDelete={handleDeleteCreator}
+        onEditCampaign={handleEditCampaign}
+        onDeleteCampaign={handleDeleteCampaign}
       />
 
-      {campaignCreatorId && (
+      {(campaignCreatorId || editingCampaign) && (
         <UgcCampaignForm
           open={campaignFormOpen}
-          onOpenChange={setCampaignFormOpen}
+          onOpenChange={(open) => {
+            setCampaignFormOpen(open);
+            if (!open) setEditingCampaign(null);
+          }}
           creatorName={selectedCreator?.name || creators.find(c => c.id === campaignCreatorId)?.name || ''}
           onSubmit={handleCampaignSubmit}
-          isLoading={createCampaign.isPending}
+          isLoading={createCampaign.isPending || updateCampaign.isPending}
+          campaign={editingCampaign}
         />
       )}
 

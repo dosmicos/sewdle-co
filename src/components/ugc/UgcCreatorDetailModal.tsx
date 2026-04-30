@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { ExternalLink, MessageSquare, Edit, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2, Download, Image, Copy, Check } from 'lucide-react';
+import { ExternalLink, MessageSquare, Edit, Pencil, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2, Download, Image, Copy, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
@@ -32,6 +32,8 @@ interface UgcCreatorDetailModalProps {
   onVideoStatusChange: (videoId: string, status: string, feedback?: string) => void;
   onVideoPublicationChange: (videoId: string, publishedOrganic?: boolean, publishedAds?: boolean, currentStatus?: string) => void;
   onDelete?: () => void;
+  onEditCampaign?: (campaign: UgcCampaign) => void;
+  onDeleteCampaign?: (campaignId: string) => void;
 }
 
 function AccessCodeChip({ code }: { code: string }) {
@@ -65,6 +67,8 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   onVideoStatusChange,
   onVideoPublicationChange,
   onDelete,
+  onEditCampaign,
+  onDeleteCampaign,
 }) => {
   const { videos: allVideos, deleteVideo } = useUgcVideos(creator?.id);
 
@@ -438,11 +442,35 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                               {config?.label}
                             </Badge>
                           </div>
-                          {!['completado', 'cancelado'].includes(campaign.status) && (
-                            <Button size="sm" variant="outline" onClick={() => onNewVideo(campaign.id)}>
-                              <Plus className="h-3 w-3 mr-1" /> Subir Contenido
+                          <div className="flex items-center gap-1.5">
+                            {!['completado', 'cancelado'].includes(campaign.status) && (
+                              <Button size="sm" variant="outline" onClick={() => onNewVideo(campaign.id)}>
+                                <Plus className="h-3 w-3 mr-1" /> Subir Contenido
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                              title="Editar campaña"
+                              onClick={() => onEditCampaign?.(campaign)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
                             </Button>
-                          )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                              title="Eliminar campaña"
+                              onClick={() => {
+                                if (confirm(`¿Eliminar la campaña "${campaign.name}"? Esta acción no se puede deshacer.`)) {
+                                  onDeleteCampaign?.(campaign.id);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mt-2">

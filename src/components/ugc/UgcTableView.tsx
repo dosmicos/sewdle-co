@@ -98,6 +98,12 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
     [allTags, creators, getTagsForCreator]
   );
 
+  // Count creators with no tags at all
+  const noTagCount = useMemo(
+    () => creators.filter((c) => (getTagsForCreator?.(c.id) ?? []).length === 0).length,
+    [creators, getTagsForCreator]
+  );
+
   const filtered = creators.filter((creator) => {
     const matchesSearch =
       !search ||
@@ -112,9 +118,13 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
 
     const matchesTier = tierFilter === 'all' || (creator.tier ?? 'none') === tierFilter;
 
+    const creatorTags = getTagsForCreator?.(creator.id) ?? [];
     const matchesTag =
-      !selectedTagId ||
-      (getTagsForCreator?.(creator.id) ?? []).some((t) => t.id === selectedTagId);
+      !selectedTagId
+        ? true
+        : selectedTagId === '__none__'
+          ? creatorTags.length === 0
+          : creatorTags.some((t) => t.id === selectedTagId);
 
     const { publicationGoal, organicPublished, adsPublished } = getCampaignPublicationMetrics(
       activeCampaign?.id,
@@ -218,6 +228,19 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
             Todas
             <span className={`ml-0.5 px-1 rounded text-[10px] ${selectedTagId === null ? 'bg-background/20' : 'bg-muted'}`}>
               {creators.length}
+            </span>
+          </button>
+          <button
+            onClick={() => setSelectedTagId(selectedTagId === '__none__' ? null : '__none__')}
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+              selectedTagId === '__none__'
+                ? 'bg-foreground text-background border-foreground'
+                : 'bg-background text-muted-foreground border-border hover:border-foreground/40'
+            }`}
+          >
+            Sin etiqueta
+            <span className={`ml-0.5 px-1 rounded text-[10px] ${selectedTagId === '__none__' ? 'bg-background/20' : 'bg-muted'}`}>
+              {noTagCount}
             </span>
           </button>
           {tagCounts.map((tag) => (
