@@ -37,6 +37,7 @@ const AppSidebar = () => {
     { title: 'Finanzas', url: '/financial', icon: DollarSign, module: 'finances', alwaysShow: false },
     { title: 'Alegra', url: '/alegra', icon: Receipt, module: 'alegra', alwaysShow: false },
     { title: 'Mensajería IA', url: '/whatsapp-ai', icon: MessageSquare, module: 'messaging', alwaysShow: false },
+    { title: 'Carritos abandonados', url: '/cart-recovery', icon: ShoppingCart, module: 'cart_recovery', alwaysShow: false },
     { title: 'UGC Creators', url: '/ugc-creators', icon: Camera, module: 'ugc', alwaysShow: false },
     { title: 'Publicidad', url: '/publicidad', icon: Megaphone, module: 'publicidad', alwaysShow: false },
     { title: 'APIs', url: '/apis', icon: Wifi, module: 'apis', alwaysShow: false },
@@ -61,6 +62,7 @@ const AppSidebar = () => {
     'publicidad': 'publicidad',
     'users': 'users',
     'alegra': 'alegra',
+    'cart_recovery': 'cart_recovery',
     'apis': 'apis'
   };
 

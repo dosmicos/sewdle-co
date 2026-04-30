@@ -28,6 +28,7 @@ import { ReplenishmentPage } from "@/pages/ReplenishmentPage";
 import BillingPage from "@/pages/BillingPage";
 import OKRsPage from "@/pages/OKRsPage";
 import AlegraPage from "@/pages/AlegraPage";
+import CartRecoveryPage from "@/pages/CartRecoveryPage";
 import MessagingAIPage from "@/pages/MessagingAIPage";
 import ApisStatusPage from "@/pages/ApisStatusPage";
 
@@ -442,6 +443,12 @@ const AppContent = () => {
         <Route path="alegra" element={
           <AdminRoute>
             <AlegraPage />
+          </AdminRoute>
+        } />
+
+        <Route path="cart-recovery" element={
+          <AdminRoute>
+            <CartRecoveryPage />
           </AdminRoute>
         } />
 
