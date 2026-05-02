@@ -60,6 +60,7 @@ const GoogleAdsCallbackPage = React.lazy(() => import("@/pages/GoogleAdsCallback
 const TikTokCallbackPage = React.lazy(() => import("@/pages/TikTokCallbackPage"));
 const TikTokAdsCallbackPage = React.lazy(() => import("@/pages/TikTokAdsCallbackPage"));
 const SocialAnalyticsPage = React.lazy(() => import("@/pages/SocialAnalyticsPage"));
+const CartRecoveryDashboardPage = React.lazy(() => import("@/pages/CartRecoveryDashboardPage"));
 
 // Create QueryClient instance outside of component to prevent recreation
 const queryClient = new QueryClient({
@@ -254,6 +255,13 @@ const FinanceAppContent = () => {
         <PasswordChangeRouteGuard>
           <PermissionRoute module="growth" action="view">
             <SocialAnalyticsPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/cart-recovery" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="growth" action="view">
+            <CartRecoveryDashboardPage />
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />

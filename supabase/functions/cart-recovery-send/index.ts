@@ -303,9 +303,11 @@ serve(async (req) => {
           { type: 'text' as const, text: totalText },
         ];
 
-        // Boton URL dinámico (template debe declarar URL con variable {{1}})
-        const buttonParameters = recoveryUrl
-          ? [{ type: 'text' as const, text: recoveryUrl, subType: 'url' as const }]
+        // El template Meta tiene URL pattern "https://dosmicos.co/{{1}}", así que solo
+        // pasamos el path+query (Meta hace replace y construye la URL final).
+        const recoveryUrlSuffix = recoveryUrl.replace(/^https?:\/\/[^/]+\//, '');
+        const buttonParameters = recoveryUrlSuffix
+          ? [{ type: 'text' as const, text: recoveryUrlSuffix, subType: 'url' as const }]
           : undefined;
 
         const result = await sendWhatsAppTemplate(
