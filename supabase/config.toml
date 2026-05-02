@@ -156,5 +156,8 @@ verify_jwt = false
 [functions.sort-collection-products]
 verify_jwt = false
 
+[functions.cart-recovery-send]
+verify_jwt = false
+
 [functions.agent-context]
 verify_jwt = true
