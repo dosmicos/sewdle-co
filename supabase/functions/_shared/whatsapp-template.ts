@@ -10,9 +10,14 @@ export async function sendWhatsAppTemplate(
   templateName: string,
   languageCode: string,
   bodyParameters: Array<{ type: 'text'; text: string }>,
-  buttonParameters?: Array<{ type: 'payload' | 'text'; payload?: string; text?: string }>,
-  headerParameters?: Array<{ type: 'image' | 'video' | 'document'; image?: { link: string }; video?: { link: string }; document?: { link: string } }>,
-  buttonSubType: 'quick_reply' | 'url' = 'quick_reply'
+  buttonParameters?: Array<{
+    type: 'payload' | 'text';
+    payload?: string;
+    text?: string;
+    /** WhatsApp template button subtype. Defaults: payload => quick_reply, text => url. */
+    subType?: 'quick_reply' | 'url';
+  }>,
+  headerParameters?: Array<{ type: 'image' | 'video' | 'document'; image?: { link: string }; video?: { link: string }; document?: { link: string } }>
 ): Promise<{ ok: boolean; messageId?: string; error?: any }> {
   try {
     const components: any[] = [];
@@ -33,14 +38,18 @@ export async function sendWhatsAppTemplate(
       });
     }
 
-    // Add button parameters if any (quick reply or url)
+    // Add button parameters if any.
+    // WhatsApp uses different sub_types for quick-reply payload buttons vs dynamic URL buttons.
     if (buttonParameters && buttonParameters.length > 0) {
       buttonParameters.forEach((btn, index) => {
+        const { subType, ...parameter } = btn;
+        const resolvedSubType = subType || (btn.type === 'payload' ? 'quick_reply' : 'url');
+
         components.push({
           type: 'button',
-          sub_type: buttonSubType,
+          sub_type: resolvedSubType,
           index: index.toString(),
-          parameters: [btn],
+          parameters: [parameter],
         });
       });
     }
