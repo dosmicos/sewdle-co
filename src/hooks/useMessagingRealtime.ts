@@ -12,6 +12,7 @@ interface UseMessagingRealtimeOptions {
 }
 
 const POLL_INTERVAL_MS = 30000; // Poll every 30 seconds (reduced from 5s to save DB resources)
+const SUPERVISED_SUGGESTION_REFRESH_DELAYS_MS = [8000, 16000];
 
 export const useMessagingRealtime = ({ 
   organizationId, 
@@ -24,6 +25,7 @@ export const useMessagingRealtime = ({
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const supervisedSuggestionRefreshTimeoutsRef = useRef<NodeJS.Timeout[]>([]);
   const isUnmountedRef = useRef(false);
   const activeConversationIdRef = useRef(activeConversationId);
 
@@ -69,6 +71,24 @@ export const useMessagingRealtime = ({
     }
   }, []);
 
+  const clearSupervisedSuggestionRefreshes = useCallback(() => {
+    supervisedSuggestionRefreshTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+    supervisedSuggestionRefreshTimeoutsRef.current = [];
+  }, []);
+
+  const scheduleSupervisedSuggestionRefreshes = useCallback(() => {
+    clearSupervisedSuggestionRefreshes();
+
+    supervisedSuggestionRefreshTimeoutsRef.current = SUPERVISED_SUGGESTION_REFRESH_DELAYS_MS.map((delayMs) =>
+      setTimeout(() => {
+        if (!isUnmountedRef.current) {
+          console.log(`🔄 [Messaging] Follow-up refresh for Elsa supervised suggestion after ${delayMs}ms`);
+          refreshAll();
+        }
+      }, delayMs)
+    );
+  }, [clearSupervisedSuggestionRefreshes, refreshAll]);
+
   // Cleanup realtime channel
   const cleanupChannel = useCallback(() => {
     if (channelRef.current) {
@@ -94,6 +114,7 @@ export const useMessagingRealtime = ({
         (payload) => {
           console.log('📨 [Realtime] New message:', payload.new);
           refreshAll();
+          scheduleSupervisedSuggestionRefreshes();
         }
       )
       .on(
@@ -135,7 +156,7 @@ export const useMessagingRealtime = ({
         setConnectionStatus('disconnected');
       }
     }, 10000);
-  }, [organizationId, enabled, cleanupChannel, refreshAll, connectionStatus]);
+  }, [organizationId, enabled, cleanupChannel, refreshAll, scheduleSupervisedSuggestionRefreshes, connectionStatus]);
 
   // Main effect - start polling immediately, try realtime as bonus
   useEffect(() => {
@@ -155,6 +176,7 @@ export const useMessagingRealtime = ({
     return () => {
       isUnmountedRef.current = true;
       stopPolling();
+      clearSupervisedSuggestionRefreshes();
       cleanupChannel();
     };
   }, [enabled, organizationId]); // eslint-disable-line react-hooks/exhaustive-deps
