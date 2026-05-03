@@ -16,6 +16,8 @@ import { UgcChildrenManager } from './UgcChildrenManager';
 import { UgcCreatorTagsManager } from './UgcCreatorTagsManager';
 import { GenerateUploadLinkButton } from './GenerateUploadLinkButton';
 import { DiscountLinkButton } from './DiscountLinkButton';
+import { CreatorPortalLinkButton } from './CreatorPortalLinkButton';
+import { UgcToolkitAssignmentsManager } from './UgcToolkitAssignmentsManager';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -306,6 +308,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
           </div>
           {/* Action buttons row */}
           <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border flex-wrap">
+            <CreatorPortalLinkButton creatorId={creator.id} creatorName={creator.name} />
             <GenerateUploadLinkButton creatorId={creator.id} creatorName={creator.name} />
             <DiscountLinkButton creatorId={creator.id} creatorName={creator.name} accessCode={creator.access_code} />
             <Button variant="outline" size="sm" onClick={onEdit}>
@@ -413,6 +416,9 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
 
             {/* Children */}
             <UgcChildrenManager creatorId={creator.id} />
+
+            {/* Club creator toolkits */}
+            <UgcToolkitAssignmentsManager creatorId={creator.id} campaigns={creatorCampaigns} />
           </TabsContent>
 
           {/* Tab: Campaigns */}

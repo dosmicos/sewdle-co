@@ -84,8 +84,22 @@ export const useUgcUploadTokens = (creatorId: string | undefined) => {
     },
   });
 
+  const deleteToken = useMutation({
+    mutationFn: async () => {
+      if (!activeToken) throw new Error('No active token');
+      const { error } = await supabase
+        .from('ugc_upload_tokens' as any)
+        .delete()
+        .eq('id', activeToken.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ugc-upload-token', creatorId] });
+    },
+  });
+
   const getUploadUrl = (token: string) => {
-    return `https://upload.dosmicos.com/upload/${token}`;
+    return `https://club.dosmicos.com/upload/${token}`;
   };
 
   return {
@@ -93,6 +107,7 @@ export const useUgcUploadTokens = (creatorId: string | undefined) => {
     isLoading,
     generateToken,
     deactivateToken,
+    deleteToken,
     getUploadUrl,
   };
 };
