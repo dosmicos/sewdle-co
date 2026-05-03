@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Link2, Copy, Check, Loader2, XCircle, Upload } from 'lucide-react';
+import { Link2, Copy, Check, Loader2, XCircle, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUgcUploadTokens } from '@/hooks/useUgcUploadTokens';
 import { format } from 'date-fns';
@@ -22,12 +22,12 @@ export const GenerateUploadLinkButton: React.FC<GenerateUploadLinkButtonProps> =
 }) => {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [expiresInDays, setExpiresInDays] = useState(7);
-  const [hasExpiration, setHasExpiration] = useState(true);
+  const [expiresInDays, setExpiresInDays] = useState(30);
+  const [hasExpiration, setHasExpiration] = useState(false);
   const [hasMaxUploads, setHasMaxUploads] = useState(false);
   const [maxUploads, setMaxUploads] = useState(10);
 
-  const { activeToken, isLoading, generateToken, deactivateToken, getUploadUrl } = useUgcUploadTokens(creatorId);
+  const { activeToken, isLoading, generateToken, deactivateToken, deleteToken, getUploadUrl } = useUgcUploadTokens(creatorId);
 
   const handleGenerate = () => {
     generateToken.mutate(
@@ -54,6 +54,14 @@ export const GenerateUploadLinkButton: React.FC<GenerateUploadLinkButtonProps> =
     deactivateToken.mutate(undefined, {
       onSuccess: () => toast.success('Link desactivado'),
       onError: () => toast.error('Error al desactivar'),
+    });
+  };
+
+  const handleDelete = () => {
+    if (!window.confirm(`¿Eliminar el link de subida de ${creatorName}?`)) return;
+    deleteToken.mutate(undefined, {
+      onSuccess: () => toast.success('Link eliminado'),
+      onError: () => toast.error('Error al eliminar'),
     });
   };
 
@@ -105,9 +113,12 @@ export const GenerateUploadLinkButton: React.FC<GenerateUploadLinkButtonProps> =
                 </Button>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Button variant="outline" size="sm" className="text-destructive" onClick={handleDeactivate} disabled={deactivateToken.isPending}>
                   <XCircle className="h-4 w-4 mr-1" /> Desactivar Link
+                </Button>
+                <Button variant="outline" size="sm" className="text-destructive" onClick={handleDelete} disabled={deleteToken.isPending}>
+                  <Trash2 className="h-4 w-4 mr-1" /> Eliminar
                 </Button>
                 <Button size="sm" onClick={handleGenerate} disabled={generateToken.isPending}>
                   {generateToken.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Link2 className="h-4 w-4 mr-1" />}

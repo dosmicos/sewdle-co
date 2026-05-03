@@ -28,6 +28,8 @@ export const useUgcUploadTokens = (creatorId: string | undefined) => {
         .select('*')
         .eq('creator_id', creatorId)
         .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (error) throw error;
       return data as unknown as UgcUploadToken | null;
@@ -84,8 +86,22 @@ export const useUgcUploadTokens = (creatorId: string | undefined) => {
     },
   });
 
+  const deleteToken = useMutation({
+    mutationFn: async () => {
+      if (!activeToken) throw new Error('No active token');
+      const { error } = await supabase
+        .from('ugc_upload_tokens' as any)
+        .delete()
+        .eq('id', activeToken.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ugc-upload-token', creatorId] });
+    },
+  });
+
   const getUploadUrl = (token: string) => {
-    return `https://upload.dosmicos.com/upload/${token}`;
+    return `https://club.dosmicos.com/upload/${token}`;
   };
 
   return {
@@ -93,6 +109,7 @@ export const useUgcUploadTokens = (creatorId: string | undefined) => {
     isLoading,
     generateToken,
     deactivateToken,
+    deleteToken,
     getUploadUrl,
   };
 };
