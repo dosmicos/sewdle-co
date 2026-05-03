@@ -120,6 +120,7 @@ const MessagingAIPage = () => {
       is_pinned: (conv as any).is_pinned ?? false,
       folder_id: (conv as any).folder_id ?? null,
       is_group: (conv as any).is_group ?? false,
+      metadata: conv.metadata as Conversation['metadata'],
     }));
   }, [conversations]);
 

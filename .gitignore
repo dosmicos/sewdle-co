@@ -23,3 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Local agent/runtime folders — never index Claude/OpenClaw worktrees or tool state
+.claude/
+.agents/
+.openclaw/
+workspace/
+

@@ -12,6 +12,11 @@ import { format, isToday, isYesterday, isThisWeek, isThisYear } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+  formatSuggestionConfidence,
+  getPendingElsaSupervisedSuggestion,
+  type ConversationMetadata,
+} from '@/lib/elsaSupervisedSuggestion';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { ChannelType } from './ConversationsList';
@@ -84,6 +89,7 @@ interface Conversation {
   status: 'active' | 'pending' | 'resolved';
   channel: ChannelType;
   ai_managed?: boolean;
+  metadata?: ConversationMetadata;
 }
 
 interface ConversationThreadProps {
@@ -312,6 +318,7 @@ export const ConversationThread = ({
   const [inputMessage, setInputMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [copiedElsaSuggestion, setCopiedElsaSuggestion] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<string[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -332,6 +339,12 @@ export const ConversationThread = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const elsaSuggestion = useMemo(
+    () => getPendingElsaSupervisedSuggestion(conversation?.metadata),
+    [conversation?.metadata]
+  );
+  const elsaConfidence = formatSuggestionConfidence(elsaSuggestion?.confidence);
 
   // Filter quick replies based on search
   const filteredQuickReplies = useMemo(() => {
@@ -823,6 +836,31 @@ export const ConversationThread = ({
     setCopiedIndex(index);
     toast.success('Mensaje copiado');
     setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const handleUseElsaSuggestion = () => {
+    if (!elsaSuggestion?.text) return;
+    setInputMessage(elsaSuggestion.text);
+    setSelectedFiles([]);
+    setFilePreviews([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (imageInputRef.current) imageInputRef.current.value = '';
+    setTimeout(() => {
+      inputRef.current?.focus();
+      if (inputRef.current) {
+        inputRef.current.style.height = 'auto';
+        inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 120) + 'px';
+      }
+    }, 50);
+    toast.success('Sugerencia de Elsa lista para revisar');
+  };
+
+  const handleCopyElsaSuggestion = () => {
+    if (!elsaSuggestion?.text) return;
+    navigator.clipboard.writeText(elsaSuggestion.text);
+    setCopiedElsaSuggestion(true);
+    toast.success('Sugerencia de Elsa copiada');
+    setTimeout(() => setCopiedElsaSuggestion(false), 2000);
   };
 
   const handleReply = (message: Message) => {
@@ -1349,6 +1387,71 @@ export const ConversationThread = ({
 
         {/* Input area */}
         <div className="p-2 lg:p-4 border-t border-border safe-area-bottom">
+          {/* Elsa supervised suggestion */}
+          {elsaSuggestion && (
+            <div className="mb-2 rounded-xl border border-amber-200 bg-amber-50/90 p-3 shadow-sm animate-in fade-in slide-in-from-bottom-2">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-amber-950">Sugerencia de Elsa</p>
+                    <Badge variant="secondary" className="bg-white/80 text-amber-800 border-amber-200">
+                      Supervisada · no enviada
+                    </Badge>
+                    {elsaConfidence && (
+                      <Badge variant="outline" className="bg-white/70 text-amber-800 border-amber-200">
+                        Confianza {elsaConfidence}
+                      </Badge>
+                    )}
+                    {elsaSuggestion.handoff_required && (
+                      <Badge variant="destructive" className="gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        Revisar caso
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="whitespace-pre-wrap rounded-lg border border-amber-100 bg-white/80 p-3 text-sm leading-relaxed text-slate-900">
+                    {elsaSuggestion.text}
+                  </p>
+                  {elsaSuggestion.handoff_reason && (
+                    <p className="text-xs text-amber-800">
+                      Motivo de revisión: {elsaSuggestion.handoff_reason}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-amber-500 hover:bg-amber-600 text-white"
+                      onClick={handleUseElsaSuggestion}
+                      disabled={isSending}
+                    >
+                      Usar respuesta
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCopyElsaSuggestion}
+                    >
+                      {copiedElsaSuggestion ? (
+                        <Check className="h-4 w-4 mr-1.5 text-emerald-500" />
+                      ) : (
+                        <Copy className="h-4 w-4 mr-1.5" />
+                      )}
+                      Copiar
+                    </Button>
+                    <span className="text-xs text-amber-800">
+                      La asesora debe revisar y enviar manualmente.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Reply preview */}
           {replyingTo && (
             <div className="mb-2 p-2 lg:p-3 bg-muted/50 rounded-lg border-l-4 border-emerald-500 flex items-start gap-2">
