@@ -113,6 +113,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const hydratedKeyRef = useRef<string | null>(null);
   const syncInFlightKeyRef = useRef<string | null>(null);
   const shopifyFreshKeyRef = useRef<string | null>(null);
+  // Tracks whether the Shopify note textarea is focused — prevents background syncs from overwriting user input
+  const shopifyNoteFocusedRef = useRef(false);
   // SKU Verification states
   const [skuInput, setSkuInput] = useState('');
   const [verificationResult, setVerificationResult] = useState<{
@@ -484,10 +486,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           console.log(`🛡️ sync_from_shopify: Tags protegidos para orden empacada (status: ${localOrder?.operational_status})`);
         }
 
-        // Update UI with fresh Shopify data
-        setShopifyNote(syncedNote);
-        lastSavedShopifyNoteRef.current = syncedNote;
-        setShopifyNoteSaveState(syncedNote ? 'saved' : 'idle');
+        // Update UI with fresh Shopify data — only if user is NOT currently typing
+        // (shopifyNoteFocusedRef is true while the textarea has focus)
+        if (!shopifyNoteFocusedRef.current) {
+          setShopifyNote(syncedNote);
+          lastSavedShopifyNoteRef.current = syncedNote;
+          setShopifyNoteSaveState(syncedNote ? 'saved' : 'idle');
+        }
 
         // Update local UI cache so it persists when reopening the modal
         setLocalOrder((prev) =>
@@ -1038,11 +1043,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
     console.log(`📦 Marcando como empacado: Orden #${localOrder.shopify_order.order_number}`);
 
-    // Print IMMEDIATELY before any async operation.
-    // window.open() is blocked by browsers when called after an await — must be synchronous.
+    // Open a blank print window SYNCHRONOUSLY before any await.
+    // Browsers block window.open() called after an await (popup blocker).
+    // We open blank now and navigate to the print URL after the status update succeeds.
+    let printWindow: Window | null = null;
     if (autoPrintTriggeredRef.current !== orderId) {
       autoPrintTriggeredRef.current = orderId;
-      handlePrint();
+      printWindow = window.open('', '_blank');
     }
 
     const MAX_ATTEMPTS = 2;
@@ -1070,13 +1077,23 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     setIsRetryingPack(false);
 
     if (lastError) {
+      // Status update failed — close the blank window so the user doesn't see a blank tab
+      printWindow?.close();
       const message = lastError instanceof Error ? lastError.message : 'Error desconocido';
       setPackError(message);
       // Allow retry (manual button or re-scan)
       autoPackTriggeredRef.current = null;
-      toast.error('❌ No se pudo actualizar el estado. La impresión ya fue enviada. Usa "Reintentar" para aplicar etiqueta EMPACADO.', {
+      toast.error('❌ No se pudo aplicar etiqueta EMPACADO. NO se imprimió. Usa "Reintentar".', {
         duration: 8000,
       });
+    } else if (printWindow) {
+      // Status update succeeded — navigate the pre-opened window to the print URL
+      const shopifyOrderId = localOrder.shopify_order_id ?? localOrder.shopify_order?.shopify_order_id;
+      if (shopifyOrderId) {
+        printWindow.location.href = `/picking-packing/print/${shopifyOrderId}`;
+      } else {
+        printWindow.close();
+      }
     }
 
     packInFlightRef.current = false;
@@ -2013,6 +2030,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
                       setShopifyNote(e.target.value);
                       setShopifyNoteSaveState('idle');
                     }}
+                    onFocus={() => { shopifyNoteFocusedRef.current = true; }}
+                    onBlur={() => { shopifyNoteFocusedRef.current = false; }}
                     placeholder="Agregar notas visibles en Shopify..."
                     className="min-h-[60px] md:min-h-[100px] text-sm"
                     disabled={!!effectiveOrder?.shopify_order?.cancelled_at || isSyncingFromShopify}
