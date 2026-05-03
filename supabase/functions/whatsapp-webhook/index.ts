@@ -2521,9 +2521,10 @@ serve(async (req) => {
                   .order('sent_at', { ascending: false })
                   .limit(15);
 
-                // Always use OpenAI (GPT-4o-mini) — supports text + vision
-                const functionName = 'messaging-ai-openai';
-                console.log(`Using AI provider: openai, function: ${functionName}`);
+                const channelAiConfig = channel.ai_config || {};
+                const aiRuntime = resolveAiRuntime(channelAiConfig);
+                const functionName = aiRuntime.functionName;
+                console.log(`Using AI provider: ${aiRuntime.provider}, function: ${functionName}, supervised: ${aiRuntime.supervised}`);
 
                 // Build messages for the AI function — all accumulated messages are already in the DB
                 // Include image URLs for vision analysis when available
@@ -2544,13 +2545,14 @@ serve(async (req) => {
                   return { role, content: m.content || '' };
                 });
 
-                // Call the AI edge function
-                const channelAiConfig = channel.ai_config || {};
+                // Call the AI edge function selected by channel.ai_config.aiProvider.
+                // Elsa/hermes providers route to elsa-hermes-agent; supervised mode is handled below.
                 const { data: aiData, error: aiError } = await supabase.functions.invoke(functionName, {
                   body: {
                     messages: messagesForAI,
                     systemPrompt: channelAiConfig.systemPrompt || 'Eres un asistente virtual amigable de Dosmicos. Responde en español.',
                     organizationId: channel.organization_id,
+                    conversationId: conversation.id,
                   }
                 });
 
@@ -2559,141 +2561,173 @@ serve(async (req) => {
                 
                 if (aiError) {
                   console.error('AI function error:', aiError);
-                  // Fallback to local generateAIResponse if edge function fails
-                  console.log('Falling back to local generateAIResponse...');
-                  const aiResult = await generateAIResponse(
-                    content,
-                    (historyMessages || []).reverse(),
-                    channel.ai_config,
-                    channel.organization_id,
-                    supabase,
-                    shopifyCredentials
-                  );
-                  aiText = aiResult.text;
-                  aiProductImages = aiResult.productImages;
+
+                  if (aiRuntime.isElsaProvider || aiRuntime.supervised) {
+                    // Do not fall back to the legacy OpenAI auto-send path for Elsa/supervised mode.
+                    // elsa-hermes-agent already owns its own safe fallback; if invoking it fails,
+                    // suppress outbound sends rather than risking an automatic customer reply.
+                    console.error('Elsa/supervised AI invocation failed; suppressing legacy auto-reply fallback');
+                  } else {
+                    // Fallback to local generateAIResponse for the legacy non-Elsa auto-reply path only.
+                    console.log('Falling back to local generateAIResponse...');
+                    const aiResult = await generateAIResponse(
+                      content,
+                      (historyMessages || []).reverse(),
+                      channel.ai_config,
+                      channel.organization_id,
+                      supabase,
+                      shopifyCredentials
+                    );
+                    aiText = aiResult.text;
+                    aiProductImages = aiResult.productImages;
+                  }
                 } else {
                   aiText = aiData?.response || '';
                   aiProductImages = aiData?.product_images || [];
                 }
 
                 if (aiText) {
-                  // Send the text response via WhatsApp
-                  const sent = await sendWhatsAppMessage(
-                    senderPhone,
-                    aiText,
-                    channel.meta_phone_number_id || phoneNumberId
-                  );
+                  const deliveryPlan = resolveAiDeliveryPlan(aiRuntime, aiText);
 
-                  if (sent) {
-                    // Save AI response to database
-                    await supabase
-                      .from('messaging_messages')
-                      .insert({
-                        conversation_id: conversation.id,
-                        channel_type: 'whatsapp',
-                        direction: 'outbound',
-                        sender_type: 'ai',
-                        content: aiText,
-                        message_type: 'text',
-                        sent_at: new Date().toISOString(),
-                      });
+                  if (deliveryPlan.shouldPersistSuggestion) {
+                    const metadataPatch = buildSupervisedSuggestionMetadata({
+                      aiText,
+                      aiData,
+                      runtime: aiRuntime,
+                    });
 
-                    // Update conversation last message
                     await supabase
                       .from('messaging_conversations')
                       .update({
-                        last_message_at: new Date().toISOString(),
-                        last_message_preview: aiText.substring(0, 100),
+                        metadata: {
+                          ...cleanMetadata,
+                          ...metadataPatch,
+                        },
                       })
                       .eq('id', conversation.id);
 
-                    console.log('AI response sent and saved');
+                    console.log('📝 Elsa supervised suggestion saved; not sent to customer');
+                  } else if (!deliveryPlan.shouldSendToCustomer) {
+                    console.log('AI delivery plan suppressed outbound send');
+                  } else {
+                    // Send the text response via WhatsApp
+                    const sent = await sendWhatsAppMessage(
+                      senderPhone,
+                      aiText,
+                      channel.meta_phone_number_id || phoneNumberId
+                    );
 
-                    // ========== AI ESCALATION DETECTION ==========
-                    const escalationPhrases = [
-                      'conecto con el equipo', 'conecto con un asesor',
-                      'no tengo esa información', 'no cuento con esa información',
-                      'no puedo ayudarte con eso', 'contactar a nuestro equipo',
-                      'comunícate con nosotros', 'escribenos al'
-                    ];
-                    const aiTextLower = aiText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                    const isEscalation = escalationPhrases.some(phrase => {
-                      const normalizedPhrase = phrase.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                      return aiTextLower.includes(normalizedPhrase);
-                    });
+                    if (sent) {
+                      // Save AI response to database
+                      await supabase
+                        .from('messaging_messages')
+                        .insert({
+                          conversation_id: conversation.id,
+                          channel_type: 'whatsapp',
+                          direction: 'outbound',
+                          sender_type: 'ai',
+                          content: aiText,
+                          message_type: 'text',
+                          sent_at: new Date().toISOString(),
+                        });
 
-                    if (isEscalation) {
-                      console.log('🔴 AI escalation detected, assigning "Requiere atencion" tag');
-                      try {
-                        // 1. Assign "Requiere atencion" tag
-                        const { data: attentionTag } = await supabase
-                          .from('messaging_conversation_tags')
-                          .select('id')
-                          .eq('organization_id', channel.organization_id)
-                          .eq('name', 'Requiere atencion')
-                          .maybeSingle();
-                        if (attentionTag) {
-                          await supabase.from('messaging_conversation_tag_assignments')
-                            .upsert({ conversation_id: conversation.id, tag_id: attentionTag.id }, { onConflict: 'conversation_id,tag_id' });
+                      // Update conversation last message
+                      await supabase
+                        .from('messaging_conversations')
+                        .update({
+                          last_message_at: new Date().toISOString(),
+                          last_message_preview: aiText.substring(0, 100),
+                        })
+                        .eq('id', conversation.id);
+
+                      console.log('AI response sent and saved');
+
+                      // ========== AI ESCALATION DETECTION ==========
+                      const escalationPhrases = [
+                        'conecto con el equipo', 'conecto con un asesor',
+                        'no tengo esa información', 'no cuento con esa información',
+                        'no puedo ayudarte con eso', 'contactar a nuestro equipo',
+                        'comunícate con nosotros', 'escribenos al'
+                      ];
+                      const aiTextLower = aiText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                      const isEscalation = escalationPhrases.some(phrase => {
+                        const normalizedPhrase = phrase.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        return aiTextLower.includes(normalizedPhrase);
+                      });
+
+                      if (isEscalation) {
+                        console.log('🔴 AI escalation detected, assigning "Requiere atencion" tag');
+                        try {
+                          // 1. Assign "Requiere atencion" tag
+                          const { data: attentionTag } = await supabase
+                            .from('messaging_conversation_tags')
+                            .select('id')
+                            .eq('organization_id', channel.organization_id)
+                            .eq('name', 'Requiere atencion')
+                            .maybeSingle();
+                          if (attentionTag) {
+                            await supabase.from('messaging_conversation_tag_assignments')
+                              .upsert({ conversation_id: conversation.id, tag_id: attentionTag.id }, { onConflict: 'conversation_id,tag_id' });
+                          }
+                          // 2. Disable AI on this conversation (mark as automation-disabled so it can be re-enabled later)
+                          const { data: escConv } = await supabase.from('messaging_conversations').select('metadata').eq('id', conversation.id).single();
+                          const escMeta = escConv?.metadata || {};
+                          await supabase.from('messaging_conversations')
+                            .update({ ai_managed: false, metadata: { ...escMeta, ai_disabled_by_automation: true } })
+                            .eq('id', conversation.id);
+                          console.log('🔴 Conversation tagged and AI disabled for human handoff');
+                        } catch (escErr) {
+                          console.error('❌ Error handling AI escalation:', escErr);
                         }
-                        // 2. Disable AI on this conversation (mark as automation-disabled so it can be re-enabled later)
-                        const { data: escConv } = await supabase.from('messaging_conversations').select('metadata').eq('id', conversation.id).single();
-                        const escMeta = escConv?.metadata || {};
-                        await supabase.from('messaging_conversations')
-                          .update({ ai_managed: false, metadata: { ...escMeta, ai_disabled_by_automation: true } })
-                          .eq('id', conversation.id);
-                        console.log('🔴 Conversation tagged and AI disabled for human handoff');
-                      } catch (escErr) {
-                        console.error('❌ Error handling AI escalation:', escErr);
                       }
-                    }
-                    // ========== END AI ESCALATION DETECTION ==========
+                      // ========== END AI ESCALATION DETECTION ==========
 
-                    // Send ALL product images (up to 10)
-                    if (aiProductImages && aiProductImages.length > 0) {
-                      console.log(`Sending ${aiProductImages.length} product images...`);
-                      
-                      for (const img of aiProductImages) {
-                        console.log(`Sending image for product ${img.product_id}: ${img.product_name}`);
-                        
-                        const imageSent = await sendWhatsAppImage(
-                          senderPhone,
-                          img.image_url,
-                          `📸 ${img.product_name}`,
-                          channel.meta_phone_number_id || phoneNumberId
-                        );
-                        
-                        if (imageSent) {
-                          // Save image message to database
-                          await supabase
-                            .from('messaging_messages')
-                            .insert({
-                              conversation_id: conversation.id,
-                              channel_type: 'whatsapp',
-                              direction: 'outbound',
-                              sender_type: 'ai',
-                              content: `📸 ${img.product_name}`,
-                              message_type: 'image',
-                              media_url: img.image_url,
-                              sent_at: new Date().toISOString(),
-                            });
-                          
-                          console.log(`Product image sent: ${img.product_name}`);
-                        } else {
-                          console.error(`Failed to send product image: ${img.product_name}`);
+                      // Send ALL product images (up to 10)
+                      if (aiProductImages && aiProductImages.length > 0) {
+                        console.log(`Sending ${aiProductImages.length} product images...`);
+
+                        for (const img of aiProductImages) {
+                          console.log(`Sending image for product ${img.product_id}: ${img.product_name}`);
+
+                          const imageSent = await sendWhatsAppImage(
+                            senderPhone,
+                            img.image_url,
+                            `📸 ${img.product_name}`,
+                            channel.meta_phone_number_id || phoneNumberId
+                          );
+
+                          if (imageSent) {
+                            // Save image message to database
+                            await supabase
+                              .from('messaging_messages')
+                              .insert({
+                                conversation_id: conversation.id,
+                                channel_type: 'whatsapp',
+                                direction: 'outbound',
+                                sender_type: 'ai',
+                                content: `📸 ${img.product_name}`,
+                                message_type: 'image',
+                                media_url: img.image_url,
+                                sent_at: new Date().toISOString(),
+                              });
+
+                            console.log(`Product image sent: ${img.product_name}`);
+                          } else {
+                            console.error(`Failed to send product image: ${img.product_name}`);
+                          }
+
+                          // Small delay between images to avoid rate limiting
+                          await new Promise(resolve => setTimeout(resolve, 500));
                         }
-                        
-                        // Small delay between images to avoid rate limiting
-                        await new Promise(resolve => setTimeout(resolve, 500));
+
+                        console.log(`All ${aiProductImages.length} product images processed`);
                       }
-                      
-                      console.log(`All ${aiProductImages.length} product images processed`);
                     }
                   }
                 } else {
                   console.log('No AI response generated');
                 }
-                
+
                 // NOTE: Order creation is handled by messaging-ai-openai via OpenAI function calling (create_order).
                 // No separate auto-order detection needed here.
                 } // end else (duplicate guard - no recent AI response found)
