@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  buildSupervisedSuggestionMetadata,
+  resolveAiDeliveryPlan,
+  resolveAiRuntime,
+} from "../_shared/elsa-supervision.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1189,8 +1194,8 @@ async function fetchUserProfile(userId: string, _igAccountId?: string, platform?
     console.log(`🔍 [PROFILE:${label}] Searching name in Page ${fbPageId} conversations for user ${userId}`);
 
     while (nextUrl && pagesChecked < maxPages) {
-      const convResponse = await fetch(nextUrl);
-      const convData = await convResponse.json();
+      const convResponse: Response = await fetch(nextUrl);
+      const convData: any = await convResponse.json();
 
       if (convResponse.ok && convData.data) {
         for (const conv of convData.data) {
@@ -1384,8 +1389,8 @@ async function handleAIAutoReply(
     .limit(10);
 
   const aiConfig = channel.ai_config || {};
-  const aiProvider = aiConfig.aiProvider || 'minimax';
-  const functionName = aiProvider === 'minimax' ? 'messaging-ai-minimax' : 'messaging-ai-openai';
+  const aiRuntime = resolveAiRuntime(aiConfig, { defaultProvider: 'minimax' });
+  const functionName = aiRuntime.functionName;
 
   const messagesForAI = [
     ...(historyMessages || []).reverse().map((m: any) => {
@@ -1439,6 +1444,31 @@ async function handleAIAutoReply(
 
   if (!aiText) {
     console.log(`⚠️ [${channelType}] No AI response generated`);
+    return;
+  }
+
+  const deliveryPlan = resolveAiDeliveryPlan(aiRuntime, aiText);
+
+  if (deliveryPlan.shouldPersistSuggestion) {
+    const metadataPatch = buildSupervisedSuggestionMetadata({
+      aiText,
+      aiData,
+      runtime: aiRuntime,
+    });
+
+    await supabase.from('messaging_conversations').update({
+      metadata: {
+        ...(conversation.metadata || {}),
+        ...metadataPatch,
+      },
+    }).eq('id', conversation.id);
+
+    console.log(`📝 [${channelType}] Elsa supervised suggestion saved; not sent to customer`);
+    return;
+  }
+
+  if (!deliveryPlan.shouldSendToCustomer) {
+    console.log(`⚠️ [${channelType}] AI delivery plan suppressed outbound send`);
     return;
   }
 
