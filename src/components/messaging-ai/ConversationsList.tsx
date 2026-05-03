@@ -13,8 +13,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { MessageCircle, Clock, CheckCheck, Instagram, Facebook, Pin } from 'lucide-react';
+import { MessageCircle, Clock, CheckCheck, Instagram, Facebook, Pin, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getPendingElsaSupervisedSuggestion, type ConversationMetadata } from '@/lib/elsaSupervisedSuggestion';
 import { ConversationContextMenu } from './ConversationContextMenu';
 import { MessagingFolder } from '@/hooks/useMessagingFolders';
 
@@ -39,6 +40,7 @@ export interface Conversation {
   is_pinned?: boolean;
   folder_id?: string | null;
   is_group?: boolean;
+  metadata?: ConversationMetadata;
 }
 
 interface ConversationsListProps {
@@ -120,6 +122,7 @@ export const ConversationsList = ({
     const ChannelIcon = channelInfo.icon;
     const isPinned = conversation.is_pinned || false;
     const isUnread = (conversation.unread || 0) > 0;
+    const hasElsaSuggestion = Boolean(getPendingElsaSupervisedSuggestion(conversation.metadata));
 
     if (isMobile) {
       // Telegram-style mobile layout: avatar + content + time/badge
@@ -171,6 +174,12 @@ export const ConversationsList = ({
                     className="w-2 h-2 rounded-full flex-shrink-0"
                     style={{ backgroundColor: conversation.tags[0].color }}
                   />
+                )}
+                {hasElsaSuggestion && (
+                  <Badge variant="secondary" className="h-5 gap-1 px-1.5 text-[10px] bg-amber-100 text-amber-800 border-amber-200">
+                    <Sparkles className="h-3 w-3" />
+                    Elsa
+                  </Badge>
                 )}
                 {isUnread && (
                   <Badge className={cn("text-white text-[11px] px-1.5 py-0 min-w-[20px] h-5 flex items-center justify-center rounded-full", channelInfo.bgColor)}>
@@ -268,6 +277,12 @@ export const ConversationsList = ({
         >
           {conversation.lastMessage}
         </p>
+        {hasElsaSuggestion && (
+          <Badge variant="secondary" className="mt-2 h-5 gap-1 px-1.5 text-[10px] bg-amber-100 text-amber-800 border-amber-200">
+            <Sparkles className="h-3 w-3" />
+            Sugerencia Elsa
+          </Badge>
+        )}
         {/* Tags display */}
         {conversation.tags && conversation.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
