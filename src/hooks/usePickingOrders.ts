@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -93,6 +93,9 @@ export const usePickingOrders = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const { currentOrganization } = useOrganization();
+  // Stale-response guard: each fetchOrders call claims a generation number.
+  // Before committing results to state we verify no newer call has started.
+  const fetchGenerationRef = useRef(0);
   
   const pageSize = 100;
   const isAbortError = (error: unknown) =>
@@ -245,6 +248,9 @@ export const usePickingOrders = () => {
     excludeShippingMethod?: string;
     page?: number;
   }) => {
+    // Claim a generation slot — if a newer call starts before we finish, we discard our results
+    const thisGeneration = ++fetchGenerationRef.current;
+
     if (!currentOrganization?.id) {
       logger.warn('[PickingOrders] Organización no cargada aún, esperando...');
       setLoading(false);
@@ -458,16 +464,25 @@ export const usePickingOrders = () => {
 
       logger.info(`[PickingOrders] Query optimizada: ${paginatedOrders.length} de ${filteredTotalCount} órdenes (${Date.now()}ms)`);
 
+      // Discard stale responses: a newer fetchOrders call supersedes this one
+      if (thisGeneration !== fetchGenerationRef.current) {
+        logger.info(`[PickingOrders] Descartando respuesta obsoleta (gen ${thisGeneration}, actual ${fetchGenerationRef.current})`);
+        return;
+      }
+
       setOrders(paginatedOrders as PickingOrder[]);
       setTotalCount(filteredTotalCount);
       setCurrentPage(page);
     } catch (error: any) {
+      if (thisGeneration !== fetchGenerationRef.current) return; // stale error, ignore
       logger.error('[PickingOrders] Error fetching picking orders', error);
       toast.error('Error al cargar órdenes');
       setOrders([]);
       setTotalCount(0);
     } finally {
-      setLoading(false);
+      if (thisGeneration === fetchGenerationRef.current) {
+        setLoading(false);
+      }
     }
   };
 

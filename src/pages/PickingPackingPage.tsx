@@ -195,6 +195,13 @@ const [showItemsModal, setShowItemsModal] = useState(false);
     });
   };
 
+  // Always keep ref in sync so the Realtime callback (which captures a stale closure)
+  // still invokes the latest handleRefreshList with current filter state.
+  const handleRefreshListRef = useRef(handleRefreshList);
+  useEffect(() => {
+    handleRefreshListRef.current = handleRefreshList;
+  });
+
   // Supabase Realtime - Auto refresh when shopify_orders table changes
   useEffect(() => {
     if (!currentOrganization?.id) return;
@@ -214,7 +221,7 @@ const [showItemsModal, setShowItemsModal] = useState(false);
           setLastWebhookUpdate(new Date());
           // Solo auto-refresh si NO hay modal abierto
           if (!selectedOrderId) {
-            handleRefreshList();
+            handleRefreshListRef.current();
           } else {
             // Marcar que hay updates pendientes para cuando se cierre el modal
             setHasPendingUpdates(true);
@@ -226,8 +233,7 @@ const [showItemsModal, setShowItemsModal] = useState(false);
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentOrganization?.id, searchTerm, operationalStatuses.join(','), financialStatuses.join(','), 
-      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, shippingMethod, excludeShippingMethod, currentPage, selectedOrderId]);
+  }, [currentOrganization?.id, selectedOrderId]);
 
   // Auto-refresh list when modal closes if there were pending updates
   useEffect(() => {
@@ -450,45 +456,11 @@ const [showItemsModal, setShowItemsModal] = useState(false);
     setCommandValue('');
   };
 
-  // Fetch orders when filters change
+  // Fetch orders when filters change — always apply ALL active filters, including search term
   useEffect(() => {
     if (currentOrganization?.id) {
-      // Si hay búsqueda activa, ignorar los demás filtros para buscar globalmente
-      if (searchTerm) {
-        fetchOrders({ 
-          searchTerm,
-          page: 1 
-        });
-      } else {
-        // Sin búsqueda, aplicar todos los filtros normalmente
-        fetchOrders({ 
-          operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
-          financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
-          fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
-          tags: tags.length > 0 ? tags : undefined,
-          excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
-          priceRange: priceRange || undefined,
-          dateRange: dateRange || undefined,
-          shippingMethod: shippingMethod || undefined,
-          excludeShippingMethod: excludeShippingMethod || undefined,
-          page: 1 
-        });
-      }
-    }
-  }, [searchTerm, operationalStatuses.join(','), financialStatuses.join(','), 
-      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, shippingMethod, excludeShippingMethod, currentOrganization?.id]);
-
-  
-
-  const handlePageChange = (page: number) => {
-    // Si hay búsqueda activa, ignorar los demás filtros
-    if (searchTerm) {
-      fetchOrders({ 
-        searchTerm,
-        page 
-      });
-    } else {
-      fetchOrders({ 
+      fetchOrders({
+        searchTerm: searchTerm || undefined,
         operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
         financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
         fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
@@ -498,9 +470,28 @@ const [showItemsModal, setShowItemsModal] = useState(false);
         dateRange: dateRange || undefined,
         shippingMethod: shippingMethod || undefined,
         excludeShippingMethod: excludeShippingMethod || undefined,
-        page 
+        page: 1
       });
     }
+  }, [searchTerm, operationalStatuses.join(','), financialStatuses.join(','),
+      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, shippingMethod, excludeShippingMethod, currentOrganization?.id]);
+
+  
+
+  const handlePageChange = (page: number) => {
+    fetchOrders({
+      searchTerm: searchTerm || undefined,
+      operationalStatuses: operationalStatuses.length > 0 ? operationalStatuses : undefined,
+      financialStatuses: financialStatuses.length > 0 ? financialStatuses : undefined,
+      fulfillmentStatuses: fulfillmentStatuses.length > 0 ? fulfillmentStatuses : undefined,
+      tags: tags.length > 0 ? tags : undefined,
+      excludeTags: excludeTags.length > 0 ? excludeTags : undefined,
+      priceRange: priceRange || undefined,
+      dateRange: dateRange || undefined,
+      shippingMethod: shippingMethod || undefined,
+      excludeShippingMethod: excludeShippingMethod || undefined,
+      page
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
