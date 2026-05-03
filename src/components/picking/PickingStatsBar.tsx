@@ -1,9 +1,9 @@
 import React from 'react';
 import { usePickingOrderStats } from '@/hooks/usePickingOrderStats';
-import { ShoppingBag, Package, AlertCircle, CheckCircle2, Zap } from 'lucide-react';
+import { ShoppingBag, Package, AlertCircle, CheckCircle2, Zap, Scissors } from 'lucide-react';
 
 interface PickingStatsBarProps {
-  onFilterClick: (filterType: 'pedidos' | 'para_empacar' | 'no_confirmados' | 'express' | 'empacados') => void;
+  onFilterClick: (filterType: 'pedidos' | 'para_empacar' | 'no_confirmados' | 'express' | 'empacados' | 'bordados') => void;
 }
 
 export const PickingStatsBar: React.FC<PickingStatsBarProps> = ({ onFilterClick }) => {
@@ -17,7 +17,8 @@ export const PickingStatsBar: React.FC<PickingStatsBarProps> = ({ onFilterClick 
     );
   }
 
-  const totalPedidos = stats.paraEmpacar + stats.noConfirmados;
+  // Pedidos = all active orders pending some action
+  const totalPedidos = stats.paraEmpacar + stats.bordados + stats.express + stats.noConfirmados;
 
   return (
     <div className="overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
@@ -62,6 +63,17 @@ export const PickingStatsBar: React.FC<PickingStatsBarProps> = ({ onFilterClick 
           <Zap className="w-3 h-3 text-purple-500" />
           <span className="text-muted-foreground/70">Express:</span>
           <span className="font-medium text-purple-600">{stats.express}</span>
+        </button>
+
+        <span className="text-border">|</span>
+
+        <button
+          onClick={() => onFilterClick('bordados')}
+          className="flex items-center gap-1.5 hover:text-foreground transition-colors whitespace-nowrap"
+        >
+          <Scissors className="w-3 h-3 text-pink-500" />
+          <span className="text-muted-foreground/70">Bordados:</span>
+          <span className="font-medium text-pink-600">{stats.bordados}</span>
         </button>
 
         <span className="text-border">|</span>

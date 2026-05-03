@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -93,6 +93,9 @@ export const usePickingOrders = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const { currentOrganization } = useOrganization();
+  // Stale-response guard: each fetchOrders call claims a generation number.
+  // Before committing results to state we verify no newer call has started.
+  const fetchGenerationRef = useRef(0);
   
   const pageSize = 100;
   const isAbortError = (error: unknown) =>
@@ -245,6 +248,9 @@ export const usePickingOrders = () => {
     excludeShippingMethod?: string;
     page?: number;
   }) => {
+    // Claim a generation slot — if a newer call starts before we finish, we discard our results
+    const thisGeneration = ++fetchGenerationRef.current;
+
     if (!currentOrganization?.id) {
       logger.warn('[PickingOrders] Organización no cargada aún, esperando...');
       setLoading(false);
@@ -458,16 +464,25 @@ export const usePickingOrders = () => {
 
       logger.info(`[PickingOrders] Query optimizada: ${paginatedOrders.length} de ${filteredTotalCount} órdenes (${Date.now()}ms)`);
 
+      // Discard stale responses: a newer fetchOrders call supersedes this one
+      if (thisGeneration !== fetchGenerationRef.current) {
+        logger.info(`[PickingOrders] Descartando respuesta obsoleta (gen ${thisGeneration}, actual ${fetchGenerationRef.current})`);
+        return;
+      }
+
       setOrders(paginatedOrders as PickingOrder[]);
       setTotalCount(filteredTotalCount);
       setCurrentPage(page);
     } catch (error: any) {
+      if (thisGeneration !== fetchGenerationRef.current) return; // stale error, ignore
       logger.error('[PickingOrders] Error fetching picking orders', error);
       toast.error('Error al cargar órdenes');
       setOrders([]);
       setTotalCount(0);
     } finally {
-      setLoading(false);
+      if (thisGeneration === fetchGenerationRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -530,15 +545,24 @@ export const usePickingOrders = () => {
         shipped: 'ENVIADO'
       };
 
-      // Fire Shopify tag update in background — non-blocking.
-      // The local DB is already updated so the order is marked correctly in the system.
-      // If Shopify fails the tag is shown as a warning but the status is NOT rolled back,
-      // avoiding stuck loading states and preventing print from being blocked.
-      console.log('🏷️ Actualizando etiqueta Shopify en background para orden:', effectiveShopifyOrderId, '→', statusTags[newStatus]);
-      updateShopifyTags(effectiveShopifyOrderId, [statusTags[newStatus]]).catch((tagError) => {
-        console.error('⚠️ Shopify tag update failed (non-blocking):', tagError);
-        toast.warning('⚠️ Etiqueta no actualizada en Shopify. Verifica manualmente si es necesario.', { duration: 6000 });
-      });
+      try {
+        console.log('🏷️ Updating Shopify tags for order:', effectiveShopifyOrderId, 'with tag:', statusTags[newStatus]);
+        await updateShopifyTags(effectiveShopifyOrderId, [statusTags[newStatus]]);
+      } catch (tagError) {
+        // ROLLBACK: Revert operational_status since Shopify tag failed
+        console.error('❌ CRITICAL: Tag update failed, rolling back operational_status:', tagError);
+        try {
+          await supabase
+            .from('picking_packing_orders')
+            .update({ operational_status: previousStatus })
+            .eq('id', pickingOrderId);
+          console.log(`🔄 Rollback exitoso: ${newStatus} → ${previousStatus}`);
+        } catch (rollbackError) {
+          console.error('❌ ROLLBACK FAILED:', rollbackError);
+        }
+        toast.error('Error al actualizar etiquetas en Shopify. Estado revertido.');
+        throw tagError;
+      }
 
       toast.success('Estado actualizado correctamente');
       await fetchOrders();
