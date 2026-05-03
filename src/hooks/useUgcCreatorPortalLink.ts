@@ -7,6 +7,7 @@ export interface UgcCreatorPortalLinkMeta {
   creator_id: string;
   organization_id: string;
   token_last4: string;
+  portal_url: string | null;
   is_active: boolean;
   created_at: string;
   last_accessed_at: string | null;
@@ -28,7 +29,7 @@ export const useUgcCreatorPortalLink = (creatorId: string | undefined) => {
     queryFn: async () => {
       if (!creatorId) return null;
       const { data, error } = await (supabase.from('ugc_creator_portal_links' as any) as any)
-        .select('id, creator_id, organization_id, token_last4, is_active, created_at, last_accessed_at, revoked_at')
+        .select('id, creator_id, organization_id, token_last4, portal_url, is_active, created_at, last_accessed_at, revoked_at')
         .eq('creator_id', creatorId)
         .eq('is_active', true)
         .order('created_at', { ascending: false })

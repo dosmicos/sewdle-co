@@ -18,10 +18,11 @@ export const CreatorPortalLinkButton: React.FC<CreatorPortalLinkButtonProps> = (
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const { activeLinkMeta, isLoading, generateLink, revokeLink, lastGeneratedUrl } = useUgcCreatorPortalLink(creatorId);
+  const visiblePortalUrl = lastGeneratedUrl || activeLinkMeta?.portal_url || null;
 
   const handleCopy = async () => {
-    if (!lastGeneratedUrl) return;
-    await navigator.clipboard.writeText(lastGeneratedUrl);
+    if (!visiblePortalUrl) return;
+    await navigator.clipboard.writeText(visiblePortalUrl);
     setCopied(true);
     toast.success('Link Club copiado');
     setTimeout(() => setCopied(false), 2000);
@@ -68,7 +69,7 @@ export const CreatorPortalLinkButton: React.FC<CreatorPortalLinkButtonProps> = (
           <DialogHeader>
             <DialogTitle>Link Club — {creatorName}</DialogTitle>
             <DialogDescription>
-              Link privado para entrar a club.dosmicos.com sin contraseña. Por seguridad, el link completo solo se muestra al generarlo.
+              Link privado para entrar a club.dosmicos.com sin contraseña. El link completo queda guardado para copiarlo cuando lo necesites.
             </DialogDescription>
           </DialogHeader>
 
@@ -99,11 +100,11 @@ export const CreatorPortalLinkButton: React.FC<CreatorPortalLinkButtonProps> = (
                 </div>
               )}
 
-              {lastGeneratedUrl && (
+              {visiblePortalUrl && (
                 <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">Último link generado en esta sesión:</p>
+                  <p className="text-xs text-muted-foreground">Link Club completo:</p>
                   <div className="flex items-center gap-2">
-                    <Input readOnly value={lastGeneratedUrl} className="text-xs font-mono" />
+                    <Input readOnly value={visiblePortalUrl} className="text-xs font-mono" />
                     <Button size="icon" variant="outline" onClick={handleCopy}>
                       {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
                     </Button>
@@ -111,9 +112,9 @@ export const CreatorPortalLinkButton: React.FC<CreatorPortalLinkButtonProps> = (
                 </div>
               )}
 
-              {!lastGeneratedUrl && activeLinkMeta && (
+              {!visiblePortalUrl && activeLinkMeta && (
                 <p className="text-xs text-muted-foreground">
-                  Si perdiste el link completo, genera uno nuevo. El link anterior quedará invalidado.
+                  Este link activo es anterior al guardado permanente de URL. Regénéralo una sola vez para poder verlo y copiarlo siempre.
                 </p>
               )}
 
