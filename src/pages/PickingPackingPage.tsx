@@ -698,13 +698,21 @@ const [showItemsModal, setShowItemsModal] = useState(false);
                 case 'para_empacar':
                   newParams.set('financial_status', 'paid,pending,partially_paid');
                   newParams.set('tags', 'confirmado');
-                  newParams.set('exclude_tags', 'empacado');
+                  newParams.set('exclude_tags', 'empacado,bordado');
+                  newParams.set('exclude_shipping_method', 'express');
                   break;
                 case 'no_confirmados':
                   newParams.set('exclude_tags', 'confirmado');
                   break;
                 case 'express':
-                  newParams.set('tags', 'express');
+                  newParams.set('financial_status', 'paid,pending,partially_paid');
+                  newParams.set('tags', 'confirmado');
+                  newParams.set('exclude_tags', 'empacado');
+                  newParams.set('shipping_method', 'express');
+                  break;
+                case 'bordados':
+                  newParams.set('financial_status', 'paid,pending,partially_paid');
+                  newParams.set('tags', 'confirmado,BORDADO');
                   newParams.set('exclude_tags', 'empacado');
                   break;
                 case 'empacados':

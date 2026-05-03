@@ -9,6 +9,7 @@ export interface PickingOrderStats {
   noConfirmados: number;
   express: number;
   empacados: number;
+  bordados: number;
 }
 
 export const usePickingOrderStats = () => {
@@ -18,6 +19,7 @@ export const usePickingOrderStats = () => {
     noConfirmados: 0,
     express: 0,
     empacados: 0,
+    bordados: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -28,8 +30,8 @@ export const usePickingOrderStats = () => {
       const orgId = currentOrganization.id;
 
       // Execute all queries in parallel
-      const [paraEmpacarRes, noConfirmadosRes, expressRes, empacadosRes] = await Promise.all([
-        // Para empacar: tags contains 'confirmado', NOT contains 'empacado', specific payment statuses
+      const [paraEmpacarRes, noConfirmadosRes, expressRes, empacadosRes, bordadosRes] = await Promise.all([
+        // Para empacar: confirmado + NOT empacado + NOT bordado + NOT express shipping
         supabase
           .from('shopify_orders')
           .select('*', { count: 'exact', head: true })
@@ -38,10 +40,12 @@ export const usePickingOrderStats = () => {
           .is('cancelled_at', null)
           .ilike('tags', '%confirmado%')
           .not('tags', 'ilike', '%empacado%')
+          .not('tags', 'ilike', '%bordado%')
+          .not('raw_data->shipping_lines->0->>title', 'ilike', '%Express%')
           .in('financial_status', ['paid', 'pending', 'partially_paid'])
           .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled,fulfillment_status.eq.partial'),
 
-        // No confirmados: Sin tag confirmado + no enviados + pago pendiente
+        // No confirmados: sin tag confirmado + pago pendiente + no cancelado
         supabase
           .from('shopify_orders')
           .select('*', { count: 'exact', head: true })
@@ -52,15 +56,17 @@ export const usePickingOrderStats = () => {
           .or('tags.is.null,tags.not.ilike.%confirmado%')
           .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled,fulfillment_status.eq.partial'),
 
-        // Express: tags contains 'express', NOT contains 'empacado'
+        // Express: confirmado + NOT empacado + shipping method contiene "Express"
         supabase
           .from('shopify_orders')
           .select('*', { count: 'exact', head: true })
           .eq('organization_id', orgId)
           .gte('order_number', MIN_ORDER_NUMBER)
           .is('cancelled_at', null)
-          .ilike('tags', '%express%')
+          .ilike('tags', '%confirmado%')
           .not('tags', 'ilike', '%empacado%')
+          .filter('raw_data->shipping_lines->0->>title', 'ilike', '%Express%')
+          .in('financial_status', ['paid', 'pending', 'partially_paid'])
           .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled,fulfillment_status.eq.partial'),
 
         // Empacados: tags contains 'empacado'
@@ -70,6 +76,19 @@ export const usePickingOrderStats = () => {
           .eq('organization_id', orgId)
           .gte('order_number', MIN_ORDER_NUMBER)
           .ilike('tags', '%empacado%'),
+
+        // Bordados: confirmado + BORDADO + NOT empacado
+        supabase
+          .from('shopify_orders')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', orgId)
+          .gte('order_number', MIN_ORDER_NUMBER)
+          .is('cancelled_at', null)
+          .ilike('tags', '%confirmado%')
+          .ilike('tags', '%bordado%')
+          .not('tags', 'ilike', '%empacado%')
+          .in('financial_status', ['paid', 'pending', 'partially_paid'])
+          .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled,fulfillment_status.eq.partial'),
       ]);
 
       setStats({
@@ -77,6 +96,7 @@ export const usePickingOrderStats = () => {
         noConfirmados: noConfirmadosRes.count || 0,
         express: expressRes.count || 0,
         empacados: empacadosRes.count || 0,
+        bordados: bordadosRes.count || 0,
       });
     } catch (error) {
       console.error('Error fetching picking order stats:', error);
