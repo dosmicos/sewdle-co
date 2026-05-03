@@ -28,6 +28,8 @@ export const useUgcUploadTokens = (creatorId: string | undefined) => {
         .select('*')
         .eq('creator_id', creatorId)
         .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
       if (error) throw error;
       return data as unknown as UgcUploadToken | null;

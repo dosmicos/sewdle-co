@@ -104,6 +104,7 @@ CREATE OR REPLACE FUNCTION public.create_default_ugc_upload_token()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 BEGIN
   INSERT INTO public.ugc_upload_tokens (
@@ -164,6 +165,7 @@ CREATE OR REPLACE FUNCTION public.generate_ugc_creator_portal_link(p_creator_id 
 RETURNS TABLE(token text, portal_url text, token_last4 text)
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_org uuid;
@@ -212,6 +214,7 @@ CREATE OR REPLACE FUNCTION public.revoke_ugc_creator_portal_link(p_creator_id uu
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_org uuid;
@@ -244,6 +247,7 @@ CREATE OR REPLACE FUNCTION public.get_ugc_creator_portal_by_token(p_token text)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public
 AS $$
 DECLARE
   v_token_hash text;
