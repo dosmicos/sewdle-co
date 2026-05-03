@@ -1038,6 +1038,13 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
     console.log(`📦 Marcando como empacado: Orden #${localOrder.shopify_order.order_number}`);
 
+    // Print IMMEDIATELY before any async operation.
+    // window.open() is blocked by browsers when called after an await — must be synchronous.
+    if (autoPrintTriggeredRef.current !== orderId) {
+      autoPrintTriggeredRef.current = orderId;
+      handlePrint();
+    }
+
     const MAX_ATTEMPTS = 2;
     const RETRY_BACKOFF_MS = 1500;
     let lastError: unknown = null;
@@ -1049,12 +1056,6 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           console.log(`🔁 Reintentando marcar como empacado (intento ${attempt}/${MAX_ATTEMPTS})`);
         }
         await handleStatusChange('ready_to_ship');
-
-        // SUCCESS: print once and exit
-        if (autoPrintTriggeredRef.current !== orderId) {
-          autoPrintTriggeredRef.current = orderId;
-          handlePrint();
-        }
         lastError = null;
         break;
       } catch (error) {
@@ -1073,7 +1074,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       setPackError(message);
       // Allow retry (manual button or re-scan)
       autoPackTriggeredRef.current = null;
-      toast.error('❌ No se pudo aplicar etiqueta EMPACADO. NO se imprimió. Usa "Reintentar".', {
+      toast.error('❌ No se pudo actualizar el estado. La impresión ya fue enviada. Usa "Reintentar" para aplicar etiqueta EMPACADO.', {
         duration: 8000,
       });
     }

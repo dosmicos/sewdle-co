@@ -530,24 +530,15 @@ export const usePickingOrders = () => {
         shipped: 'ENVIADO'
       };
 
-      try {
-        console.log('🏷️ Updating Shopify tags for order:', effectiveShopifyOrderId, 'with tag:', statusTags[newStatus]);
-        await updateShopifyTags(effectiveShopifyOrderId, [statusTags[newStatus]]);
-      } catch (tagError) {
-        // ROLLBACK: Revert operational_status since Shopify tag failed
-        console.error('❌ CRITICAL: Tag update failed, rolling back operational_status:', tagError);
-        try {
-          await supabase
-            .from('picking_packing_orders')
-            .update({ operational_status: previousStatus })
-            .eq('id', pickingOrderId);
-          console.log(`🔄 Rollback exitoso: ${newStatus} → ${previousStatus}`);
-        } catch (rollbackError) {
-          console.error('❌ ROLLBACK FAILED:', rollbackError);
-        }
-        toast.error('Error al actualizar etiquetas en Shopify. Estado revertido.');
-        throw tagError;
-      }
+      // Fire Shopify tag update in background — non-blocking.
+      // The local DB is already updated so the order is marked correctly in the system.
+      // If Shopify fails the tag is shown as a warning but the status is NOT rolled back,
+      // avoiding stuck loading states and preventing print from being blocked.
+      console.log('🏷️ Actualizando etiqueta Shopify en background para orden:', effectiveShopifyOrderId, '→', statusTags[newStatus]);
+      updateShopifyTags(effectiveShopifyOrderId, [statusTags[newStatus]]).catch((tagError) => {
+        console.error('⚠️ Shopify tag update failed (non-blocking):', tagError);
+        toast.warning('⚠️ Etiqueta no actualizada en Shopify. Verifica manualmente si es necesario.', { duration: 6000 });
+      });
 
       toast.success('Estado actualizado correctamente');
       await fetchOrders();
