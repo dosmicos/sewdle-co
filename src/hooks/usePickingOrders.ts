@@ -96,6 +96,8 @@ export const usePickingOrders = () => {
   // Stale-response guard: each fetchOrders call claims a generation number.
   // Before committing results to state we verify no newer call has started.
   const fetchGenerationRef = useRef(0);
+  // Safety timeout ref: forces loading=false if a fetch hangs indefinitely.
+  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   const pageSize = 100;
   const isAbortError = (error: unknown) =>
@@ -256,6 +258,13 @@ export const usePickingOrders = () => {
       setLoading(false);
       return;
     }
+
+    // Reset safety timeout so a hung fetch can't block the spinner forever
+    if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
+    loadingTimeoutRef.current = setTimeout(() => {
+      logger.warn('[PickingOrders] Fetch timeout — forcing loading=false after 30s');
+      setLoading(false);
+    }, 30000);
 
     try {
       setLoading(true);
@@ -480,9 +489,13 @@ export const usePickingOrders = () => {
       setOrders([]);
       setTotalCount(0);
     } finally {
-      if (thisGeneration === fetchGenerationRef.current) {
-        setLoading(false);
-      }
+      // Clear safety timeout — fetch completed (success or error)
+      if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
+      // Always clear loading when any fetch completes.
+      // Data state (setOrders, setTotalCount) is protected by the generation check above.
+      // Removing the generation guard here prevents the spinner from getting stuck
+      // permanently when a stale fetch finishes before the current one.
+      setLoading(false);
     }
   };
 

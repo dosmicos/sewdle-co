@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -367,25 +367,43 @@ export const useShippingManifests = () => {
     }
   }, [user?.id, fetchManifests]);
 
-  // Delete a manifest (only open ones)
+  // Delete a manifest (any status)
+  // Uses an edge function with service_role to bypass RLS restrictions
+  // (RLS only allowed deleting 'open' manifests, but users can delete any status)
   const deleteManifest = useCallback(async (manifestId: string) => {
     try {
-      const { error } = await supabase
-        .from('shipping_manifests')
-        .delete()
-        .eq('id', manifestId);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
 
-      if (error) throw error;
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/delete-manifest`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'apikey': SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ manifest_id: manifestId }),
+        }
+      );
 
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || 'Error al eliminar manifiesto');
+      }
+
+      // Update local state immediately
+      setManifests(prev => prev.filter(m => m.id !== manifestId));
       toast.success('Manifiesto eliminado');
-      await fetchManifests();
       return true;
     } catch (err: any) {
       console.error('Error deleting manifest:', err);
-      toast.error('Error al eliminar manifiesto: ' + err.message);
+      toast.error('Error al eliminar: ' + err.message);
       return false;
     }
-  }, [fetchManifests]);
+  }, []);
 
   // Get available labels for manifest creation
   const getAvailableLabels = useCallback(async (carrier?: string, dateFrom?: string, dateTo?: string) => {

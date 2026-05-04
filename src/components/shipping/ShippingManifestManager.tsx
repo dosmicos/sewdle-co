@@ -333,15 +333,13 @@ export const ShippingManifestManager: React.FC = () => {
                           <Printer className="h-4 w-4 mr-2" />
                           Imprimir
                         </DropdownMenuItem>
-                        {manifest.status === 'open' && (
-                          <DropdownMenuItem
-                            className="text-destructive"
-                            onClick={() => setDeleteConfirm(manifest.id)}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Eliminar
-                          </DropdownMenuItem>
-                        )}
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={() => setDeleteConfirm(manifest.id)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Eliminar
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -365,8 +363,8 @@ export const ShippingManifestManager: React.FC = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Eliminar manifiesto?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción no se puede deshacer. Las guías asociadas quedarán disponibles
-              para agregar a otro manifiesto.
+              Esta acción no se puede deshacer. Las guías del manifiesto quedarán
+              disponibles para agregar a otro manifiesto.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

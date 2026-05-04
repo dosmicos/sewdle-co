@@ -715,9 +715,6 @@ const [showItemsModal, setShowItemsModal] = useState(false);
                   newParams.set('tags', 'confirmado,BORDADO');
                   newParams.set('exclude_tags', 'empacado');
                   break;
-                case 'empacados':
-                  newParams.set('tags', 'empacado');
-                  break;
               }
               setSearchParams(newParams);
             }}
