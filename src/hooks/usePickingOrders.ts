@@ -513,19 +513,23 @@ export const usePickingOrders = () => {
         operational_status: newStatus,
       };
 
+      // Use getSession() (local JWT cache) instead of getUser() (always a network call).
+      // getUser() can hang indefinitely when Supabase auth is slow, blocking the whole flow.
+      const userId = (await supabase.auth.getSession()).data.session?.user?.id;
+
       // Set timestamps based on status
       if (newStatus === 'picking' && !order?.picked_at) {
         updates.picked_at = new Date().toISOString();
-        updates.picked_by = (await supabase.auth.getUser()).data.user?.id;
+        updates.picked_by = userId;
       } else if (newStatus === 'packing' && !order?.packed_at) {
         updates.packed_at = new Date().toISOString();
-        updates.packed_by = (await supabase.auth.getUser()).data.user?.id;
+        updates.packed_by = userId;
       } else if (newStatus === 'ready_to_ship') {
         updates.packed_at = new Date().toISOString();
-        updates.packed_by = (await supabase.auth.getUser()).data.user?.id;
+        updates.packed_by = userId;
       } else if (newStatus === 'shipped') {
         updates.shipped_at = new Date().toISOString();
-        updates.shipped_by = (await supabase.auth.getUser()).data.user?.id;
+        updates.shipped_by = userId;
       }
 
       const { error } = await supabase
