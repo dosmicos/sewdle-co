@@ -10,6 +10,7 @@ export interface ElsaSupervisedSuggestion {
   function_name?: string | null;
   supervision_source?: string | null;
   sent_to_customer?: boolean;
+  review_status?: string | null;
   generated_at?: string | null;
 }
 
@@ -54,6 +55,7 @@ export function getElsaSupervisedSuggestion(
     function_name: parseString(rawSuggestion.function_name),
     supervision_source: parseString(rawSuggestion.supervision_source),
     sent_to_customer: rawSuggestion.sent_to_customer === true,
+    review_status: parseString(rawSuggestion.review_status),
     generated_at: parseString(rawSuggestion.generated_at),
   };
 }
@@ -63,6 +65,7 @@ export function getPendingElsaSupervisedSuggestion(
 ): ElsaSupervisedSuggestion | null {
   const suggestion = getElsaSupervisedSuggestion(metadata);
   if (!suggestion || suggestion.sent_to_customer) return null;
+  if (suggestion.review_status && suggestion.review_status !== 'pending') return null;
   return suggestion;
 }
 
