@@ -1,13 +1,15 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
+declare const EdgeRuntime: { waitUntil?: (promise: Promise<unknown>) => void } | undefined;
+
 const log = (step: string, details?: any) => {
   const str = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[SHOPIFY-UGC-WEBHOOK] ${step}${str}`);
 };
 
 serve(async (req) => {
-  // Shopify requires a fast 200 response — respond immediately, then process
+  // Shopify requires a fast 200 response; EdgeRuntime.waitUntil keeps attribution running safely.
   const body = await req.text();
 
   // Verify via static token in URL query param (avoids HMAC secret mismatch issues)
@@ -23,11 +25,14 @@ serve(async (req) => {
     log("WARNING: SHOPIFY_WEBHOOK_TOKEN not set, skipping token check");
   }
 
-  // Respond 200 immediately (Shopify needs < 5s response)
+  // Respond 200 quickly, but keep background processing alive in Supabase Edge Runtime.
   const processingPromise = processOrder(body);
 
-  // Fire-and-forget — don't await
-  processingPromise.catch(err => log("Processing error", { error: err.message }));
+  if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+    EdgeRuntime.waitUntil(processingPromise);
+  } else {
+    await processingPromise;
+  }
 
   return new Response('OK', { status: 200 });
 });
