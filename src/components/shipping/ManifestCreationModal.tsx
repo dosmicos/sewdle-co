@@ -254,14 +254,19 @@ export const ManifestCreationModal: React.FC<ManifestCreationModalProps> = ({
 
     const selected = shipments.filter(s => selectedIds.has(s.id));
 
-    // Only pass real DB label IDs (not synthetic envia_xxx or manual_xxx)
-    const dbLabelIds = selected
-      .filter(s => !s.id.startsWith('envia_') && !s.id.startsWith('manual_'))
-      .map(s => s.id);
-
+    // Pass all selected shipments (including envia_xxx / manual_xxx).
+    // createManifest will upsert stub shipping_labels records for guides that
+    // only exist in the Envia portal and have no DB record yet.
     const result = await createManifest({
       carrier,
-      labelIds: dbLabelIds,
+      shipments: selected.map(s => ({
+        id: s.id,
+        tracking_number: s.tracking_number,
+        shopify_order_id: s.shopify_order_id,
+        order_number: s.order_number,
+        recipient_name: s.recipient_name,
+        destination_city: s.destination_city,
+      })),
       notes: notes || undefined,
     });
 
