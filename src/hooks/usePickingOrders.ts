@@ -558,27 +558,22 @@ export const usePickingOrders = () => {
         shipped: 'ENVIADO'
       };
 
-      try {
-        console.log('🏷️ Updating Shopify tags for order:', effectiveShopifyOrderId, 'with tag:', statusTags[newStatus]);
-        await updateShopifyTags(effectiveShopifyOrderId, [statusTags[newStatus]]);
-      } catch (tagError) {
-        // ROLLBACK: Revert operational_status since Shopify tag failed
-        console.error('❌ CRITICAL: Tag update failed, rolling back operational_status:', tagError);
-        try {
-          await supabase
-            .from('picking_packing_orders')
-            .update({ operational_status: previousStatus })
-            .eq('id', pickingOrderId);
-          console.log(`🔄 Rollback exitoso: ${newStatus} → ${previousStatus}`);
-        } catch (rollbackError) {
-          console.error('❌ ROLLBACK FAILED:', rollbackError);
-        }
-        toast.error('Error al actualizar etiquetas en Shopify. Estado revertido.');
-        throw tagError;
-      }
+      // Fire-and-forget: Shopify tag update must NOT block the pack/print flow.
+      // DB status is the source of truth; Shopify is eventually consistent.
+      // Awaiting Shopify here caused the scan-stuck-loading regression because
+      // the outer 25s withTimeout in handleStatusChange would fire first,
+      // leaving packInFlightRef locked and packError never set.
+      console.log('🏷️ Updating Shopify tags for order (non-blocking):', effectiveShopifyOrderId, 'with tag:', statusTags[newStatus]);
+      void updateShopifyTags(effectiveShopifyOrderId, [statusTags[newStatus]])
+        .then(() => console.log(`✅ Shopify tag actualizado para orden ${effectiveShopifyOrderId}`))
+        .catch((tagError: any) => {
+          console.error('⚠️ Shopify tag update failed (non-blocking, no rollback):', tagError);
+          toast.warning('Etiqueta de Shopify no pudo actualizarse. El estado en el sistema sí fue actualizado.', { duration: 5000 });
+        });
 
       toast.success('Estado actualizado correctamente');
-      await fetchOrders();
+      // Fire-and-forget list refresh — modal already updates via optimistic cache
+      void fetchOrders();
     } catch (error: any) {
       console.error('Error updating order status:', error);
       throw error;
