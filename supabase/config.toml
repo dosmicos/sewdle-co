@@ -164,3 +164,6 @@ verify_jwt = true
 
 [functions.elsa-review-learning]
 verify_jwt = false
+
+[functions.elsa-review-suggestion]
+verify_jwt = false

@@ -39,6 +39,18 @@ Deno.test("getPendingElsaSupervisedSuggestion hides suggestions already marked a
   assertEquals(suggestion, null);
 });
 
+Deno.test("getPendingElsaSupervisedSuggestion hides rejected suggestions so they do not keep blocking the composer", () => {
+  const suggestion = getPendingElsaSupervisedSuggestion({
+    elsa_supervised_suggestion: {
+      text: "No tengo esa información, te conecto con el equipo",
+      sent_to_customer: false,
+      review_status: "rejected",
+    },
+  });
+
+  assertEquals(suggestion, null);
+});
+
 Deno.test("formatSuggestionConfidence formats model confidence as a percentage", () => {
   assertEquals(formatSuggestionConfidence(0.923), "92%");
   assertEquals(formatSuggestionConfidence(87), "87%");

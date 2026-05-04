@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -319,6 +320,11 @@ export const ConversationThread = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copiedElsaSuggestion, setCopiedElsaSuggestion] = useState(false);
+  const [showElsaCorrection, setShowElsaCorrection] = useState(false);
+  const [elsaCorrectionText, setElsaCorrectionText] = useState('');
+  const [elsaRejectReason, setElsaRejectReason] = useState('');
+  const [isReviewingElsaSuggestion, setIsReviewingElsaSuggestion] = useState(false);
+  const [dismissedElsaSuggestionKey, setDismissedElsaSuggestionKey] = useState<string | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [filePreviews, setFilePreviews] = useState<string[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -340,10 +346,16 @@ export const ConversationThread = ({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  const elsaSuggestion = useMemo(
+  const rawElsaSuggestion = useMemo(
     () => getPendingElsaSupervisedSuggestion(conversation?.metadata),
     [conversation?.metadata]
   );
+  const elsaSuggestionKey = rawElsaSuggestion
+    ? `${conversation?.id || ''}:${rawElsaSuggestion.generated_at || rawElsaSuggestion.text}`
+    : null;
+  const elsaSuggestion = elsaSuggestionKey && dismissedElsaSuggestionKey === elsaSuggestionKey
+    ? null
+    : rawElsaSuggestion;
   const elsaConfidence = formatSuggestionConfidence(elsaSuggestion?.confidence);
 
   // Filter quick replies based on search
@@ -373,6 +385,13 @@ export const ConversationThread = ({
   };
 
   // Instant scroll when conversation changes
+  useEffect(() => {
+    setShowElsaCorrection(false);
+    setElsaCorrectionText('');
+    setElsaRejectReason('');
+    setDismissedElsaSuggestionKey(null);
+  }, [conversation?.id]);
+
   useEffect(() => {
     if (conversation?.id && messages.length > 0) {
       const timer = setTimeout(() => scrollToBottom('instant'), 50);
@@ -861,6 +880,38 @@ export const ConversationThread = ({
     setCopiedElsaSuggestion(true);
     toast.success('Sugerencia de Elsa copiada');
     setTimeout(() => setCopiedElsaSuggestion(false), 2000);
+  };
+
+  const handleRejectElsaSuggestion = async () => {
+    if (!conversation?.id || !currentOrganization?.id || !elsaSuggestion) return;
+
+    setIsReviewingElsaSuggestion(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('elsa-review-suggestion', {
+        body: {
+          conversationId: conversation.id,
+          organizationId: currentOrganization.id,
+          rejectionReason: elsaRejectReason,
+          correctedResponse: elsaCorrectionText,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      if (elsaSuggestionKey) setDismissedElsaSuggestionKey(elsaSuggestionKey);
+      setShowElsaCorrection(false);
+      setElsaCorrectionText('');
+      setElsaRejectReason('');
+      toast.success(elsaCorrectionText.trim()
+        ? 'Corrección guardada para revisión de Elsa'
+        : 'Sugerencia rechazada y enviada a aprendizajes');
+    } catch (err: any) {
+      console.error('Error rejecting Elsa suggestion:', err);
+      toast.error(err?.message || 'No se pudo rechazar la sugerencia de Elsa');
+    } finally {
+      setIsReviewingElsaSuggestion(false);
+    }
   };
 
   const handleReply = (message: Message) => {
@@ -1443,10 +1494,68 @@ export const ConversationThread = ({
                       )}
                       Copiar
                     </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-red-200 text-red-700 hover:bg-red-50"
+                      onClick={() => setShowElsaCorrection((current) => !current)}
+                      disabled={isReviewingElsaSuggestion}
+                    >
+                      <X className="h-4 w-4 mr-1.5" />
+                      Rechazar
+                    </Button>
                     <span className="text-xs text-amber-800">
                       La asesora debe revisar y enviar manualmente.
                     </span>
                   </div>
+                  {showElsaCorrection && (
+                    <div className="space-y-2 rounded-lg border border-red-100 bg-white/80 p-3">
+                      <p className="text-xs font-medium text-red-800">
+                        Corrección para que Elsa aprenda
+                      </p>
+                      <Textarea
+                        value={elsaCorrectionText}
+                        onChange={(event) => setElsaCorrectionText(event.target.value)}
+                        placeholder="Opcional: escribe cómo debió responder Elsa. Si ya lo vas a responder en el chat, igual puedes dejar aquí la corrección corta."
+                        className="min-h-[76px] bg-white"
+                      />
+                      <Input
+                        value={elsaRejectReason}
+                        onChange={(event) => setElsaRejectReason(event.target.value)}
+                        placeholder="Motivo opcional: producto equivocado, política incompleta, tono, precio, etc."
+                        className="bg-white"
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          onClick={handleRejectElsaSuggestion}
+                          disabled={isReviewingElsaSuggestion}
+                        >
+                          {isReviewingElsaSuggestion && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+                          Guardar rechazo
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setShowElsaCorrection(false);
+                            setElsaCorrectionText('');
+                            setElsaRejectReason('');
+                          }}
+                          disabled={isReviewingElsaSuggestion}
+                        >
+                          Cancelar
+                        </Button>
+                        <span className="text-xs text-slate-500">
+                          Se crea un aprendizaje en revisión; Elsa no lo usa hasta aprobarlo.
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
