@@ -57,7 +57,7 @@ serve(async (req) => {
       const { data: { user } } = await supabase.auth.getUser(token);
       if (user) {
         const { data: membership } = await supabase
-          .from('organization_members')
+          .from('organization_users')  // NOTE: correct table (not organization_members)
           .select('organization_id')
           .eq('user_id', user.id)
           .limit(1)
