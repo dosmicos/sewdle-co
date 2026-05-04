@@ -134,6 +134,35 @@ async function cacheImageToStorage(
   }
 }
 
+async function captureHumanReplyLearning(
+  supabase: any,
+  params: {
+    conversationId: string;
+    messageId: string;
+    organizationId: string;
+    source: string;
+  }
+) {
+  try {
+    const { error } = await supabase.functions.invoke('elsa-capture-human-reply', {
+      body: {
+        conversationId: params.conversationId,
+        messageId: params.messageId,
+        organizationId: params.organizationId,
+        source: params.source,
+      },
+    });
+
+    if (error) {
+      console.warn('Elsa human-reply learning capture failed:', error.message || error);
+    } else {
+      console.log('🧠 Elsa human-reply learning capture queued');
+    }
+  } catch (error: any) {
+    console.warn('Elsa human-reply learning capture skipped:', error?.message || error);
+  }
+}
+
 async function sendWhatsAppImageByLink(
   phoneNumberId: string,
   token: string,
@@ -216,6 +245,7 @@ serve(async (req) => {
     let channelType = 'whatsapp';
     let phoneNumberId: string | null = null;
     let metaPageId: string | null = null;
+    let organizationId: string | null = null;
     
     if (conversation_id) {
       // Get conversation with channel info
@@ -223,6 +253,7 @@ serve(async (req) => {
         .from('messaging_conversations')
         .select(`
           external_user_id,
+          organization_id,
           channel_type,
           channel_id,
           messaging_channels!inner (
@@ -243,6 +274,7 @@ serve(async (req) => {
       
       recipientPhone = conversation.external_user_id;
       channelType = conversation.channel_type;
+      organizationId = conversation.organization_id;
       
       // Get phone_number_id and meta_page_id from the channel
       const channel = conversation.messaging_channels as any;
@@ -351,23 +383,41 @@ serve(async (req) => {
         );
       }
 
-      // Save message to database
+      // Save message to database and capture it as a human learning candidate for Elsa.
       if (conversationId) {
-        await supabase.from('messaging_messages').insert({
-          conversation_id: conversationId,
-          external_message_id: result.message_id || result.messages?.[0]?.id || null,
-          channel_type: channelType,
-          direction: 'outbound',
-          sender_type: 'agent',
-          content: message,
-          message_type: 'text',
-          sent_at: new Date().toISOString(),
-        });
+        const { data: savedMessage, error: saveMessageError } = await supabase
+          .from('messaging_messages')
+          .insert({
+            conversation_id: conversationId,
+            external_message_id: result.message_id || result.messages?.[0]?.id || null,
+            channel_type: channelType,
+            direction: 'outbound',
+            sender_type: 'agent',
+            content: message,
+            message_type: 'text',
+            sent_at: new Date().toISOString(),
+          })
+          .select('id')
+          .single();
+
+        if (saveMessageError) {
+          console.error(`Error saving ${channelType} message to DB:`, saveMessageError);
+        }
 
         await supabase.from('messaging_conversations').update({
           last_message_preview: message.substring(0, 100),
           last_message_at: new Date().toISOString(),
         }).eq('id', conversationId);
+
+        const savedMessageId = savedMessage?.id;
+        if (savedMessageId && organizationId && message?.trim()) {
+          await captureHumanReplyLearning(supabase, {
+            conversationId,
+            messageId: savedMessageId,
+            organizationId,
+            source: `send-whatsapp-message:${channelType}`,
+          });
+        }
       }
 
       return new Response(
@@ -541,11 +591,17 @@ serve(async (req) => {
       }
 
       const mediaId = mediaUploadResponse.media_id;
+      if (!mediaId) {
+        return new Response(
+          JSON.stringify({ error: 'WhatsApp media upload did not return a media id' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       console.log('Media uploaded to WhatsApp, ID:', mediaId);
 
       // Send message with media (incluyendo context si es respuesta)
       // Use effectiveMediaType which may have been switched to 'document' for large images
-      const messagePayload = buildMediaMessagePayload(cleanPhone, effectiveMediaType, mediaId, message, replyToExternalId, media_filename);
+      const messagePayload = buildMediaMessagePayload(cleanPhone, effectiveMediaType, mediaId, message || '', replyToExternalId, media_filename);
       messageTypeForDb = media_type; // Keep original type for DB (still 'image' for UI display)
 
       console.log('Sending media message:', JSON.stringify(messagePayload));
@@ -638,12 +694,12 @@ serve(async (req) => {
       }
     }
 
-    // Save message to database in parallel (don't block the response to the user)
+    // Save message to database, then capture it as a human learning candidate for Elsa.
     if (conversationId) {
       const now = new Date().toISOString();
-      // Fire both DB writes in parallel — no need to await sequentially
-      Promise.all([
-        supabase.from('messaging_messages').insert({
+      const { data: savedMessage, error: saveMessageError } = await supabase
+        .from('messaging_messages')
+        .insert({
           conversation_id: conversationId,
           external_message_id: result.messages?.[0]?.id,
           channel_type: channelType,
@@ -656,15 +712,38 @@ serve(async (req) => {
           reply_to_message_id: reply_to_message_id || null,
           metadata: result,
           sent_at: now
-        }),
-        supabase.from('messaging_conversations').update({
+        })
+        .select('id')
+        .single();
+
+      if (saveMessageError) {
+        console.error('Error saving message to DB:', saveMessageError);
+      }
+
+      const { error: conversationUpdateError } = await supabase
+        .from('messaging_conversations')
+        .update({
           last_message_preview: (message || `📎 ${media_type === 'image' ? 'Imagen' : media_type === 'audio' ? 'Audio' : 'Documento'}`).substring(0, 100),
           last_message_at: now,
-        }).eq('id', conversationId)
-      ]).catch(err => console.error('Error saving message to DB:', err));
+        })
+        .eq('id', conversationId);
+
+      if (conversationUpdateError) {
+        console.error('Error updating conversation after outbound message:', conversationUpdateError);
+      }
+
+      const savedMessageId = savedMessage?.id;
+      if (savedMessageId && organizationId && message?.trim()) {
+        await captureHumanReplyLearning(supabase, {
+          conversationId,
+          messageId: savedMessageId,
+          organizationId,
+          source: 'send-whatsapp-message:whatsapp',
+        });
+      }
     }
 
-    // Respond immediately after Meta confirms — DB writes continue in background
+    // Respond after Meta confirms and Sewdle stores the outbound message.
     return new Response(
       JSON.stringify({
         success: true,
@@ -673,7 +752,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending WhatsApp message:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
@@ -719,7 +798,7 @@ async function uploadMediaToWhatsApp(
     }
 
     return { success: true, media_id: result.id };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error uploading media:', error);
     return { success: false, error: error.message };
   }
