@@ -30,6 +30,7 @@ import OKRsPage from "@/pages/OKRsPage";
 import AlegraPage from "@/pages/AlegraPage";
 import CartRecoveryPage from "@/pages/CartRecoveryPage";
 import MessagingAIPage from "@/pages/MessagingAIPage";
+import ElsaLearningsPage from "@/pages/ElsaLearningsPage";
 import ApisStatusPage from "@/pages/ApisStatusPage";
 
 import { ShopifyDashboardPage } from "@/pages/ShopifyDashboardPage";
@@ -472,6 +473,16 @@ const AppContent = () => {
         <PasswordChangeRouteGuard>
           <PermissionRoute module="messaging" action="view">
             <MessagingAIPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+
+      <Route path="elsa-learnings" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="messaging" action="view">
+            <MainLayout>
+              <ElsaLearningsPage />
+            </MainLayout>
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />

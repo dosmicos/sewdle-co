@@ -161,3 +161,6 @@ verify_jwt = false
 
 [functions.agent-context]
 verify_jwt = true
+
+[functions.elsa-review-learning]
+verify_jwt = false
