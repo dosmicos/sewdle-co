@@ -162,65 +162,160 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const today = new Date().toLocaleDateString('es-CO', { 
-      day: 'numeric', 
-      month: 'short', 
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    // Expand each item into individual label units (one per unit, paired with order numbers)
+    const labelUnits: Array<{
+      title: string;
+      size: string;
+      orderNumber: number;
+      embroideryName: string | null;
+      hasEmbroidery: boolean;
+    }> = [];
+
+    items.forEach(item => {
+      const customizationNames = ['nombre bordado', 'para', 'nombre'];
+      const embroideryProp = item.properties?.find(p =>
+        customizationNames.includes(p.name.toLowerCase())
+      );
+      const embroideryName = embroideryProp?.value || null;
+      const size = item.size || item.variantTitle || '';
+
+      for (let i = 0; i < item.quantity; i++) {
+        const orderNumber = item.orderNumbers[i % item.orderNumbers.length];
+        labelUnits.push({
+          title: item.title,
+          size,
+          orderNumber,
+          embroideryName,
+          hasEmbroidery: item.hasCustomization,
+        });
+      }
     });
 
-    const itemsHtml = items.map(item => {
-      const propsHtml = item.hasCustomization && item.properties?.length 
-        ? `<div class="props">${item.properties.map(p => `<span>🧵 ${p.name}: ${p.value}</span>`).join('')}</div>`
-        : '';
-      const ordersText = item.orderNumbers.slice(0, 10).map(n => `#${n}`).join(', ');
-      
-      return `
-        <div class="item">
-          <div class="row">
-            <span class="title">${item.title}</span>
-            <span class="qty">x${item.quantity}</span>
-          </div>
-          ${item.variantTitle ? `<div class="variant">${item.variantTitle}</div>` : ''}
-          ${item.sku ? `<div class="sku">SKU: ${item.sku}</div>` : ''}
-          <div class="orders">Pedidos: ${ordersText}${item.orderNumbers.length > 10 ? ` (+${item.orderNumbers.length - 10})` : ''}</div>
-          ${propsHtml}
-        </div>
-      `;
-    }).join('');
+    const labelsHtml = labelUnits.map(label => `
+      <div class="label${label.hasEmbroidery ? ' label-embroidery' : ''}">
+        <div class="product-name">${label.title}</div>
+        ${label.size ? `<div class="size-info">${label.size}</div>` : ''}
+        <div class="order-num">#${label.orderNumber}</div>
+        ${label.hasEmbroidery && label.embroideryName
+          ? `<div class="embroidery">&#129523; ${label.embroideryName}</div>`
+          : ''}
+      </div>
+    `).join('');
 
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
-        <head>
-          <title>Artículos Para Empacar</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: Arial, sans-serif; padding: 16px; font-size: 12px; }
-            h1 { font-size: 16px; margin-bottom: 4px; }
-            .summary { color: #666; margin-bottom: 12px; font-size: 11px; }
-            .item { border-bottom: 1px solid #ddd; padding: 8px 0; }
-            .row { display: flex; justify-content: space-between; align-items: flex-start; }
-            .title { font-weight: bold; font-size: 13px; flex: 1; }
-            .qty { font-weight: bold; font-size: 14px; margin-left: 8px; }
-            .variant { color: #555; margin-top: 2px; }
-            .sku { color: #888; font-size: 10px; margin-top: 2px; }
-            .orders { color: #666; font-size: 10px; margin-top: 4px; }
-            .props { background: #fef3c7; border: 1px solid #fcd34d; padding: 4px 6px; margin-top: 4px; border-radius: 4px; }
-            .props span { display: block; color: #92400e; }
-            @media print { body { padding: 0; } }
-          </style>
-        </head>
-        <body>
-          <h1>📦 Artículos Para Empacar</h1>
-          <p class="summary">${totalQuantity} unidades • ${items.length} artículos • ${uniqueOrders} pedidos • ${today}</p>
-          ${itemsHtml}
-        </body>
+      <head>
+        <title>Etiquetas - Artículos Para Empacar</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          html, body {
+            width: 100mm;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .page {
+            display: grid;
+            grid-template-columns: repeat(2, 48mm);
+            column-gap: 4mm;
+            row-gap: 0;
+            padding: 0;
+            margin: 0;
+            justify-content: center;
+          }
+          .label {
+            width: 48mm;
+            height: 20mm;
+            padding: 1.5mm 2mm;
+            box-sizing: border-box;
+            page-break-inside: avoid;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow: hidden;
+          }
+          .label-embroidery {
+            background: #fffbeb;
+            border-left: 1.5mm solid #f59e0b;
+          }
+          .product-name {
+            font-size: 7.5pt;
+            font-weight: 700;
+            line-height: 1.15;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #111;
+          }
+          .size-info {
+            font-size: 7pt;
+            color: #444;
+            line-height: 1.15;
+            margin-top: 0.4mm;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .order-num {
+            font-size: 8.5pt;
+            font-weight: 700;
+            color: #1d4ed8;
+            line-height: 1.15;
+            margin-top: 0.4mm;
+          }
+          .embroidery {
+            font-size: 6.5pt;
+            font-weight: 700;
+            color: #92400e;
+            background: #fef3c7;
+            padding: 0.3mm 1mm;
+            border-radius: 0.5mm;
+            margin-top: 0.5mm;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          @media print {
+            @page {
+              size: 100mm 20mm;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            html, body {
+              width: 100mm;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .label {
+              border: none;
+              width: 48mm;
+            }
+            .label-embroidery {
+              background: #fffbeb !important;
+              border-left: 1.5mm solid #f59e0b !important;
+            }
+            .embroidery {
+              background: #fef3c7 !important;
+              color: #92400e !important;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="page">
+          ${labelsHtml}
+        </div>
+        <script>
+          setTimeout(function() { window.print(); window.close(); }, 300);
+        </script>
+      </body>
       </html>
     `);
     printWindow.document.close();
-    printWindow.print();
   };
 
   const removeSize = (size: string) => {

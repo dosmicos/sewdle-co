@@ -8,7 +8,6 @@ export interface PickingOrderStats {
   paraEmpacar: number;
   noConfirmados: number;
   express: number;
-  empacados: number;
   bordados: number;
 }
 
@@ -18,7 +17,6 @@ export const usePickingOrderStats = () => {
     paraEmpacar: 0,
     noConfirmados: 0,
     express: 0,
-    empacados: 0,
     bordados: 0,
   });
   const [loading, setLoading] = useState(true);
@@ -30,7 +28,7 @@ export const usePickingOrderStats = () => {
       const orgId = currentOrganization.id;
 
       // Execute all queries in parallel
-      const [paraEmpacarRes, noConfirmadosRes, expressRes, empacadosRes, bordadosRes] = await Promise.all([
+      const [paraEmpacarRes, noConfirmadosRes, expressRes, bordadosRes] = await Promise.all([
         // Para empacar: confirmado + NOT empacado + NOT bordado + NOT express shipping
         supabase
           .from('shopify_orders')
@@ -69,14 +67,6 @@ export const usePickingOrderStats = () => {
           .in('financial_status', ['paid', 'pending', 'partially_paid'])
           .or('fulfillment_status.is.null,fulfillment_status.eq.unfulfilled,fulfillment_status.eq.partial'),
 
-        // Empacados: tags contains 'empacado'
-        supabase
-          .from('shopify_orders')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', orgId)
-          .gte('order_number', MIN_ORDER_NUMBER)
-          .ilike('tags', '%empacado%'),
-
         // Bordados: confirmado + BORDADO + NOT empacado
         supabase
           .from('shopify_orders')
@@ -95,7 +85,6 @@ export const usePickingOrderStats = () => {
         paraEmpacar: paraEmpacarRes.count || 0,
         noConfirmados: noConfirmadosRes.count || 0,
         express: expressRes.count || 0,
-        empacados: empacadosRes.count || 0,
         bordados: bordadosRes.count || 0,
       });
     } catch (error) {

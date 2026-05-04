@@ -6,35 +6,21 @@ const log = (step: string, details?: any) => {
   console.log(`[SHOPIFY-UGC-WEBHOOK] ${step}${str}`);
 };
 
-async function verifyHmac(body: string, hmacHeader: string, secret: string): Promise<boolean> {
-  try {
-    const encoder = new TextEncoder();
-    const keyData = encoder.encode(secret);
-    const key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-    const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(body));
-    const computed = btoa(String.fromCharCode(...new Uint8Array(signature)));
-    return computed === hmacHeader;
-  } catch {
-    return false;
-  }
-}
-
 serve(async (req) => {
   // Shopify requires a fast 200 response — respond immediately, then process
   const body = await req.text();
 
-  // Verify HMAC signature
-  const hmacHeader = req.headers.get('X-Shopify-Hmac-Sha256') ?? '';
-  const webhookSecret = Deno.env.get('SHOPIFY_WEBHOOK_SECRET');
+  // Verify via static token in URL query param (avoids HMAC secret mismatch issues)
+  const webhookToken = Deno.env.get('SHOPIFY_WEBHOOK_TOKEN');
+  const urlToken = new URL(req.url).searchParams.get('token');
 
-  if (webhookSecret) {
-    const valid = await verifyHmac(body, hmacHeader, webhookSecret);
-    if (!valid) {
-      log("HMAC verification failed");
+  if (webhookToken) {
+    if (urlToken !== webhookToken) {
+      log("Token mismatch — unauthorized");
       return new Response('Unauthorized', { status: 401 });
     }
   } else {
-    log("WARNING: SHOPIFY_WEBHOOK_SECRET not set, skipping HMAC check");
+    log("WARNING: SHOPIFY_WEBHOOK_TOKEN not set, skipping token check");
   }
 
   // Respond 200 immediately (Shopify needs < 5s response)
