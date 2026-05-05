@@ -97,12 +97,20 @@ serve(async (req) => {
 
         // Filter to last 7 days (API returns full month).
         // created_at format: "2026-05-03 12:19:36" — extract date prefix for comparison.
-        // Only include "Created" status — exclude Cancelled, In transit, Delivered, etc.
+        // For manifest purposes include "Created" AND "In transit" (already picked up by
+        // carrier but not yet delivered). Exclude terminal statuses only.
+        const TERMINAL_STATUSES = new Set([
+          'delivered', 'entregado',
+          'cancelled', 'cancelado',
+          'returned', 'devuelto',
+        ]);
+
         const recentShipments = all.filter((s: any) => {
           const created = s.created_at || s.createdAt || '';
           // Normalize to YYYY-MM-DD prefix (works for both "2026-05-03 12:19:36" and ISO)
           const createdDate = created.slice(0, 10);
-          const statusOk = (s.status || '').toLowerCase() === 'created';
+          const status = (s.status || '').toLowerCase();
+          const statusOk = !TERMINAL_STATUSES.has(status);
           return createdDate >= cutoffDate && statusOk;
         });
 
@@ -116,7 +124,7 @@ serve(async (req) => {
 
         enviaShipments = filtered;
         enviaOk = true;
-        console.log(`✅ Envia Queries API OK — ${all.length} total this month, ${recentShipments.length} with status=created in last 7 days, ${filtered.length} after carrier filter`);
+        console.log(`✅ Envia Queries API OK — ${all.length} total this month, ${recentShipments.length} non-terminal in last 7 days, ${filtered.length} after carrier filter`);
       } else {
         console.warn(`⚠️ Envia Queries API returned unexpected response: status=${res.status}, data type=${typeof data?.data}`);
       }
@@ -131,7 +139,8 @@ serve(async (req) => {
         .from('shipping_labels')
         .select('id, shopify_order_id, order_number, tracking_number, carrier, recipient_name, destination_city, created_at, shipment_id, status')
         .eq('organization_id', orgId)
-        .eq('status', 'created')
+        // Include all non-terminal statuses (same logic as Envia API filter above)
+        .not('status', 'in', '("delivered","cancelled","returned")')
         .not('tracking_number', 'is', null)
         .gte('created_at', `${cutoffDate}T00:00:00.000Z`)
         .lte('created_at', `${today}T23:59:59.999Z`)
