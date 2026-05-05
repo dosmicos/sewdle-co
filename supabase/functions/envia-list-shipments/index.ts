@@ -97,8 +97,11 @@ serve(async (req) => {
 
         // Filter to last 7 days (API returns full month).
         // created_at format: "2026-05-03 12:19:36" — extract date prefix for comparison.
-        // For manifest purposes include "Created" AND "In transit" (already picked up by
-        // carrier but not yet delivered). Exclude terminal statuses only.
+        //
+        // Rules (for manifest purposes):
+        //   • TODAY's guides  → include if non-terminal (carrier may have picked up same day)
+        //   • Previous days   → include ONLY if still 'created' (not yet picked up)
+        //   • Terminal states → always exclude (delivered, cancelled, returned)
         const TERMINAL_STATUSES = new Set([
           'delivered', 'entregado',
           'cancelled', 'cancelado',
@@ -109,9 +112,16 @@ serve(async (req) => {
           const created = s.created_at || s.createdAt || '';
           // Normalize to YYYY-MM-DD prefix (works for both "2026-05-03 12:19:36" and ISO)
           const createdDate = created.slice(0, 10);
+          if (createdDate < cutoffDate) return false;
+
           const status = (s.status || '').toLowerCase();
-          const statusOk = !TERMINAL_STATUSES.has(status);
-          return createdDate >= cutoffDate && statusOk;
+          if (TERMINAL_STATUSES.has(status)) return false;
+
+          // Previous days: only show if still pending with the shipper
+          if (createdDate < today) return status === 'created';
+
+          // Today: show regardless of status (carrier may have scanned same day)
+          return true;
         });
 
         // Apply carrier filter — carrier name is in `name` field (e.g. "interRapidisimo")
@@ -124,7 +134,7 @@ serve(async (req) => {
 
         enviaShipments = filtered;
         enviaOk = true;
-        console.log(`✅ Envia Queries API OK — ${all.length} total this month, ${recentShipments.length} non-terminal in last 7 days, ${filtered.length} after carrier filter`);
+        console.log(`✅ Envia Queries API OK — ${all.length} total this month, ${recentShipments.length} eligible in last 7 days, ${filtered.length} after carrier filter`);
       } else {
         console.warn(`⚠️ Envia Queries API returned unexpected response: status=${res.status}, data type=${typeof data?.data}`);
       }
