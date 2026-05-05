@@ -64,12 +64,22 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus input
+  // Auto-focus on mount
   useEffect(() => {
     if (inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, []);
+
+  // Re-focus input after each scan completes.
+  // Must live in a useEffect so it runs after React commits the DOM update
+  // that removes `disabled` from the input — calling focus() while the element
+  // is still disabled is a no-op, which is why the field felt "dead" after scans.
+  useEffect(() => {
+    if (!scanning) {
+      inputRef.current?.focus();
+    }
+  }, [scanning]);
 
   // Refresh items when manifest changes
   useEffect(() => {
@@ -108,7 +118,8 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     }
 
     setScanning(false);
-    inputRef.current?.focus();
+    // Focus is restored by the useEffect watching `scanning` — calling it
+    // here would be a no-op because the input is still `disabled` at this point.
   }, [scanning, manifest.id, scanTrackingNumber, extraScans]);
 
   // Enter key — resolves tracking from current input and delegates to triggerScan.
