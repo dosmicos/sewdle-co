@@ -1,0 +1,317 @@
+╔════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                  AUTOMATIZACIONES SEWDLE - REFERENCIA RÁPIDA                                                                                                                                  ║
+║                                                                    2026-03-27                                                                                                                                                  ║
+╚════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+
+═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+📚 DOCUMENTACIÓN DISPONIBLE
+═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+1. AUTOMATIZACIONES_QUICK_START.md
+   └─ Para: Implementación rápida (5-15 min)
+   └─ Contiene: TL;DR, 3 pasos, ejemplos listos, tabla horarios
+
+2. GUIAS_AUTOMATIZACIONES.md
+   └─ Para: Implementación completa (30-45 min)
+   └─ Contiene: 10 automatizaciones con todos los detalles
+
+3. CLAUDE_CODE_HOOKS.md
+   └─ Para: Automatización de desarrollo local
+   └─ Contiene: 10 hooks + plantilla configurable
+
+4. AUTOMATIZACIONES_README.md
+   └─ Para: Índice y navegación general
+   └─ Contiene: Mapa conceptual, flujo de decisión
+
+5. AUTOMATIZACIONES_CHECKLIST.md
+   └─ Para: Control de implementación
+   └─ Contiene: 10 fases a completar por automatización
+
+═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+⏱️ HORARIOS CRON - CONVERSIÓN UTC A COLOMBIA (UTC-5)
+═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+EXPRESIÓN CRON          UTC             COLOMBIA            CASOS DE USO
+─────────────────────────────────────────────────────────────────────────────────────────
+0 2 * * *              02:00           21:00 (día anterior) Sync Shopify, inventario
+0 6 * * *              06:00           01:00               Campañas WhatsApp
+0 8 * * *              08:00           03:00               Reportes, stock bajo, cálculos
+0 12 * * *             12:00           07:00               Reportes matutinos (opcional)
+0 */6 * * *            0,6,12,18       19,1,7,13           Meta Ads sync
+0 */12 * * *           0,12            19,7                Google Ads sync
+0 2 * * 1              02:00 (Lunes)   21:00 (Dom)         Reposición semanal
+0 3 1 * *              03:00 (1º mes)  22:00 (mes ant.)    Envía coverage mensual
+0 3 1 1,4,7,10 *       03:00 (1º qtr)  22:00               Archive orders trimestral
+
+═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+🎯 AUTOMATIZACIONES DISPONIBLES (Lista Completa)
+═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+NOMBRE                          FRECUENCIA          UTC          FUNCIÓN                      ESTADO      GUÍA
+─────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+1. Órdenes Shopify              Diaria              0 2 * * *    sync-shopify-sales           ✅ Lista   #1
+2. Meta Ads Analytics           Cada 6h             0 */6 * * *  sync-meta-ad-performance     ✅ Lista   #2
+3. Reposición Inteligente       Semanal (Mié)       0 8 * * 3    intelligent-replenishment    ✅ Activa  #3
+4. Campañas WhatsApp            Semanal (Jue)       0 6 * * 4    send-hotdays-campaign        ✅ Lista   #4
+5. Cobertura Envía              Mensual (1º)        0 3 1 * *    populate-shipping-coverage   ✅ Lista   #5
+6. Google Ads Analytics         Cada 12h            0 */12 * * * sync-google-ads              ✅ Lista   #6
+7. Limpiar Órdenes Viejas       Trimestral (1º)     0 2 1 1,4,7,10 * (función custom)        📝 No impl #7
+8. Notificaciones Stock Bajo    Diaria              0 8 * * *    (función custom)             📝 No impl #8
+9. Reporte Diario Ventas        Diaria              0 8 * * *    send-daily-sales-report      📝 No impl #9
+10. Etiquetas Shopify           Semanal (Mar)       0 7 * * 2    sync-recent-shopify-tags     ✅ Lista   #10
+
+LEGENDA: ✅ Lista = listo para agendar  |  ✅ Activa = ya agendada  |  📝 No impl = requiere crear función
+
+═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+🔧 COMANDOS ESENCIALES (Copiar-Pegar)
+═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+CREAR NUEVA AUTOMATIZACIÓN:
+  npx supabase migration create nombre_descriptivo
+
+DESPLEGAR A SUPABASE:
+  npx supabase db push
+
+VERIFICAR QUE EXISTE:
+  # En Supabase SQL Editor:
+  SELECT * FROM cron.job WHERE jobname = 'mi-nombre';
+
+REVISAR LOGS:
+  npx supabase functions logs nombre-funcion --limit 50
+
+PROBAR FUNCIÓN MANUALMENTE:
+  npx supabase functions invoke nombre-funcion
+
+LISTAR FUNCIONES DISPONIBLES:
+  npx supabase functions list
+
+═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+📋 TEMPLATE CRON JOB (Copiar-Pegar Base)
+═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+SELECT cron.schedule(
+  'nombre-unico',
+  '0 2 * * *',  ← Cambiar horario aquí
+  $$
+  SELECT net.http_post(
+      url:='https://ysdcsqsfnckeuafjyrbc.supabase.co/functions/v1/NOMBRE-FUNCION',
+      headers:='{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('app.settings.anon_key') || '"}'::jsonb,
+      body:='{"scheduled": true, "execution_time": "' || now() || '"}'::jsonb
+  );
+  $$
+);
+
+═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+✅ 3 PASOS PARA CUALQUIER AUTOMATIZACIÓN
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+PASO 1: Crear
+  $ npx supabase migration create tu_nombre
+
+PASO 2: Editar
+  - Abre archivo generado en supabase/migrations/
+  - Reemplaza NOMBRE-FUNCION y horario
+  - Guarda
+
+PASO 3: Desplegar
+  $ npx supabase db push
+
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+🎯 DECISIÓN RÁPIDA: ¿CUÁL DOCUMENTO?
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+¿NECESITAS...?                                          → LEE:
+─────────────────────────────────────────────────────────────────────
+Implementar RÁPIDO (5-15 min)                           → QUICK START
+Todos los detalles y casos avanzados                    → GUIAS COMPLETAS
+Automatización en desarrollo local                      → CLAUDE CODE HOOKS
+Navegar entre documentos                                → README
+Implementar paso a paso checkeado                       → CHECKLIST
+Búsqueda rápida de horarios/comandos                    → ESTA REFERENCIA
+
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+❓ FAQ RÁPIDO
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+P: ¿A qué hora se ejecuta un cron?
+R: En el horario UTC especificado. Para Colombia, resta 5 horas.
+
+P: ¿Puedo cambiar el horario después?
+R: Sí, crea nueva migración con cron.unschedule() y cron.schedule() nuevo.
+
+P: ¿Cuál es el intervalo mínimo?
+R: 1 minuto. Para menos, usa Cloud Functions.
+
+P: ¿Dónde veo si se ejecutó?
+R: Supabase Dashboard → Functions → Logs o `npx supabase functions logs`
+
+P: ¿Qué pasa si falla?
+R: El cron lo reintenta. Revisa logs para ver el error específico.
+
+P: ¿Puedo desagendar un cron?
+R: Sí, en SQL Editor: SELECT cron.unschedule('nombre-del-job');
+
+P: ¿Funciona de noche?
+R: Sí, crons se ejecutan 24/7 automáticamente.
+
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+📊 MONITOREO BÁSICO (Hacer cada semana)
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+Cada VIERNES por la mañana:
+  1. Abrir Supabase Dashboard → Functions → Logs
+  2. Buscar tus funciones automatizadas de la semana
+  3. Verificar:
+     ✓ Status 200 (éxito)
+     ✓ Sin errores
+     ✓ Timestamp coincide con horario agendado
+  4. Si ves ❌: Investigar causa en TROUBLESHOOTING
+
+Cada PRIMER VIERNES DEL MES:
+  1. Verificar que la función se ejecutó las veces esperadas
+     Esperadas = días en mes / intervalo
+     Ej: 31 días / 1 = 31 ejecuciones diarias
+  2. Verificar que los datos se actualizaron correctamente
+  3. Comparar resultados con mes anterior
+
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+🚨 TROUBLESHOOTING COMÚN
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+PROBLEMA                           SOLUCIÓN RÁPIDA
+─────────────────────────────────────────────────────────────────────────────────────────
+Job no aparece en cron.job         → Ejecutar: npx supabase db push
+Token inválido                     → Usar: current_setting('app.settings.anon_key')
+Función no existe                  → Verificar: npx supabase functions list
+Error "Bearer token invalid"       → Revisión de acceso a Supabase
+Horario incorrecto                 → Verificar zona (UTC vs Colombia -5)
+Logs muestran error 500            → Ver detalle en: npx supabase functions logs
+Función lenta (tarda >5 min)       → Revisar query en función, agregar índices
+No sincroniza datos                → Verificar credenciales API externa (Shopify, etc)
+
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+🏗️ ARQUITECTURA SUPABASE CRON
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────┐
+│ Supabase Database (pg_cron)                         │
+├─────────────────────────────────────────────────────┤
+│ • Stores schedule (0 2 * * *)                       │
+│ • Triggers net.http_post() at scheduled time       │
+│ • Calls your Edge Function via HTTPS                │
+└─────────────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────────────┐
+│ Supabase Edge Function                              │
+├─────────────────────────────────────────────────────┤
+│ • Receives HTTP POST                                │
+│ • Processes scheduled: true flag                    │
+│ • Syncs data, sends notifications, etc              │
+└─────────────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────────────┐
+│ External APIs (Optional)                            │
+├─────────────────────────────────────────────────────┤
+│ • Shopify API                                       │
+│ • Meta Ads API                                      │
+│ • Google Ads API                                    │
+│ • Envía API                                         │
+│ • Email service (SendGrid, Resend)                 │
+└─────────────────────────────────────────────────────┘
+
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+📍 LOCALIZACIÓN DE ARCHIVOS
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+/Users/juliancastro/Desktop/sewdle-co/
+├── AUTOMATIZACIONES_README.md              ← Índice general (empieza aquí)
+├── AUTOMATIZACIONES_QUICK_START.md         ← Implementación rápida (5-15 min)
+├── GUIAS_AUTOMATIZACIONES.md               ← Guía completa con 10 casos
+├── CLAUDE_CODE_HOOKS.md                    ← Hooks para desarrollo local
+├── AUTOMATIZACIONES_CHECKLIST.md           ← Checklist de implementación
+├── AUTOMATIZACIONES_REFERENCIA_RAPIDA.txt  ← Este archivo
+│
+├── supabase/
+│   ├── migrations/                         ← Aquí crear migración de cron
+│   │   └── 20260327120000_add_sync_*.sql
+│   └── functions/
+│       ├── sync-shopify-sales/
+│       ├── sync-meta-ad-performance/
+│       ├── intelligent-replenishment/
+│       ├── send-hotdays-campaign/
+│       └── ... (79 funciones totales)
+│
+└── scripts/
+    ├── send-hotdays-batched.sh             ← Script manual para campañas
+    ├── send-hotdays-range.sh
+    └── send-hotdays2-campaign.sh
+
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+🔐 SEGURIDAD & MEJORES PRÁCTICAS
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+✅ SÍ:
+  • Usar current_setting('app.settings.anon_key') para token dinámico
+  • Idempotencia: ejecutar 2 veces = resultado igual a 1 vez
+  • Nombres únicos de jobs para cada cron
+  • Revisar logs regularmente
+
+❌ NO:
+  • Hardcodear tokens de API directamente
+  • Agendar crons muy cercanos (pueden competir)
+  • Ignorar errores en logs
+  • Olvidar convertir UTC a zona local
+
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+💡 EJEMPLO: IMPLEMENTACIÓN COMPLETA EN 3 COMANDOS
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+Objetivo: Sincronizar Shopify cada día a las 21:00 Colombia (2 AM UTC)
+
+$ npx supabase migration create sync_shopify_daily
+
+# [Editar archivo: reemplazar NOMBRE y horario]
+
+$ npx supabase db push
+
+✅ LISTO. Mañana a las 21:00 Colombia, Shopify se sincroniza automáticamente.
+
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+📞 RECURSOS ÚTILES
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+Supabase pg_cron docs:
+  https://supabase.com/docs/guides/database/functions#cron-jobs
+
+Cron syntax helper:
+  https://crontab.guru/ (ingresa "0 2 * * *" para ver cuándo se ejecuta)
+
+Zona horaria Colombia:
+  UTC-5 (GMT-5)
+  Ejemplo: UTC 00:00 = Colombia 19:00 (día anterior)
+
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+✨ RESUMEN FINAL
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+Tienes 5 documentos listos para implementar automatizaciones en Sewdle:
+
+1. README → Navega entre documentos
+2. QUICK START → Implementación rápida (copiar-pegar)
+3. GUIAS COMPLETAS → Todos los detalles
+4. HOOKS → Automatización de desarrollo
+5. CHECKLIST → Control paso a paso
+
+¿Por dónde empezar?
+
+→ Si tienes 15 min: QUICK START
+→ Si tienes 45 min: GUIAS COMPLETAS
+→ Si necesitas checklist: CHECKLIST
+
+¡Adelante con tus automatizaciones! 🚀
+
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+Última actualización: 2026-03-27
+Proyecto: Sewdle
+Equipo: Automatizaciones
+═════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════

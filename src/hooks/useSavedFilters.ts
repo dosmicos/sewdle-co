@@ -1,0 +1,121 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { toast } from 'sonner';
+import { Json } from '@/integrations/supabase/types';
+
+export interface SavedFilter {
+  id: string;
+  name: string;
+  filters: Record<string, any>;
+  is_shared: boolean;
+  user_id: string;
+  created_at: string;
+}
+
+export const useSavedFilters = () => {
+  const { currentOrganization } = useOrganization();
+  const [savedFilters, setSavedFilters] = useState<SavedFilter[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchSavedFilters = async () => {
+    if (!currentOrganization?.id) return;
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('saved_picking_filters')
+        .select('*')
+        .eq('organization_id', currentOrganization.id)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setSavedFilters((data || []).map(item => ({
+        ...item,
+        filters: item.filters as Record<string, any>
+      })));
+    } catch (error: any) {
+      toast.error('Error al cargar filtros guardados');
+      console.error('Error fetching saved filters:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveFilter = async (name: string, filters: Record<string, any>, isShared: boolean = false) => {
+    if (!currentOrganization?.id) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuario no autenticado');
+
+      const { data, error } = await supabase
+        .from('saved_picking_filters')
+        .insert([{
+          organization_id: currentOrganization.id,
+          user_id: user.id,
+          name,
+          filters: filters as unknown as Json,
+          is_shared: isShared
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      toast.success(`Filtro "${name}" guardado exitosamente`);
+      await fetchSavedFilters();
+      return data;
+    } catch (error: any) {
+      toast.error('Error al guardar filtro');
+      console.error('Error saving filter:', error);
+    }
+  };
+
+  const deleteFilter = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('saved_picking_filters')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      toast.success('Filtro eliminado');
+      await fetchSavedFilters();
+    } catch (error: any) {
+      toast.error('Error al eliminar filtro');
+      console.error('Error deleting filter:', error);
+    }
+  };
+
+  const updateFilter = async (id: string, name: string, filters: Record<string, any>) => {
+    try {
+      const { error } = await supabase
+        .from('saved_picking_filters')
+        .update({ name, filters: filters as unknown as Json, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      toast.success('Filtro actualizado');
+      await fetchSavedFilters();
+    } catch (error: any) {
+      toast.error('Error al actualizar filtro');
+      console.error('Error updating filter:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchSavedFilters();
+  }, [currentOrganization?.id]);
+
+  return {
+    savedFilters,
+    loading,
+    saveFilter,
+    deleteFilter,
+    updateFilter,
+    refetch: fetchSavedFilters
+  };
+};

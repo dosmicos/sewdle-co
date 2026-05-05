@@ -1,0 +1,553 @@
+import React from 'react';
+import { Toaster } from "sonner";
+import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
+import { OrganizationProvider } from "@/contexts/OrganizationContext";
+import { LanguageProvider } from "@/contexts/LanguageContext";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import AuthPage from "@/pages/AuthPage";
+// Landing page uses three.js (~600KB) — lazy load it
+const LandingPage = React.lazy(() => import("@/pages/LandingPage"));
+import SignupPage from "@/pages/SignupPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import PasswordChangePage from "@/pages/PasswordChangePage";
+import MainLayout from "@/components/MainLayout";
+import DashboardPage from "@/pages/DashboardPage";
+import OrdersPage from "@/pages/OrdersPage";
+import SuppliesPage from "@/pages/SuppliesPage";
+import WorkshopsPage from "@/pages/WorkshopsPage";
+import ProductsPage from "@/pages/ProductsPage";
+import DeliveriesPage from "@/pages/DeliveriesPage";
+import DeliveryDetailsPage from "@/pages/DeliveryDetailsPage";
+import FinancialPage from "@/pages/FinancialPage";
+import { ReplenishmentPage } from "@/pages/ReplenishmentPage";
+import BillingPage from "@/pages/BillingPage";
+import OKRsPage from "@/pages/OKRsPage";
+import AlegraPage from "@/pages/AlegraPage";
+import CartRecoveryPage from "@/pages/CartRecoveryPage";
+import MessagingAIPage from "@/pages/MessagingAIPage";
+import ElsaLearningsPage from "@/pages/ElsaLearningsPage";
+import ApisStatusPage from "@/pages/ApisStatusPage";
+
+import { ShopifyDashboardPage } from "@/pages/ShopifyDashboardPage";
+import UsersRolesPage from "@/pages/UsersRolesPage";
+import OrderDetailsPage from "@/pages/OrderDetailsPage";
+import ProspectsPage from "@/pages/ProspectsPage";
+import NotFound from "@/pages/NotFound";
+import PickingPackingPage from "@/pages/PickingPackingPage";
+import PrintableOrderView from "@/pages/PrintableOrderView";
+import PasswordChangeRouteGuard from "@/components/PasswordChangeRouteGuard";
+import UgcCreatorsPage from "@/pages/UgcCreatorsPage";
+import PublicidadPage from "@/pages/PublicidadPage";
+import UgcUploadPage from "@/pages/UgcUploadPage";
+import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
+import TermsOfServicePage from "@/pages/TermsOfServicePage";
+import DataDeletionPage from "@/pages/DataDeletionPage";
+// Finance dashboard — lazy loaded (heavy: Recharts, date-fns)
+const FinanceDashboardPage = React.lazy(() => import("@/pages/FinanceDashboardPage"));
+const AdPerformancePage = React.lazy(() => import("@/pages/AdPerformancePage"));
+const AdIntelligencePage = React.lazy(() => import("@/pages/AdIntelligencePage"));
+const AdAnalysisPage = React.lazy(() => import("@/pages/AdAnalysisPage"));
+const UgcPerformancePage = React.lazy(() => import("@/pages/UgcPerformancePage"));
+const CostSettingsPage = React.lazy(() => import("@/pages/CostSettingsPage"));
+const MarketingCalendarPage = React.lazy(() => import("@/pages/MarketingCalendarPage"));
+const ContentPlannerPage = React.lazy(() => import("@/pages/ContentPlannerPage"));
+const MetaAdsCallbackPage = React.lazy(() => import("@/pages/MetaAdsCallbackPage"));
+const GoogleAdsCallbackPage = React.lazy(() => import("@/pages/GoogleAdsCallbackPage"));
+const TikTokCallbackPage = React.lazy(() => import("@/pages/TikTokCallbackPage"));
+const TikTokAdsCallbackPage = React.lazy(() => import("@/pages/TikTokAdsCallbackPage"));
+const SocialAnalyticsPage = React.lazy(() => import("@/pages/SocialAnalyticsPage"));
+const CartRecoveryDashboardPage = React.lazy(() => import("@/pages/CartRecoveryDashboardPage"));
+
+// Create QueryClient instance outside of component to prevent recreation
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      retry: 3,
+    },
+  },
+});
+
+// Smart redirect: sends user to the right page based on their permissions
+const SmartRedirect = () => {
+  const { hasPermission, isLoading } = usePermissions();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // If user has dashboard permission, go to dashboard (normal flow)
+  if (hasPermission('dashboard', 'view')) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // If user only has messaging permission, go directly to whatsapp-ai
+  if (hasPermission('messaging', 'view')) {
+    return <Navigate to="/whatsapp-ai" replace />;
+  }
+
+  // Fallback to dashboard
+  return <Navigate to="/dashboard" replace />;
+};
+
+// Componente para rutas que requieren rol de administrador
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+  
+  if (user?.role !== 'Administrador') {
+    return <SmartRedirect />;
+  }
+  
+  return <>{children}</>;
+};
+
+// Componente para rutas según permisos específicos
+const PermissionRoute = ({
+  children,
+  module,
+  action
+}: {
+  children: React.ReactNode;
+  module: string;
+  action: string;
+}) => {
+  const { user, loading: authLoading } = useAuth();
+  const { hasPermission, isLoading: permissionsLoading } = usePermissions();
+
+  if (authLoading || permissionsLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  if (!hasPermission(module, action)) {
+    // Use SmartRedirect to avoid infinite loops (e.g., dashboard → dashboard)
+    return <SmartRedirect />;
+  }
+
+  return <>{children}</>;
+};
+
+// Redirect finance.sewdle.co → growth.sewdle.co
+if (window.location.hostname === 'finance.sewdle.co') {
+  window.location.replace(`https://growth.sewdle.co${window.location.pathname}${window.location.search}`);
+}
+
+// Detect if we're on the growth/finance subdomain
+const isFinanceSubdomain = () => {
+  const hostname = window.location.hostname;
+  return hostname === 'growth.sewdle.co' || hostname.startsWith('growth.');
+};
+
+// Finance Dashboard - layout independiente para finance.sewdle.co
+const LazyFallback = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+  </div>
+);
+
+const FinanceAppContent = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/auth" element={<AuthPage />} />
+        <Route path="*" element={<Navigate to="/auth" replace />} />
+      </Routes>
+    );
+  }
+
+  return (
+    <React.Suspense fallback={<LazyFallback />}>
+    <Routes>
+      <Route path="/" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="growth" action="view">
+            <FinanceDashboardPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/ad-performance" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="growth" action="view">
+            <AdPerformancePage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/intelligence" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="growth" action="view">
+            <AdIntelligencePage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/ad-analysis" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="growth" action="view">
+            <AdAnalysisPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/ugc-performance" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="growth" action="view">
+            <UgcPerformancePage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/cost-settings" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="growth" action="view">
+            <CostSettingsPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/marketing-calendar" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="growth" action="view">
+            <MarketingCalendarPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/content-planner" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="growth" action="view">
+            <ContentPlannerPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/social-analytics" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="growth" action="view">
+            <SocialAnalyticsPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/cart-recovery" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="growth" action="view">
+            <CartRecoveryDashboardPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/meta-callback" element={<MetaAdsCallbackPage />} />
+      <Route path="/google-ads-callback" element={<GoogleAdsCallbackPage />} />
+      <Route path="/tiktok-callback" element={<TikTokCallbackPage />} />
+      <Route path="/tiktok-ads-callback" element={<TikTokAdsCallbackPage />} />
+      <Route path="/auth" element={<Navigate to="/" replace />} />
+      <Route path="/password-change" element={<PasswordChangePage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+    </React.Suspense>
+  );
+};
+
+const AppContent = () => {
+  const { user, loading } = useAuth();
+
+  // Si estamos en finance.sewdle.co, mostrar el dashboard financiero
+  if (isFinanceSubdomain()) {
+    return <FinanceAppContent />;
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  return (
+    <Routes>
+      {/* Rutas públicas */}
+      <Route path="/auth" element={!user ? <AuthPage /> : <SmartRedirect />} />
+      <Route path="/signup" element={!user ? <SignupPage /> : <SmartRedirect />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/login" element={<Navigate to="/auth" replace />} />
+      <Route path="/" element={!user ? <React.Suspense fallback={<LazyFallback />}><LandingPage /></React.Suspense> : <SmartRedirect />} />
+      <Route path="/upload/:token" element={<UgcUploadPage />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+      <Route path="/terms-of-service" element={<TermsOfServicePage />} />
+      <Route path="/data-deletion" element={<DataDeletionPage />} />
+
+      {/* Ruta de cambio de contraseña obligatorio - NO protegida por PasswordChangeRouteGuard */}
+      <Route path="/password-change" element={
+        user ? <PasswordChangePage /> : <Navigate to="/auth" replace />
+      } />
+
+      {/* Rutas protegidas con enforcement de cambio de contraseña */}
+      <Route path="/" element={
+        <PasswordChangeRouteGuard>
+          <MainLayout />
+        </PasswordChangeRouteGuard>
+      }>
+        <Route path="dashboard" element={
+          <PermissionRoute module="dashboard" action="view">
+            <DashboardPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="orders" element={
+          <PermissionRoute module="orders" action="view">
+            <OrdersPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="orders/:orderId" element={<OrderDetailsPage />} />
+
+        <Route path="supplies" element={
+          <PermissionRoute module="insumos" action="view">
+            <SuppliesPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="workshops" element={
+          <PermissionRoute module="workshops" action="view">
+            <WorkshopsPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="products" element={
+          <PermissionRoute module="products" action="view">
+            <ProductsPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="deliveries" element={
+          <PermissionRoute module="deliveries" action="view">
+            <DeliveriesPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="deliveries/:deliveryId" element={
+          <PermissionRoute module="deliveries" action="view">
+            <DeliveryDetailsPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="financial" element={
+          <PermissionRoute module="finances" action="view">
+            <FinancialPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="replenishment" element={
+          <PermissionRoute module="replenishment" action="view">
+            <ReplenishmentPage />
+          </PermissionRoute>
+        } />
+
+        {/* Finance Dashboard - accesible también desde la app principal */}
+        <Route path="finance-dashboard" element={
+          <PermissionRoute module="growth" action="view">
+            <React.Suspense fallback={<LazyFallback />}>
+              <FinanceDashboardPage />
+            </React.Suspense>
+          </PermissionRoute>
+        } />
+
+        {/* Cost Settings - accesible desde la app principal */}
+        <Route path="cost-settings" element={
+          <PermissionRoute module="growth" action="view">
+            <React.Suspense fallback={<LazyFallback />}>
+              <CostSettingsPage />
+            </React.Suspense>
+          </PermissionRoute>
+        } />
+
+        {/* Marketing Calendar - accesible desde la app principal */}
+        <Route path="marketing-calendar" element={
+          <PermissionRoute module="growth" action="view">
+            <React.Suspense fallback={<LazyFallback />}>
+              <MarketingCalendarPage />
+            </React.Suspense>
+          </PermissionRoute>
+        } />
+
+        {/* Ads OAuth callbacks */}
+        <Route path="meta-callback" element={<MetaAdsCallbackPage />} />
+        <Route path="google-ads-callback" element={<GoogleAdsCallbackPage />} />
+        <Route path="tiktok-callback" element={<TikTokCallbackPage />} />
+        <Route path="tiktok-ads-callback" element={<TikTokAdsCallbackPage />} />
+
+        <Route path="shopify" element={
+          <PermissionRoute module="shopify" action="view">
+            <ShopifyDashboardPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="users-roles" element={
+          <PermissionRoute module="users" action="view">
+            <UsersRolesPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="settings/billing" element={<BillingPage />} />
+
+        <Route path="prospects" element={
+          <PermissionRoute module="prospects" action="view">
+            <ProspectsPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="okrs/*" element={<OKRsPage />} />
+
+        <Route path="ugc-creators" element={
+          <PermissionRoute module="ugc" action="view">
+            <UgcCreatorsPage />
+          </PermissionRoute>
+        } />
+
+        <Route path="social-analytics" element={
+          <PermissionRoute module="publicidad" action="view">
+            <React.Suspense fallback={<LazyFallback />}>
+              <SocialAnalyticsPage />
+            </React.Suspense>
+          </PermissionRoute>
+        } />
+
+        <Route path="publicidad" element={
+          <AdminRoute>
+            <PublicidadPage />
+          </AdminRoute>
+        } />
+
+        <Route path="alegra" element={
+          <AdminRoute>
+            <AlegraPage />
+          </AdminRoute>
+        } />
+
+        <Route path="cart-recovery" element={
+          <AdminRoute>
+            <CartRecoveryPage />
+          </AdminRoute>
+        } />
+
+        <Route path="apis" element={
+          <AdminRoute>
+            <ApisStatusPage />
+          </AdminRoute>
+        } />
+      </Route>
+
+      {/* Mensajería IA - Layout independiente con guard de permisos */}
+      <Route path="whatsapp-ai" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="messaging" action="view">
+            <MessagingAIPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+
+      <Route path="elsa-learnings" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="messaging" action="view">
+            <MainLayout>
+              <ElsaLearningsPage />
+            </MainLayout>
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+
+      {/* Picking & Packing - Layout independiente con guard */}
+      <Route path="picking-packing" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="picking y packing" action="view">
+            <PickingPackingPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+
+      <Route path="picking-packing/print/:orderId" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="picking y packing" action="view">
+            <PrintableOrderView />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+};
+
+const App = () => {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <OrganizationProvider>
+            <Toaster 
+              position="top-right"
+              expand={true}
+              richColors={true}
+              closeButton={true}
+              toastOptions={{
+                style: {
+                  backgroundColor: '#ffffff',
+                  color: '#000000',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  padding: '16px',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                  zIndex: 999999
+                },
+                className: 'toast-custom'
+              }}
+            />
+            <ShadcnToaster />
+            <BrowserRouter>
+              <ErrorBoundary>
+                <AppContent />
+              </ErrorBoundary>
+            </BrowserRouter>
+            </OrganizationProvider>
+          </AuthProvider>
+        </LanguageProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
+
+export default App;
