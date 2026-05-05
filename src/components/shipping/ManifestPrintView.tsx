@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { ManifestWithItems } from '@/hooks/useShippingManifests';
 import { CARRIER_NAMES, type CarrierCode } from '@/features/shipping/types/envia';
@@ -19,14 +19,25 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
   const leftColumn = items.slice(0, halfLength);
   const rightColumn = items.slice(halfLength);
 
+  // Add a body class while open so the scoped @media print CSS can
+  // hide the app and show only the manifest without affecting other print actions.
+  useEffect(() => {
+    document.body.classList.add('manifest-printing');
+    return () => document.body.classList.remove('manifest-printing');
+  }, []);
+
   const handlePrint = () => {
     window.print();
   };
 
-  // Render as a portal directly under <body> so that @media print CSS can
-  // hide #root (the entire React app) and show only this manifest node.
-  // Without the portal, window.print() flattens ALL DOM content including the
-  // app behind the overlay, producing one page per component (~13 pages).
+  // Portal target: #root (not document.body).
+  // React 18 attaches event delegation to the root container (#root), so portaling
+  // to document.body — which is a sibling of #root — means click events never reach
+  // React's listener and onClick handlers never fire.
+  // By portaling to #root, events bubble up through #root and React catches them. ✓
+  const rootEl = document.getElementById('root');
+  if (!rootEl) return null;
+
   return ReactDOM.createPortal(
     <div id="manifest-print-root" className="fixed inset-0 z-50 bg-white overflow-auto">
       {/* Print controls - hidden when printing */}
@@ -64,7 +75,7 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
               <p>{format(new Date(manifest.manifest_date), 'dd/MM/yyyy', { locale: es })}</p>
             </div>
           </div>
-          
+
           {/* Remitente/Destinatario info */}
           <div className="grid grid-cols-2 text-[9px] border-b border-black">
             <div className="p-1.5 border-r border-black">
@@ -79,7 +90,7 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
               <p>Ver detalle por guía</p>
             </div>
           </div>
-          
+
           <div className="flex text-[10px] p-1.5">
             <div className="flex-1">
               <p><strong>Total de guías:</strong> {items.length}</p>
@@ -107,7 +118,7 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
               const rightItem = rightColumn[idx];
               const leftNum = idx + 1;
               const rightNum = halfLength + idx + 1;
-              
+
               return (
                 <tr key={leftItem.id} className="even:bg-gray-50">
                   <td className="border border-black px-0.5 py-0.5 text-center font-medium">
@@ -117,7 +128,7 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
                     {leftItem.tracking_number}
                   </td>
                   <td className="border border-black px-0.5 py-0.5 text-center">1</td>
-                  
+
                   {rightItem ? (
                     <>
                       <td className="border border-black px-0.5 py-0.5 text-center font-medium">
@@ -147,7 +158,7 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
           <div className="p-2 border-b border-black text-[10px]">
             <p><strong>Total Paquetes:</strong> {items.length}</p>
           </div>
-          
+
           {/* Signatures section */}
           <div className="grid grid-cols-2 text-[9px]">
             {/* Left: Transportadora signature */}
@@ -155,7 +166,7 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
               <p className="font-bold mb-4">Transportadora: {CARRIER_NAMES[manifest.carrier as CarrierCode] || manifest.carrier}</p>
               <div className="border-t border-black pt-1 mt-12"></div>
             </div>
-            
+
             {/* Right: Driver/vehicle info */}
             <div className="p-2 space-y-2">
               <div>
@@ -175,19 +186,18 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
         </div>
       </div>
 
-      {/* Print styles */}
+      {/* Print styles — scoped to body.manifest-printing so they don't affect other print actions */}
       <style>{`
         @media print {
           @page {
             size: letter;
             margin: 5mm;
           }
-          /* Hide the entire React app — only the manifest portal renders */
-          #root {
+          body.manifest-printing #root > * {
             display: none !important;
           }
-          /* Un-fix the portal container so it flows normally on the page */
-          #manifest-print-root {
+          body.manifest-printing #manifest-print-root {
+            display: block !important;
             position: static !important;
             overflow: visible !important;
             background: white !important;
@@ -208,6 +218,6 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
         }
       `}</style>
     </div>,
-    document.body
+    rootEl
   );
 };
