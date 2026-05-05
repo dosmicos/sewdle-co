@@ -286,7 +286,7 @@ const UgcCreatorsPage: React.FC = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => window.open('https://ads.dosmicos.com/ranking', '_blank')}
+              onClick={() => window.open('https://club.dosmicos.com/ranking', '_blank')}
             >
               <ExternalLink className="h-4 w-4 mr-1" /> Ver Ranking Público
             </Button>

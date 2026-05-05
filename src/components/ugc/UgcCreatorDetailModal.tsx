@@ -49,7 +49,7 @@ function AccessCodeChip({ code }: { code: string }) {
     <button
       onClick={handleCopy}
       className="flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-2.5 py-1 text-xs font-mono font-medium text-gray-600 hover:bg-gray-100 transition-colors"
-      title="Código de acceso para ads.dosmicos.com — click para copiar"
+      title="Código de acceso para club.dosmicos.com — click para copiar"
     >
       {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
       {code}
@@ -369,7 +369,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
               </div>
               {creator.access_code && (
                 <div className="col-span-2">
-                  <span className="text-muted-foreground">Código de acceso (ads.dosmicos.com):</span>
+                  <span className="text-muted-foreground">Código de acceso (club.dosmicos.com):</span>
                   <div className="flex items-center gap-2 mt-1">
                     <code className="font-mono font-bold tracking-widest text-sm bg-muted px-2 py-0.5 rounded">
                       {creator.access_code}

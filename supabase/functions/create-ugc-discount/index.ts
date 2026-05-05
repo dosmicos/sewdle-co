@@ -84,7 +84,7 @@ serve(async (req) => {
     if (existing) {
       return new Response(JSON.stringify({
         already_exists: true,
-        redirect_url: `https://ads.dosmicos.com/ugc/${existing.redirect_token}`,
+        redirect_url: `https://club.dosmicos.com/ugc/${existing.redirect_token}`,
         discount_link_id: existing.id,
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -169,7 +169,7 @@ serve(async (req) => {
 
     if (insertError) throw new Error(`DB insert error: ${insertError.message}`);
 
-    const redirectUrl = `https://ads.dosmicos.com/ugc/${link.redirect_token}`;
+    const redirectUrl = `https://club.dosmicos.com/ugc/${link.redirect_token}`;
     log("Done", { redirectUrl, linkId: link.id });
 
     return new Response(JSON.stringify({
