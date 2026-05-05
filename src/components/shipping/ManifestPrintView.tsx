@@ -1,4 +1,5 @@
 import React from 'react';
+import ReactDOM from 'react-dom';
 import { ManifestWithItems } from '@/hooks/useShippingManifests';
 import { CARRIER_NAMES, type CarrierCode } from '@/features/shipping/types/envia';
 import { format } from 'date-fns';
@@ -22,8 +23,12 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
     window.print();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 bg-white overflow-auto">
+  // Render as a portal directly under <body> so that @media print CSS can
+  // hide #root (the entire React app) and show only this manifest node.
+  // Without the portal, window.print() flattens ALL DOM content including the
+  // app behind the overlay, producing one page per component (~13 pages).
+  return ReactDOM.createPortal(
+    <div id="manifest-print-root" className="fixed inset-0 z-50 bg-white overflow-auto">
       {/* Print controls - hidden when printing */}
       <div className="print:hidden flex items-center justify-between p-4 border-b bg-gray-100 sticky top-0">
         <h2 className="font-semibold">Vista previa de impresión</h2>
@@ -177,6 +182,16 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
             size: letter;
             margin: 5mm;
           }
+          /* Hide the entire React app — only the manifest portal renders */
+          #root {
+            display: none !important;
+          }
+          /* Un-fix the portal container so it flows normally on the page */
+          #manifest-print-root {
+            position: static !important;
+            overflow: visible !important;
+            background: white !important;
+          }
           body {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
@@ -192,6 +207,7 @@ export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
           }
         }
       `}</style>
-    </div>
+    </div>,
+    document.body
   );
 };
