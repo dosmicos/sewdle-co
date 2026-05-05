@@ -76,8 +76,9 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     setItems(manifest.items);
   }, [manifest.items]);
 
-  const handleScan = useCallback(async () => {
-    const trackingNumber = scanInput.trim().toUpperCase();
+  // Core scan function — takes a resolved tracking number directly so
+  // auto-scan can pass the full number even when input only has 4 digits.
+  const triggerScan = useCallback(async (trackingNumber: string) => {
     if (!trackingNumber || scanning) return;
 
     setScanning(true);
@@ -108,7 +109,43 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
 
     setScanning(false);
     inputRef.current?.focus();
-  }, [scanInput, scanning, manifest.id, scanTrackingNumber, extraScans]);
+  }, [scanning, manifest.id, scanTrackingNumber, extraScans]);
+
+  // Enter key — resolves tracking from current input and delegates to triggerScan.
+  const handleScan = useCallback(async () => {
+    const trackingNumber = scanInput.trim().toUpperCase();
+    if (!trackingNumber || scanning) return;
+    await triggerScan(trackingNumber);
+  }, [scanInput, scanning, triggerScan]);
+
+  // Instant auto-scan: fires without Enter when the input unambiguously
+  // identifies a pending guide (full match) or its last 4 digits (suffix match).
+  useEffect(() => {
+    if (scanning) return;
+    const input = scanInput.trim();
+    if (!input) return;
+
+    const pendingTrackings = items
+      .filter(i => i.scan_status === 'pending' || i.scan_status === null)
+      .map(i => i.tracking_number.toUpperCase());
+
+    const inputUpper = input.toUpperCase();
+
+    // Full match → verify immediately (handles barcode scanners sending the whole number)
+    if (pendingTrackings.includes(inputUpper)) {
+      triggerScan(inputUpper);
+      return;
+    }
+
+    // Exactly 4 digits → check for unique suffix match among pending guides
+    if (/^\d{4}$/.test(input)) {
+      const matches = pendingTrackings.filter(t => t.endsWith(input));
+      if (matches.length === 1) {
+        triggerScan(matches[0]);
+      }
+      // If 0 or 2+ matches: wait — user can keep typing or press Enter
+    }
+  }, [scanInput, scanning, items, triggerScan]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
