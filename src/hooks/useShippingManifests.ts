@@ -200,15 +200,30 @@ export const useShippingManifests = () => {
         const toCreate = externalShipments.filter(s => !foundByTracking.has(s.tracking_number));
 
         if (toCreate.length > 0) {
-          const stubs = toCreate.map(s => ({
-            organization_id: currentOrganization.id,
-            // shopify_order_id is NOT NULL in the schema — use 0 as sentinel for portal-only guides
-            shopify_order_id: s.shopify_order_id ?? 0,
-            order_number: s.order_number || s.tracking_number,
-            carrier,
-            tracking_number: s.tracking_number,
-            status: 'created',
-          }));
+          const stubs = toCreate.map(s => {
+            // shopify_order_id is NOT NULL and has a unique constraint per (org, order_id).
+            // For portal-only guides (no real Shopify order) we derive a safe unique value
+            // from the tracking number:
+            //   • Numeric tracking (e.g. Coordinadora 57214551667) → parse as int.
+            //     These are in the 10-billion range, far from Shopify IDs (~75000).
+            //   • Non-numeric → use real shopify_order_id if available, else 0.
+            //     (Multiple non-numeric guides from same org with shopify_order_id=0
+            //      would still conflict; if that ever occurs, a migration to allow NULL
+            //      is the correct long-term fix.)
+            const numericTracking = /^\d+$/.test(s.tracking_number)
+              ? parseInt(s.tracking_number, 10)
+              : null;
+            const shopifyOrderId = s.shopify_order_id ?? numericTracking ?? 0;
+
+            return {
+              organization_id: currentOrganization.id,
+              shopify_order_id: shopifyOrderId,
+              order_number: s.order_number || s.tracking_number,
+              carrier,
+              tracking_number: s.tracking_number,
+              status: 'created',
+            };
+          });
 
           const { data: createdStubs, error: stubError } = await supabase
             .from('shipping_labels')
