@@ -1,223 +1,177 @@
-import React, { useEffect } from 'react';
-import ReactDOM from 'react-dom';
+/**
+ * Opens a new browser window with the manifest content and triggers print.
+ *
+ * Uses window.open() instead of a React portal overlay — avoids conflicts with
+ * Radix Sheet's onPointerDownOutside closing the manifests panel and the
+ * React 18 event delegation issue (listeners on #root, not document.body).
+ */
 import { ManifestWithItems } from '@/hooks/useShippingManifests';
-import { CARRIER_NAMES, type CarrierCode } from '@/features/shipping/types/envia';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 
-interface ManifestPrintViewProps {
-  manifest: ManifestWithItems;
-  onClose: () => void;
+const CARRIER_NAMES: Record<string, string> = {
+  coordinadora: 'Coordinadora',
+  interrapidisimo: 'Interrapidísimo',
+  deprisa: 'Deprisa',
+  servientrega: 'Servientrega',
+  tcc: 'TCC',
+  envia: 'Envía',
+  otro: 'Otro',
+};
+
+function fmtDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    const dd = d.getDate().toString().padStart(2, '0');
+    const mm = (d.getMonth() + 1).toString().padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  } catch {
+    return dateStr;
+  }
 }
 
-export const ManifestPrintView: React.FC<ManifestPrintViewProps> = ({
-  manifest,
-  onClose,
-}) => {
+export function openManifestPrintWindow(manifest: ManifestWithItems): void {
   const items = manifest.items;
   const halfLength = Math.ceil(items.length / 2);
   const leftColumn = items.slice(0, halfLength);
   const rightColumn = items.slice(halfLength);
 
-  // Add a body class while open so the scoped @media print CSS can
-  // hide the app and show only the manifest without affecting other print actions.
-  useEffect(() => {
-    document.body.classList.add('manifest-printing');
-    return () => document.body.classList.remove('manifest-printing');
-  }, []);
+  const carrierName = CARRIER_NAMES[manifest.carrier] || manifest.carrier;
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const tableRows = leftColumn.map((leftItem, idx) => {
+    const rightItem = rightColumn[idx];
+    const leftNum = String(idx + 1).padStart(2, '0');
+    const rightNum = String(halfLength + idx + 1).padStart(2, '0');
+    const bgColor = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
 
-  // Portal target: #root (not document.body).
-  // React 18 attaches event delegation to the root container (#root), so portaling
-  // to document.body — which is a sibling of #root — means click events never reach
-  // React's listener and onClick handlers never fire.
-  // By portaling to #root, events bubble up through #root and React catches them. ✓
-  const rootEl = document.getElementById('root');
-  if (!rootEl) return null;
+    const rightCells = rightItem
+      ? `<td style="border:1px solid #000;padding:2px 3px;text-align:center;font-weight:600;">${rightNum}</td>
+         <td style="border:1px solid #000;padding:2px 3px;font-family:monospace;font-size:9px;">${rightItem.tracking_number}</td>
+         <td style="border:1px solid #000;padding:2px 3px;text-align:center;">1</td>`
+      : `<td style="border:1px solid #000;padding:2px 3px;"></td>
+         <td style="border:1px solid #000;padding:2px 3px;"></td>
+         <td style="border:1px solid #000;padding:2px 3px;"></td>`;
 
-  return ReactDOM.createPortal(
-    <div id="manifest-print-root" className="fixed inset-0 z-50 bg-white overflow-auto">
-      {/* Print controls - hidden when printing */}
-      <div className="print:hidden flex items-center justify-between p-4 border-b bg-gray-100 sticky top-0">
-        <h2 className="font-semibold">Vista previa de impresión</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm border rounded hover:bg-gray-200"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handlePrint}
-            className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded hover:opacity-90"
-          >
-            Imprimir
-          </button>
+    return `<tr style="background:${bgColor};">
+      <td style="border:1px solid #000;padding:2px 3px;text-align:center;font-weight:600;">${leftNum}</td>
+      <td style="border:1px solid #000;padding:2px 3px;font-family:monospace;font-size:9px;">${leftItem.tracking_number}</td>
+      <td style="border:1px solid #000;padding:2px 3px;text-align:center;">1</td>
+      ${rightCells}
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <title>Manifiesto ${manifest.manifest_number}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 10px;
+      padding: 8px;
+      color: #000;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    @page { size: letter; margin: 5mm; }
+    @media print { body { padding: 0; } }
+    table { border-collapse: collapse; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div style="border:2px solid #000;margin-bottom:6px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 8px;border-bottom:1px solid #000;">
+      <div>
+        <div style="font-size:14px;font-weight:700;text-transform:uppercase;">${carrierName}</div>
+        <div style="font-size:9px;font-weight:600;">MANIFIESTO DE CARGA</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:13px;font-weight:700;">${manifest.manifest_number}</div>
+        <div style="font-size:9px;">${fmtDate(manifest.manifest_date)}</div>
+      </div>
+    </div>
+
+    <!-- Remitente / Destinatario -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #000;">
+      <div style="padding:5px 8px;border-right:1px solid #000;font-size:8px;">
+        <div style="font-weight:700;">REMITENTE:</div>
+        <div>Dosmicos S.A.S</div>
+        <div>Bogotá D.C.</div>
+        <div>dosmicos.sas@gmail.com</div>
+      </div>
+      <div style="padding:5px 8px;font-size:8px;">
+        <div style="font-weight:700;">DESTINATARIO:</div>
+        <div>Múltiples destinos</div>
+        <div>Ver detalle por guía</div>
+      </div>
+    </div>
+
+    <div style="display:flex;padding:4px 8px;font-size:9px;">
+      <div style="flex:1;"><strong>Total de guías:</strong> ${items.length}</div>
+      <div style="text-align:right;"><strong>Total paquetes:</strong> ${items.length}</div>
+    </div>
+  </div>
+
+  <!-- Guide table -->
+  <table style="width:100%;font-size:8px;line-height:1.2;margin-bottom:8px;">
+    <thead>
+      <tr style="background:#e0e0e0;">
+        <th style="border:1px solid #000;padding:2px 3px;width:5%;text-align:center;">No.</th>
+        <th style="border:1px solid #000;padding:2px 3px;width:37%;text-align:left;">Número de Guía</th>
+        <th style="border:1px solid #000;padding:2px 3px;width:8%;text-align:center;">Paq.</th>
+        <th style="border:1px solid #000;padding:2px 3px;width:5%;text-align:center;">No.</th>
+        <th style="border:1px solid #000;padding:2px 3px;width:37%;text-align:left;">Número de Guía</th>
+        <th style="border:1px solid #000;padding:2px 3px;width:8%;text-align:center;">Paq.</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${tableRows}
+    </tbody>
+  </table>
+
+  <!-- Footer -->
+  <div style="border:2px solid #000;">
+    <div style="padding:6px 8px;border-bottom:1px solid #000;font-size:9px;">
+      <strong>Total Paquetes:</strong> ${items.length}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;font-size:8px;">
+      <div style="padding:8px;border-right:1px solid #000;">
+        <div style="font-weight:700;margin-bottom:36px;">Transportadora: ${carrierName}</div>
+        <div style="border-top:1px solid #000;padding-top:2px;"></div>
+      </div>
+      <div style="padding:8px;">
+        <div style="margin-bottom:10px;">
+          <strong>Tipo de vehículo:</strong><br/>
+          <div style="border-bottom:1px solid #000;margin-top:14px;"></div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <strong>Placa de vehículo:</strong><br/>
+          <div style="border-bottom:1px solid #000;margin-top:14px;"></div>
+        </div>
+        <div>
+          <strong>Cédula conductor/destino:</strong><br/>
+          <div style="border-bottom:1px solid #000;margin-top:14px;"></div>
         </div>
       </div>
+    </div>
+  </div>
 
-      {/* Printable content */}
-      <div className="p-4 print:p-0 max-w-[210mm] mx-auto print:max-w-none">
-        {/* Header */}
-        <div className="border-2 border-black mb-2">
-          <div className="flex justify-between items-start p-2 border-b border-black">
-            <div>
-              <h1 className="text-base font-bold uppercase">
-                {CARRIER_NAMES[manifest.carrier as CarrierCode] || manifest.carrier}
-              </h1>
-              <p className="text-[10px] font-semibold">MANIFIESTO DE CARGA</p>
-            </div>
-            <div className="text-right text-[10px]">
-              <p className="font-bold text-sm">{manifest.manifest_number}</p>
-              <p>{format(new Date(manifest.manifest_date), 'dd/MM/yyyy', { locale: es })}</p>
-            </div>
-          </div>
+  <script>
+    window.addEventListener('load', function() {
+      window.focus();
+      window.print();
+    });
+  </script>
+</body>
+</html>`;
 
-          {/* Remitente/Destinatario info */}
-          <div className="grid grid-cols-2 text-[9px] border-b border-black">
-            <div className="p-1.5 border-r border-black">
-              <p className="font-bold">REMITENTE:</p>
-              <p>Dosmicos S.A.S</p>
-              <p>Bogotá D.C.</p>
-              <p>dosmicos.sas@gmail.com</p>
-            </div>
-            <div className="p-1.5">
-              <p className="font-bold">DESTINATARIO:</p>
-              <p>Múltiples destinos</p>
-              <p>Ver detalle por guía</p>
-            </div>
-          </div>
-
-          <div className="flex text-[10px] p-1.5">
-            <div className="flex-1">
-              <p><strong>Total de guías:</strong> {items.length}</p>
-            </div>
-            <div className="flex-1 text-right">
-              <p><strong>Total paquetes:</strong> {items.length}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Two column table */}
-        <table className="w-full border-collapse text-[8px] leading-tight">
-          <thead>
-            <tr className="bg-gray-200">
-              <th className="border border-black px-0.5 py-0.5 w-[4%] text-center">No.</th>
-              <th className="border border-black px-0.5 py-0.5 w-[32%] text-left">Número de Guía</th>
-              <th className="border border-black px-0.5 py-0.5 w-[8%] text-center">Paq.</th>
-              <th className="border border-black px-0.5 py-0.5 w-[4%] text-center">No.</th>
-              <th className="border border-black px-0.5 py-0.5 w-[32%] text-left">Número de Guía</th>
-              <th className="border border-black px-0.5 py-0.5 w-[8%] text-center">Paq.</th>
-            </tr>
-          </thead>
-          <tbody>
-            {leftColumn.map((leftItem, idx) => {
-              const rightItem = rightColumn[idx];
-              const leftNum = idx + 1;
-              const rightNum = halfLength + idx + 1;
-
-              return (
-                <tr key={leftItem.id} className="even:bg-gray-50">
-                  <td className="border border-black px-0.5 py-0.5 text-center font-medium">
-                    {String(leftNum).padStart(2, '0')}
-                  </td>
-                  <td className="border border-black px-0.5 py-0.5 font-mono text-[7px]">
-                    {leftItem.tracking_number}
-                  </td>
-                  <td className="border border-black px-0.5 py-0.5 text-center">1</td>
-
-                  {rightItem ? (
-                    <>
-                      <td className="border border-black px-0.5 py-0.5 text-center font-medium">
-                        {String(rightNum).padStart(2, '0')}
-                      </td>
-                      <td className="border border-black px-0.5 py-0.5 font-mono text-[7px]">
-                        {rightItem.tracking_number}
-                      </td>
-                      <td className="border border-black px-0.5 py-0.5 text-center">1</td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="border border-black px-0.5 py-0.5"></td>
-                      <td className="border border-black px-0.5 py-0.5"></td>
-                      <td className="border border-black px-0.5 py-0.5"></td>
-                    </>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-
-        {/* Footer with signature fields */}
-        <div className="mt-3 border-2 border-black">
-          {/* Totals row */}
-          <div className="p-2 border-b border-black text-[10px]">
-            <p><strong>Total Paquetes:</strong> {items.length}</p>
-          </div>
-
-          {/* Signatures section */}
-          <div className="grid grid-cols-2 text-[9px]">
-            {/* Left: Transportadora signature */}
-            <div className="p-2 border-r border-black">
-              <p className="font-bold mb-4">Transportadora: {CARRIER_NAMES[manifest.carrier as CarrierCode] || manifest.carrier}</p>
-              <div className="border-t border-black pt-1 mt-12"></div>
-            </div>
-
-            {/* Right: Driver/vehicle info */}
-            <div className="p-2 space-y-2">
-              <div>
-                <p><strong>Tipo de vehículo:</strong></p>
-                <p className="border-b border-black mt-1 pb-1">_____________________________</p>
-              </div>
-              <div>
-                <p><strong>Placa de vehículo:</strong></p>
-                <p className="border-b border-black mt-1 pb-1">_____________________________</p>
-              </div>
-              <div>
-                <p><strong>Cédula conductor/destino:</strong></p>
-                <p className="border-b border-black mt-1 pb-1">_____________________________</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Print styles — scoped to body.manifest-printing so they don't affect other print actions */}
-      <style>{`
-        @media print {
-          @page {
-            size: letter;
-            margin: 5mm;
-          }
-          body.manifest-printing #root > * {
-            display: none !important;
-          }
-          body.manifest-printing #manifest-print-root {
-            display: block !important;
-            position: static !important;
-            overflow: visible !important;
-            background: white !important;
-          }
-          body {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
-          .print\\:hidden {
-            display: none !important;
-          }
-          .print\\:p-0 {
-            padding: 0 !important;
-          }
-          .print\\:max-w-none {
-            max-width: none !important;
-          }
-        }
-      `}</style>
-    </div>,
-    rootEl
-  );
-};
+  const printWindow = window.open('', '_blank', 'width=900,height=700');
+  if (!printWindow) {
+    console.warn('Popup blocked — allow popups for this site to print manifests');
+    return;
+  }
+  printWindow.document.write(html);
+  printWindow.document.close();
+}

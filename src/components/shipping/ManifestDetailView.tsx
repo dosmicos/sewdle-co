@@ -33,7 +33,7 @@ import { CARRIER_NAMES, type CarrierCode } from '@/features/shipping/types/envia
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ManifestPrintView } from './ManifestPrintView';
+import { openManifestPrintWindow } from './ManifestPrintView';
 
 interface ManifestDetailViewProps {
   manifest: ManifestWithItems;
@@ -61,7 +61,6 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   const [extraScans, setExtraScans] = useState<string[]>([]);
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [closingManifest, setClosingManifest] = useState(false);
-  const [showPrintView, setShowPrintView] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -148,16 +147,6 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   const hasMissing = pendingItems.length > 0;
   const hasExtras = extraScans.length > 0;
 
-  // Show print view
-  if (showPrintView) {
-    return (
-      <ManifestPrintView
-        manifest={manifest}
-        onClose={() => setShowPrintView(false)}
-      />
-    );
-  }
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -190,7 +179,7 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
         <Button
           variant="outline"
           size="icon"
-          onClick={() => setShowPrintView(true)}
+          onClick={() => openManifestPrintWindow(manifest)}
           title="Imprimir manifiesto"
         >
           <Printer className="h-4 w-4" />
