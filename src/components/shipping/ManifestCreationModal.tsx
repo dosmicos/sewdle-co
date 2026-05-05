@@ -111,25 +111,14 @@ export const ManifestCreationModal: React.FC<ManifestCreationModalProps> = ({
         throw new Error(data.error || 'Error al cargar guías');
       }
 
-      // Get tracking numbers already included in any existing manifest
-      const { data: manifestedItems } = await supabase
-        .from('manifest_items')
-        .select('tracking_number')
-        .not('tracking_number', 'is', null);
-
-      const manifestedTrackings = new Set(
-        (manifestedItems || []).map((i: any) => i.tracking_number)
-      );
-
       // Preserve manually-added shipments
       const prevManual = shipments.filter(s => s.source === 'manual');
-      const rawShipments: EnviaShipment[] = data.data || [];
+      const apiShipments: EnviaShipment[] = data.data || [];
 
-      // Exclude guides already in an existing manifest
-      const apiShipments = rawShipments.filter(
-        s => !manifestedTrackings.has(s.tracking_number)
-      );
-
+      // NOTE: we intentionally do NOT filter out guides already in other manifests.
+      // Guides disappear naturally once their Envia status leaves 'created'
+      // (previous-day in-transit guides are excluded by the edge function filter).
+      // This allows re-creating manifests freely without being blocked by existing ones.
       setShipments([...apiShipments, ...prevManual]);
       setDataSource(data.source);
 
