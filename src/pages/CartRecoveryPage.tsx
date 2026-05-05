@@ -20,7 +20,14 @@ const formatCOP = (amount: number | null | undefined) => {
 
 type FilterTab = 'all' | 'sent' | 'recovered' | 'opted_out';
 
+const isRecoveredAfterWhatsApp = (cart: AbandonedCart) => {
+  if (!cart.recovered_at || (cart.last_message_step ?? 0) < 1) return false;
+  if (!cart.last_message_sent_at) return true;
+  return new Date(cart.recovered_at).getTime() >= new Date(cart.last_message_sent_at).getTime();
+};
+
 const cartStatus = (cart: AbandonedCart): { label: string; tone: 'success' | 'warning' | 'muted' | 'danger' } => {
+  if (isRecoveredAfterWhatsApp(cart)) return { label: 'Recuperado por WhatsApp', tone: 'success' };
   if (cart.recovered_at) return { label: 'Recuperado', tone: 'success' };
   if (cart.opted_out) return { label: 'Opt-out', tone: 'danger' };
   if ((cart.last_message_step ?? 0) >= 1) return { label: 'Mensaje enviado', tone: 'warning' };
@@ -79,7 +86,7 @@ const CartRecoveryPage: React.FC = () => {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
         <KpiCard
           title="Carritos abandonados"
           value={stats?.abandonedCarts ?? 0}
@@ -93,13 +100,19 @@ const CartRecoveryPage: React.FC = () => {
         <KpiCard
           title="Recuperados"
           value={stats?.recoveredCarts ?? 0}
-          subtitle={`Tasa ${(stats?.recoveryRate ?? 0).toFixed(1)}%`}
+          subtitle={`WhatsApp: ${stats?.whatsappRecoveredCarts ?? 0}`}
           accent="success"
         />
         <KpiCard
-          title="GMV recuperado"
+          title="GMV recuperado total"
           value={formatCOP(stats?.recoveredGmv ?? 0)}
           subtitle={`Pendiente: ${formatCOP(stats?.abandonedGmv ?? 0)}`}
+          accent="success"
+        />
+        <KpiCard
+          title="GMV por WhatsApp"
+          value={formatCOP(stats?.whatsappRecoveredGmv ?? 0)}
+          subtitle={`Tasa ${(stats?.whatsappRecoveryRate ?? 0).toFixed(1)}% sobre enviados`}
           accent="success"
         />
       </div>

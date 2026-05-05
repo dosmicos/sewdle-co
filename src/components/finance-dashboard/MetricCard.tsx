@@ -9,6 +9,7 @@ export interface MetricCardProps {
   label: string;
   value: string;
   changePercent?: number;
+  subtitle?: string;
   sparklineData?: number[];
   isPinned?: boolean;
   onPin?: () => void;
@@ -20,6 +21,7 @@ const MetricCard: React.FC<MetricCardProps> = React.memo(({
   label,
   value,
   changePercent,
+  subtitle,
   sparklineData,
   isPinned,
   onPin,
@@ -48,7 +50,9 @@ const MetricCard: React.FC<MetricCardProps> = React.memo(({
             )}
           </div>
         </div>
-        <div className="text-2xl font-bold text-gray-900 mb-3">{value}</div>
+        <div className="text-2xl font-bold text-gray-900 mb-1">{value}</div>
+        {subtitle && <div className="text-xs text-gray-500 mb-3">{subtitle}</div>}
+        {!subtitle && <div className="mb-3" />}
         {sparklineData && sparklineData.length > 1 && (
           <SparklineChart data={sparklineData} color={sparklineColor} height={40} />
         )}
