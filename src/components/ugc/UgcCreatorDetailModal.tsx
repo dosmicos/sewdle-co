@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { ExternalLink, MessageSquare, Edit, Pencil, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2, Download, Image, Copy, Check } from 'lucide-react';
+import { ExternalLink, MessageSquare, Edit, Pencil, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2, Download, Image, Copy, Check, Lightbulb } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
@@ -87,6 +87,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   const [pickingModalOpen, setPickingModalOpen] = useState(false);
   const [loadingPickingOrder, setLoadingPickingOrder] = useState(false);
   const [videoFilter, setVideoFilter] = useState<'all' | 'pending_organic' | 'pending_ads' | 'published_organic' | 'published_ads'>('all');
+  const [ideaDraftCampaignId, setIdeaDraftCampaignId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewSource, setPreviewSource] = useState<string | null>(null);
   const [previewOriginalUrl, setPreviewOriginalUrl] = useState<string | null>(null);
@@ -417,8 +418,9 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
             {/* Children */}
             <UgcChildrenManager creatorId={creator.id} />
 
-            {/* Club creator toolkits */}
-            <UgcToolkitAssignmentsManager creatorId={creator.id} campaigns={creatorCampaigns} />
+            <div className="rounded-lg border border-amber-100 bg-amber-50/40 p-3 text-xs text-muted-foreground">
+              Las ideas de contenido se administran en la pestaña <span className="font-medium text-amber-700">Campañas</span> y se sincronizan con Club Dosmicos.
+            </div>
           </TabsContent>
 
           {/* Tab: Campaigns */}
@@ -428,6 +430,15 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                 <Plus className="h-4 w-4 mr-1" /> Nueva Campaña
               </Button>
             </div>
+
+            <UgcToolkitAssignmentsManager
+              creatorId={creator.id}
+              campaigns={creatorCampaigns}
+              compact
+              title="Ideas de contenido"
+              draftCampaignId={ideaDraftCampaignId}
+              onDraftCampaignHandled={() => setIdeaDraftCampaignId(null)}
+            />
 
             {creatorCampaigns.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">Sin campañas registradas</p>
@@ -448,7 +459,15 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                               {config?.label}
                             </Badge>
                           </div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                              onClick={() => setIdeaDraftCampaignId(campaign.id)}
+                            >
+                              <Lightbulb className="h-3 w-3 mr-1" /> Idea
+                            </Button>
                             {!['completado', 'cancelado'].includes(campaign.status) && (
                               <Button size="sm" variant="outline" onClick={() => onNewVideo(campaign.id)}>
                                 <Plus className="h-3 w-3 mr-1" /> Subir Contenido

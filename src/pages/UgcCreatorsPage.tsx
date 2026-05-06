@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, LayoutGrid, Table as TableIcon, Trophy, RotateCcw, ExternalLink } from 'lucide-react';
+import { Plus, LayoutGrid, Table as TableIcon, Trophy, RotateCcw, ExternalLink, Lightbulb } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { supabase as supabaseClient } from '@/integrations/supabase/client';
@@ -10,6 +10,7 @@ import { useUgcCampaigns } from '@/hooks/useUgcCampaigns';
 import { useUgcVideos } from '@/hooks/useUgcVideos';
 import { useAllUgcCreatorTagAssignments } from '@/hooks/useUgcCreatorTags';
 import { useUgcCampaignSync } from '@/hooks/useUgcCampaignSync';
+import { useUgcToolkitAssignmentsSummary, normalizeToolkitLabel, type CreatorIdeaFilter } from '@/hooks/useUgcToolkitAssignmentsSummary';
 import { UgcStatsCards } from '@/components/ugc/UgcStatsCards';
 import { UgcKanbanBoard } from '@/components/ugc/UgcKanbanBoard';
 import { UgcProspectKanban } from '@/components/ugc/UgcProspectKanban';
@@ -33,6 +34,7 @@ const UgcCreatorsPage: React.FC = () => {
   const [resettingRanking, setResettingRanking] = useState(false);
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('table');
   const [kanbanTab, setKanbanTab] = useState<'prospectos' | 'campanas'>('prospectos');
+  const [ideaFilter, setIdeaFilter] = useState<CreatorIdeaFilter>('all');
   const [creatorFormOpen, setCreatorFormOpen] = useState(false);
   const [editingCreator, setEditingCreator] = useState<UgcCreator | null>(null);
   const [selectedCreator, setSelectedCreator] = useState<UgcCreator | null>(null);
@@ -49,6 +51,8 @@ const UgcCreatorsPage: React.FC = () => {
   const { campaigns, isLoading: campaignsLoading, createCampaign, updateCampaign, deleteCampaign, updateCampaignStatus } = useUgcCampaigns();
   const { videos, createVideo, updateVideoStatus, updateVideoPublication } = useUgcVideos();
   const { getTagsForCreator } = useAllUgcCreatorTagAssignments();
+  const creatorIds = useMemo(() => creators.map((creator) => creator.id), [creators]);
+  const { assignmentsByCreator, ideaFilterOptions, ideaFilterStats } = useUgcToolkitAssignmentsSummary(creatorIds);
 
   // Auto-sync campaign statuses based on shipping events
   useUgcCampaignSync(campaigns);
@@ -232,6 +236,31 @@ const UgcCreatorsPage: React.FC = () => {
   const isLoading = creatorsLoading || campaignsLoading;
   const activeCampaign = videoCampaignId ? campaigns.find((c) => c.id === videoCampaignId) : null;
 
+  const filteredCreatorsByIdea = useMemo(() => {
+    if (ideaFilter === 'all') return creators;
+
+    return creators.filter((creator) => {
+      const activeAssignments = assignmentsByCreator.get(creator.id) || [];
+      if (ideaFilter === 'with') return activeAssignments.length > 0;
+      if (ideaFilter === 'none') return activeAssignments.length === 0;
+      if (ideaFilter.startsWith('idea:')) {
+        const selectedLabel = ideaFilter.slice('idea:'.length);
+        return activeAssignments.some((assignment) => normalizeToolkitLabel(assignment.label) === selectedLabel);
+      }
+      return true;
+    });
+  }, [assignmentsByCreator, creators, ideaFilter]);
+
+  const filteredCreatorIdsByIdea = useMemo(
+    () => new Set(filteredCreatorsByIdea.map((creator) => creator.id)),
+    [filteredCreatorsByIdea]
+  );
+
+  const filteredCampaignsByIdea = useMemo(
+    () => campaigns.filter((campaign) => filteredCreatorIdsByIdea.has(campaign.creator_id)),
+    [campaigns, filteredCreatorIdsByIdea]
+  );
+
   const handleNotificationClick = (creatorId: string) => {
     const creator = creators.find(c => c.id === creatorId);
     if (creator) {
@@ -262,6 +291,31 @@ const UgcCreatorsPage: React.FC = () => {
           <Button onClick={() => { setEditingCreator(null); setCreatorFormOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Nuevo Creador
           </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-100 bg-amber-50/45 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-amber-900">
+          <Lightbulb className="h-4 w-4 shrink-0 text-amber-500" />
+          <span>Ideas sincronizadas con Club</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={ideaFilter}
+            onChange={(event) => setIdeaFilter(event.target.value as CreatorIdeaFilter)}
+            className="h-9 min-w-[220px] rounded-md border border-amber-200 bg-white px-3 text-xs font-medium text-amber-900 outline-none focus:border-amber-400"
+            title="Filtrar por idea asignada"
+          >
+            <option value="all">Todas las ideas</option>
+            <option value="with">Con ideas asignadas ({ideaFilterStats.withIdeas})</option>
+            <option value="none">Sin ideas asignadas ({ideaFilterStats.withoutIdeas})</option>
+            {ideaFilterOptions.map(({ label, count }) => (
+              <option key={label} value={`idea:${label}`}>{label} ({count})</option>
+            ))}
+          </select>
+          <span className="text-xs text-amber-700">
+            Mostrando {filteredCreatorsByIdea.length} de {creators.length}
+          </span>
         </div>
       </div>
 
@@ -317,7 +371,7 @@ const UgcCreatorsPage: React.FC = () => {
           </TabsList>
           <TabsContent value="prospectos" className="mt-4">
             <UgcProspectKanban
-              creators={creators}
+              creators={filteredCreatorsByIdea}
               campaigns={campaigns}
               onCreatorClick={handleCreatorClick}
               onStatusChange={handleCreatorStatusChange}
@@ -327,7 +381,7 @@ const UgcCreatorsPage: React.FC = () => {
           </TabsContent>
           <TabsContent value="campanas" className="mt-4">
             <UgcKanbanBoard
-              campaigns={campaigns}
+              campaigns={filteredCampaignsByIdea}
               onCampaignClick={handleCampaignClick}
               onStatusChange={(id, status) => handleCampaignStatusChange(id, status)}
               onOrderClick={handleOrderClick}
@@ -337,7 +391,7 @@ const UgcCreatorsPage: React.FC = () => {
         </Tabs>
       ) : (
         <UgcTableView
-          creators={creators}
+          creators={filteredCreatorsByIdea}
           campaigns={campaigns}
           videos={videos}
           onCreatorClick={handleCreatorClick}
