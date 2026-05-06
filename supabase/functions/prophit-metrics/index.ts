@@ -211,6 +211,23 @@ interface ProphitMetrics {
 function toISODate(d: Date): string {
   return d.toISOString().split("T")[0];
 }
+/**
+ * Returns the calendar date in America/Bogota (UTC-5, no DST) for an instant.
+ *
+ * Use this whenever filtering daily-aggregated tables (ad_metrics_daily,
+ * ad_performance_daily, etc.) whose `date` column already represents the
+ * Bogotá calendar day. Using `toISODate` (UTC) for those filters double-counts
+ * by 1 day when callers pass Bogotá-aligned bounds (T05:00:00Z / T04:59:59Z).
+ *
+ * Examples:
+ *   toBogotaDate(new Date("2026-05-05T05:00:00Z")) → "2026-05-05"  // BOG midnight
+ *   toBogotaDate(new Date("2026-05-06T04:59:59Z")) → "2026-05-05"  // last second of BOG May 5
+ *   toBogotaDate(new Date("2026-05-06T05:00:00Z")) → "2026-05-06"  // start of BOG May 6
+ */
+function toBogotaDate(d: Date): string {
+  // en-CA locale outputs YYYY-MM-DD format; timeZone applies the offset.
+  return d.toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+}
 function parseDate(s: string): Date {
   return new Date(s);
 }
@@ -223,6 +240,19 @@ function diffCalendarDays(later: Date, earlier: Date): number {
   const a = new Date(Date.UTC(later.getUTCFullYear(), later.getUTCMonth(), later.getUTCDate()));
   const b = new Date(Date.UTC(earlier.getUTCFullYear(), earlier.getUTCMonth(), earlier.getUTCDate()));
   return Math.round((a.getTime() - b.getTime()) / 86400000);
+}
+/**
+ * Calendar-day diff in America/Bogota.
+ * Use for daily-bucket and pacing calculations when callers pass Bogotá-aligned
+ * timestamps (T05:00:00Z / T04:59:59Z). UTC diff would be off-by-one for these.
+ */
+function diffBogotaCalendarDays(later: Date, earlier: Date): number {
+  const a = toBogotaDate(later);   // "YYYY-MM-DD"
+  const b = toBogotaDate(earlier);
+  // Parse as UTC midnight to get a stable epoch for the diff
+  const ams = Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10));
+  const bms = Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10));
+  return Math.round((ams - bms) / 86400000);
 }
 function startOfMonth(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
@@ -658,14 +688,17 @@ async function fetchStoreMetrics(
   const returningCustomerRevenue = returningOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
 
   // Daily breakdown
-  const dayCount = diffCalendarDays(end, start) + 1;
+  // dailyData bucketed by Bogotá calendar day, not UTC.
+  // For BOG-aligned bounds (T05:00:00Z → next-day T04:59:59Z) this produces the
+  // intuitive 1 entry for "yesterday" and N entries for an N-day MTD range.
+  const dayCount = diffBogotaCalendarDays(end, start) + 1;
   const dailyMap = new Map<string, { totalSales: number; orders: number }>();
   for (let i = 0; i < dayCount; i++) {
-    const d = toISODate(addDays(start, i));
+    const d = toBogotaDate(addDays(start, i));
     dailyMap.set(d, { totalSales: 0, orders: 0 });
   }
   for (const o of validOrders) {
-    const dayStr = (o.created_at_shopify as string).split("T")[0];
+    const dayStr = toBogotaDate(new Date(o.created_at_shopify as string));
     const entry = dailyMap.get(dayStr);
     if (entry) {
       entry.totalSales += getNetPrice(o);
@@ -750,8 +783,9 @@ function computeProphitMetrics(
   const cacCost = adSpend;
   const cacPct = netSales > 0 ? (cacCost / netSales) * 100 : 0;
 
-  // OpEx prorated
-  const daysInPeriod = diffCalendarDays(end, start) + 1;
+  // OpEx prorated. Use Bogotá calendar diff so a BOG-aligned single day
+  // counts as 1 (not 2) and a BOG MTD range counts the right number of days.
+  const daysInPeriod = diffBogotaCalendarDays(end, start) + 1;
   const monthDaysTotal = getDaysInMonth(start);
   const monthlyOpex = customExpensesTotal ?? settings.monthly_opex;
   const opexCost = (monthlyOpex / monthDaysTotal) * daysInPeriod;
@@ -769,7 +803,11 @@ function computeProphitMetrics(
   // Pace / Forecast
   const monthStart = startOfMonth(start);
   const daysInMonth = getDaysInMonth(monthStart);
-  const daysElapsed = diffCalendarDays(end, monthStart) + 1;
+  // daysElapsed = the BOG day-of-month at `end`. monthStart is UTC midnight
+  // (which falls in BOG on the previous day at 7pm), so we cannot diff from
+  // it in BOG terms — we'd be off by 1. Read the day-of-month directly from
+  // the BOG calendar date string.
+  const daysElapsed = parseInt(toBogotaDate(end).slice(8, 10), 10);
   const daysRemaining = Math.max(0, daysInMonth - daysElapsed);
 
   const revenueTarget = target?.revenue_target ?? 0;
@@ -903,7 +941,9 @@ async function computeRange(
   const monthStr = toISODate(startOfMonth(start));
   const [store, ad, target] = await Promise.all([
     fetchStoreMetrics(sb, orgId, start, end, sharedCaches.productCosts, sharedCaches.gateways),
-    fetchAdMetricsByPlatform(sb, orgId, toISODate(start), toISODate(end)),
+    // Use toBogotaDate (not toISODate) so that BOG-aligned bounds (T05:00:00Z / T04:59:59Z)
+    // map to the correct single Bogotá calendar day in ad_metrics_daily, not 2 UTC days.
+    fetchAdMetricsByPlatform(sb, orgId, toBogotaDate(start), toBogotaDate(end)),
     fetchMonthlyTarget(sb, orgId, monthStr),
   ]);
   const expenseTotals = computeExpensesForPeriod(sharedCaches.expenses, start, end);
