@@ -132,7 +132,8 @@ Deno.test("normalizeChannelKnowledge keeps Sewdle knowledge base and rules compa
       {
         category: "general",
         question: "## POLÍTICA DE ENVÍOS DOSMICOS",
-        answer: "Bogotá estándar $3.000, express $14.000. No hay express a Soacha.",
+        answer:
+          "Bogotá estándar $3.000, express $14.000. No hay express a Soacha.",
       },
       { question: "Incompleto" },
     ],
@@ -146,7 +147,8 @@ Deno.test("normalizeChannelKnowledge keeps Sewdle knowledge base and rules compa
       {
         category: "general",
         question: "## POLÍTICA DE ENVÍOS DOSMICOS",
-        answer: "Bogotá estándar $3.000, express $14.000. No hay express a Soacha.",
+        answer:
+          "Bogotá estándar $3.000, express $14.000. No hay express a Soacha.",
       },
     ],
   });
@@ -170,5 +172,33 @@ Deno.test("buildElsaPrompt explicitly prioritizes Sewdle knowledge base when pre
 
   assertIncludes(prompt, "BASE DE CONOCIMIENTO DE SEWDLE");
   assertIncludes(prompt, "Bogotá estándar $3.000, express $14.000");
-  assertIncludes(prompt, "No inventes disponibilidad, precios ni estado de pedidos");
+  assertIncludes(
+    prompt,
+    "No inventes disponibilidad, precios ni estado de pedidos",
+  );
+});
+
+Deno.test("buildElsaPrompt teaches Bold PSE payment-link action schema", () => {
+  const prompt = buildElsaPrompt({
+    messages: [{ role: "user", content: "PSE" }],
+    sewdleContext: {
+      commerce: {
+        capabilities: ["send_payment_link_bold_pse"],
+        products: [
+          {
+            id: 1,
+            title: "Ruana Pollito",
+            variants: [{ id: 2, title: "4", price: 94900, stock: 3 }],
+          },
+        ],
+      },
+    },
+    now: new Date("2026-05-02T20:30:00.000Z"),
+  });
+
+  assertIncludes(prompt, "send_payment_link");
+  assertIncludes(prompt, "Bold");
+  assertIncludes(prompt, "PSE");
+  assertIncludes(prompt, "lineItems");
+  assertIncludes(prompt, "Shopify se crea automáticamente");
 });

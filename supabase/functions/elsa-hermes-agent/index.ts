@@ -23,6 +23,11 @@ import {
   normalizeChannelKnowledge,
   safeSnippet,
 } from "../_shared/elsa-hermes-core.ts";
+import {
+  buildBoldPaymentLinkRequest,
+  type CommerceProduct,
+  summarizeCommerceCatalogForPrompt,
+} from "../_shared/elsa-commerce.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,6 +40,234 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+type CommerceActionResult = {
+  type: string;
+  success: boolean;
+  reason?: string;
+  duplicate_blocked?: boolean;
+  paymentUrl?: string;
+  paymentLinkId?: string;
+};
+
+async function fetchCommerceCatalog(
+  supabase: any,
+  organizationId?: string,
+): Promise<CommerceProduct[]> {
+  if (!organizationId) return [];
+
+  try {
+    const { data: connections } = await supabase
+      .from("ai_catalog_connections")
+      .select("shopify_product_id")
+      .eq("organization_id", organizationId)
+      .eq("connected", true);
+    const connectedProductIds = new Set(
+      (connections || []).map((connection: any) =>
+        String(connection.shopify_product_id)
+      ),
+    );
+
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("shopify_credentials")
+      .eq("id", organizationId)
+      .maybeSingle();
+    const creds = org?.shopify_credentials || {};
+    const shopifyDomain = creds.store_domain || creds.shopDomain;
+    const accessToken = creds.access_token || creds.accessToken;
+    if (!shopifyDomain || !accessToken) return [];
+
+    const response = await fetch(
+      `https://${shopifyDomain}/admin/api/2024-01/products.json?status=active&limit=250`,
+      {
+        headers: {
+          "X-Shopify-Access-Token": accessToken,
+          "Content-Type": "application/json",
+        },
+      },
+    );
+    if (!response.ok) {
+      console.warn(
+        "Could not fetch Shopify catalog for Elsa commerce:",
+        response.status,
+      );
+      return [];
+    }
+
+    const data = await response.json();
+    const products = (data.products || []) as CommerceProduct[];
+    return products.filter((product) =>
+      connectedProductIds.size === 0 ||
+      connectedProductIds.has(String(product.id))
+    );
+  } catch (error: any) {
+    console.warn("Commerce catalog fetch failed:", error?.message || error);
+    return [];
+  }
+}
+
+async function findExistingPaymentFlow(
+  supabase: any,
+  params: { conversationId?: string; customerPhone?: string },
+) {
+  const columns =
+    "id, status, bold_payment_url, total_amount, shopify_order_number, created_at";
+
+  if (params.conversationId) {
+    const { data } = await supabase
+      .from("pending_orders")
+      .select(columns)
+      .eq("conversation_id", params.conversationId)
+      .in("status", ["pending_payment", "paid", "order_created"])
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (data?.[0]) return data[0];
+  }
+
+  if (params.customerPhone) {
+    const cleanPhone = String(params.customerPhone).replace(/[\s+]/g, "");
+    const { data } = await supabase
+      .from("pending_orders")
+      .select(columns)
+      .eq("customer_phone", cleanPhone)
+      .in("status", ["pending_payment", "paid", "order_created"])
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (data?.[0]) return data[0];
+  }
+
+  return null;
+}
+
+async function executeCommerceActions(
+  supabase: any,
+  params: {
+    result: ElsaStructuredResponse & { provider: string; raw?: string };
+    catalog: CommerceProduct[];
+    organizationId?: string;
+    conversationId?: string;
+  },
+): Promise<{
+  result: ElsaStructuredResponse & { provider: string; raw?: string };
+  actionResults: CommerceActionResult[];
+}> {
+  const actionResults: CommerceActionResult[] = [];
+  if (!params.organizationId) return { result: params.result, actionResults };
+
+  const actions = params.result.actions || [];
+  const paymentAction = actions.find((action: any) =>
+    action?.type === "send_payment_link" ||
+    (action?.type === "create_order_draft" &&
+      ["link_de_pago", "pse", "PSE"].includes(
+        String(action?.payload?.paymentMethod || ""),
+      ))
+  );
+  if (!paymentAction?.payload) return { result: params.result, actionResults };
+
+  const payload = paymentAction.payload as Record<string, any>;
+  const existing = await findExistingPaymentFlow(supabase, {
+    conversationId: params.conversationId,
+    customerPhone: payload.phone || payload.customerPhone,
+  });
+
+  if (existing?.status === "pending_payment" && existing.bold_payment_url) {
+    params.result.reply =
+      `Listo 😊 tu link de pago sigue activo:\n${existing.bold_payment_url}\n\nTotal: $${
+        Number(existing.total_amount || 0).toLocaleString("es-CO")
+      } COP. Apenas Bold confirme el pago, creamos tu pedido automáticamente 🙌`;
+    actionResults.push({
+      type: String(paymentAction.type),
+      success: true,
+      duplicate_blocked: true,
+      paymentUrl: existing.bold_payment_url,
+      reason: "pending_payment",
+    });
+    return { result: params.result, actionResults };
+  }
+
+  if (existing?.status === "order_created") {
+    params.result.reply =
+      `Ese pedido ya quedó creado 😊 Número de pedido: #${existing.shopify_order_number}. Te enviaremos la guía cuando sea despachado 🙌`;
+    actionResults.push({
+      type: String(paymentAction.type),
+      success: true,
+      duplicate_blocked: true,
+      reason: "order_created",
+    });
+    return { result: params.result, actionResults };
+  }
+
+  if (!params.catalog.length) {
+    actionResults.push({
+      type: String(paymentAction.type),
+      success: false,
+      reason: "catalog_unavailable",
+    });
+    params.result.reply =
+      "Ya tengo el método de pago por PSE 😊 Te conecto con el equipo para validar disponibilidad y enviarte el link de pago.";
+    params.result.handoff_required = true;
+    params.result.handoff_reason =
+      "No hay catálogo Shopify disponible para crear link Bold automáticamente.";
+    return { result: params.result, actionResults };
+  }
+
+  const built = buildBoldPaymentLinkRequest({
+    payload,
+    catalog: params.catalog,
+    organizationId: params.organizationId,
+    conversationId: params.conversationId,
+  });
+
+  if (built.ok === false) {
+    actionResults.push({
+      type: String(paymentAction.type),
+      success: false,
+      reason: `missing_or_invalid:${built.errors.join(",")}`,
+    });
+    return { result: params.result, actionResults };
+  }
+
+  const { data, error } = await supabase.functions.invoke(
+    "create-bold-payment-link",
+    {
+      body: built.request,
+    },
+  );
+
+  if (error || !data?.paymentUrl) {
+    console.error(
+      "Elsa commerce payment link failed:",
+      error?.message || "no paymentUrl",
+    );
+    actionResults.push({
+      type: String(paymentAction.type),
+      success: false,
+      reason: error?.message || "no_payment_url",
+    });
+    params.result.reply =
+      "Ya tengo el método de pago por PSE 😊 Te conecto con el equipo para enviarte el link de pago.";
+    params.result.handoff_required = true;
+    params.result.handoff_reason =
+      "Falló la creación automática del link Bold.";
+    return { result: params.result, actionResults };
+  }
+
+  params.result.reply =
+    `¡Listo! Te dejo el link de pago por PSE 😊\n${data.paymentUrl}\n\nTotal: $${
+      Number(built.request.amount).toLocaleString("es-CO")
+    } COP. Apenas Bold confirme el pago, creamos tu pedido automáticamente 🙌`;
+  params.result.handoff_required = false;
+  params.result.handoff_reason = "";
+  actionResults.push({
+    type: String(paymentAction.type),
+    success: true,
+    paymentUrl: data.paymentUrl,
+    paymentLinkId: data.paymentLinkId,
+  });
+
+  return { result: params.result, actionResults };
 }
 
 async function fetchSewdleContext(
@@ -94,7 +327,9 @@ async function fetchSewdleContext(
       .eq("id", channelId)
       .maybeSingle();
 
-    const channelKnowledge = normalizeChannelKnowledge(channel?.ai_config || {});
+    const channelKnowledge = normalizeChannelKnowledge(
+      channel?.ai_config || {},
+    );
     if (Object.keys(channelKnowledge).length) {
       context.channel_knowledge = channelKnowledge;
     }
@@ -261,11 +496,26 @@ serve(async (req) => {
     const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     const supabase = createClient(supabaseUrl, serviceRole);
 
+    const commerceCatalog = await fetchCommerceCatalog(
+      supabase,
+      organizationId,
+    );
     const sewdleContext = await fetchSewdleContext(
       supabase,
       organizationId,
       conversationId,
     );
+    if (commerceCatalog.length) {
+      sewdleContext.commerce = {
+        capabilities: [
+          "send_payment_link_bold_pse",
+          "create_shopify_order_after_bold_payment",
+        ],
+        payment_flow:
+          "Para PSE/link de pago: generar link Bold y guardar pending_order; Shopify se crea automáticamente solo cuando Bold confirma el pago por webhook.",
+        products: summarizeCommerceCatalogForPrompt(commerceCatalog),
+      };
+    }
     const prompt = buildElsaPrompt({ messages, systemPrompt, sewdleContext });
 
     let result: ElsaStructuredResponse & { provider: string; raw?: string };
@@ -279,6 +529,15 @@ serve(async (req) => {
       result = await callOpenAIFallback(prompt);
     }
 
+    const commerceExecution = await executeCommerceActions(supabase, {
+      result,
+      catalog: commerceCatalog,
+      organizationId,
+      conversationId,
+    });
+    result = commerceExecution.result;
+    const actionResults = commerceExecution.actionResults;
+
     const responsePayload = {
       response: result.reply,
       provider: result.provider,
@@ -286,6 +545,7 @@ serve(async (req) => {
       handoff_required: Boolean(result.handoff_required),
       handoff_reason: result.handoff_reason || null,
       actions: result.actions || [{ type: "none" }],
+      action_results: actionResults,
       learning_notes: result.learning_notes || [],
       product_images: [],
       elapsed_ms: Date.now() - startedAt,
@@ -299,6 +559,7 @@ serve(async (req) => {
       confidence: result.confidence ?? null,
       handoff_required: Boolean(result.handoff_required),
       actions: result.actions || [],
+      action_results: actionResults,
       response_preview: safeSnippet(result.reply, 400),
       error_message: errorMessage || null,
       latency_ms: Date.now() - startedAt,
