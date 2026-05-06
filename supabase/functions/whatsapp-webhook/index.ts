@@ -4,6 +4,7 @@ import {
   buildSupervisedSuggestionMetadata,
   resolveAiDeliveryPlan,
   resolveAiRuntime,
+  shouldDisableAiForElsaEscalation,
 } from "../_shared/elsa-supervision.ts";
 
 const corsHeaders = {
@@ -2643,20 +2644,10 @@ serve(async (req) => {
                       console.log('AI response sent and saved');
 
                       // ========== AI ESCALATION DETECTION ==========
-                      const escalationPhrases = [
-                        'conecto con el equipo', 'conecto con un asesor',
-                        'no tengo esa información', 'no cuento con esa información',
-                        'no puedo ayudarte con eso', 'contactar a nuestro equipo',
-                        'comunícate con nosotros', 'escribenos al'
-                      ];
-                      const aiTextLower = aiText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                      const isEscalation = escalationPhrases.some(phrase => {
-                        const normalizedPhrase = phrase.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                        return aiTextLower.includes(normalizedPhrase);
-                      });
+                      const escalationDecision = shouldDisableAiForElsaEscalation({ aiText, aiData });
 
-                      if (isEscalation) {
-                        console.log('🔴 AI escalation detected, assigning "Requiere atencion" tag');
+                      if (escalationDecision.shouldDisable) {
+                        console.log(`🔴 Hard AI escalation detected (${escalationDecision.reason}), assigning "Requiere atencion" tag and disabling AI`);
                         try {
                           // 1. Assign "Requiere atencion" tag
                           const { data: attentionTag } = await supabase
@@ -2669,16 +2660,18 @@ serve(async (req) => {
                             await supabase.from('messaging_conversation_tag_assignments')
                               .upsert({ conversation_id: conversation.id, tag_id: attentionTag.id }, { onConflict: 'conversation_id,tag_id' });
                           }
-                          // 2. Disable AI on this conversation (mark as automation-disabled so it can be re-enabled later)
+                          // 2. Disable AI only for hard operational handoffs (pedido, guía, transportadora, reclamo, dirección/pago manual, etc.).
                           const { data: escConv } = await supabase.from('messaging_conversations').select('metadata').eq('id', conversation.id).single();
                           const escMeta = escConv?.metadata || {};
                           await supabase.from('messaging_conversations')
                             .update({ ai_managed: false, metadata: { ...escMeta, ai_disabled_by_automation: true } })
                             .eq('id', conversation.id);
-                          console.log('🔴 Conversation tagged and AI disabled for human handoff');
+                          console.log('🔴 Conversation tagged and AI disabled for hard human handoff');
                         } catch (escErr) {
                           console.error('❌ Error handling AI escalation:', escErr);
                         }
+                      } else if (aiData?.handoff_required) {
+                        console.log(`🟡 Soft Elsa handoff (${escalationDecision.reason}); keeping AI enabled for future customer messages`);
                       }
                       // ========== END AI ESCALATION DETECTION ==========
 

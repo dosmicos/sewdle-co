@@ -21,7 +21,78 @@ type DeliveryPlan = {
   shouldPersistSuggestion: boolean;
 };
 
+type ElsaEscalationDecision = {
+  shouldDisable: boolean;
+  reason: "no_handoff" | "soft_handoff" | "hard_operational_handoff";
+};
+
 const ELSA_PROVIDERS = new Set(["hermes", "elsa", "elsa-hermes"]);
+
+const HARD_OPERATIONAL_HANDOFF_TERMS = [
+  "pedido",
+  "orden",
+  "order",
+  "guia",
+  "guía",
+  "transportadora",
+  "coordinadora",
+  "envia",
+  "envía",
+  "entrega",
+  "entregado",
+  "despacho",
+  "reenvio",
+  "reenvío",
+  "perdido",
+  "perdida",
+  "reclamo",
+  "queja",
+  "devolucion",
+  "devolución",
+  "cambio",
+  "garantia",
+  "garantía",
+  "direccion",
+  "dirección",
+  "dirección conflictiva",
+  "pago manual",
+  "comprobante",
+  "consignacion",
+  "consignación",
+  "factura",
+  "anular",
+  "cancelar",
+  "cancelado",
+  "bodega",
+  "empacado",
+];
+
+const SOFT_HANDOFF_TERMS = [
+  "catalogo",
+  "catálogo",
+  "diseno",
+  "diseño",
+  "diseños",
+  "disponibilidad",
+  "inventario",
+  "talla",
+  "tallas",
+  "modelo",
+  "modelos",
+  "producto",
+  "productos",
+  "link",
+  "precio",
+  "precios",
+  "costo",
+  "costos",
+  "envio",
+  "envío",
+  "horario",
+  "pago",
+  "addi",
+  "nequi",
+];
 
 function defaultEnv(key: string): string | undefined {
   return Deno.env.get(key) || undefined;
@@ -55,6 +126,62 @@ function channelSupervisionSource(
   }
   if (truthyFlag(aiConfig.supervised)) return "channel.ai_config.supervised";
   return null;
+}
+
+function normalizeText(value: unknown): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function collectActionText(actions: unknown): string {
+  if (!Array.isArray(actions)) return "";
+  return actions
+    .map((action) => {
+      if (!action || typeof action !== "object") return "";
+      const typed = action as Record<string, unknown>;
+      return [typed.type, typed.reason, JSON.stringify(typed.payload || {})]
+        .join(" ");
+    })
+    .join(" ");
+}
+
+export function shouldDisableAiForElsaEscalation(params: {
+  aiText: string;
+  aiData?: Record<string, unknown> | null;
+}): ElsaEscalationDecision {
+  const aiData = params.aiData || {};
+  const actionsText = collectActionText(aiData.actions);
+  const evidence = normalizeText([
+    params.aiText,
+    aiData.handoff_reason,
+    actionsText,
+  ].join(" "));
+
+  const handoffRequired = aiData.handoff_required === true ||
+    normalizeText(actionsText).includes("handoff");
+
+  if (!handoffRequired) {
+    return { shouldDisable: false, reason: "no_handoff" };
+  }
+
+  const hasHardOperationalSignal = HARD_OPERATIONAL_HANDOFF_TERMS.some((term) =>
+    evidence.includes(normalizeText(term))
+  );
+  const hasSoftSignal = SOFT_HANDOFF_TERMS.some((term) =>
+    evidence.includes(normalizeText(term))
+  );
+
+  if (hasHardOperationalSignal) {
+    return { shouldDisable: true, reason: "hard_operational_handoff" };
+  }
+
+  if (hasSoftSignal) {
+    return { shouldDisable: false, reason: "soft_handoff" };
+  }
+
+  return { shouldDisable: false, reason: "soft_handoff" };
 }
 
 function envSupervisionSource(env: EnvReader): string | null {

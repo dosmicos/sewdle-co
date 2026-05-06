@@ -2,6 +2,7 @@ import {
   buildSupervisedSuggestionMetadata,
   resolveAiDeliveryPlan,
   resolveAiRuntime,
+  shouldDisableAiForElsaEscalation,
 } from "./elsa-supervision.ts";
 
 function assertEquals(actual: unknown, expected: unknown) {
@@ -91,4 +92,52 @@ Deno.test("buildSupervisedSuggestionMetadata keeps reviewable Elsa output withou
   assertEquals(metadata.elsa_supervised_suggestion.provider, "hermes");
   assertEquals(metadata.elsa_supervised_suggestion.confidence, 0.82);
   assertEquals(metadata.elsa_supervised_suggestion.actions, [{ type: "none" }]);
+});
+
+Deno.test("shouldDisableAiForElsaEscalation keeps Elsa active for soft catalog or availability handoff", () => {
+  const result = shouldDisableAiForElsaEscalation({
+    aiText:
+      "No tengo esa información exacta de disponibilidad, te conecto con el equipo 🙌",
+    aiData: {
+      handoff_required: true,
+      handoff_reason:
+        "Cliente pregunta diseños disponibles; requiere catálogo/inventario en tiempo real.",
+      actions: [{
+        type: "handoff",
+        reason: "validar disponibilidad de diseño",
+      }],
+    },
+  });
+
+  assertEquals(result.shouldDisable, false);
+});
+
+Deno.test("shouldDisableAiForElsaEscalation disables Elsa for hard operational handoff", () => {
+  const result = shouldDisableAiForElsaEscalation({
+    aiText: "No tengo esa información, te conecto con el equipo 🙌",
+    aiData: {
+      handoff_required: true,
+      handoff_reason:
+        "Revisar pedido perdido por transportadora y gestionar reenvío.",
+      actions: [{
+        type: "handoff",
+        reason: "revisar guía del pedido con transportadora",
+      }],
+    },
+  });
+
+  assertEquals(result.shouldDisable, true);
+  assertEquals(result.reason, "hard_operational_handoff");
+});
+
+Deno.test("shouldDisableAiForElsaEscalation does not disable just because reply has legacy escalation phrase", () => {
+  const result = shouldDisableAiForElsaEscalation({
+    aiText: "Te conecto con el equipo para confirmar diseños 😊",
+    aiData: {
+      handoff_required: false,
+      actions: [{ type: "none" }],
+    },
+  });
+
+  assertEquals(result.shouldDisable, false);
 });
