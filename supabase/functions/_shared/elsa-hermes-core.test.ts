@@ -3,6 +3,7 @@ import {
   buildElsaPrompt,
   extractHermesOutputText,
   extractJsonObject,
+  normalizeChannelKnowledge,
   textFromMessageContent,
 } from "./elsa-hermes-core.ts";
 
@@ -120,4 +121,54 @@ Deno.test("buildElsaPrompt includes deterministic Colombia date context", () => 
   );
   assertIncludes(prompt, "CONVERSACIÓN RECIENTE:\nCliente: ¿Envían hoy?");
   assertIncludes(prompt, "Devuelve SOLO JSON válido");
+});
+
+Deno.test("normalizeChannelKnowledge keeps Sewdle knowledge base and rules compact", () => {
+  const knowledge = normalizeChannelKnowledge({
+    rules: [
+      { condition: "envío express", response: "No aplica para Soacha" },
+    ],
+    knowledgeBase: [
+      {
+        category: "general",
+        question: "## POLÍTICA DE ENVÍOS DOSMICOS",
+        answer: "Bogotá estándar $3.000, express $14.000. No hay express a Soacha.",
+      },
+      { question: "Incompleto" },
+    ],
+  });
+
+  assertEquals(knowledge, {
+    rules: [
+      { condition: "envío express", response: "No aplica para Soacha" },
+    ],
+    knowledge_base: [
+      {
+        category: "general",
+        question: "## POLÍTICA DE ENVÍOS DOSMICOS",
+        answer: "Bogotá estándar $3.000, express $14.000. No hay express a Soacha.",
+      },
+    ],
+  });
+});
+
+Deno.test("buildElsaPrompt explicitly prioritizes Sewdle knowledge base when present", () => {
+  const prompt = buildElsaPrompt({
+    messages: [{ role: "user", content: "¿Cuánto cuesta envío a Bogotá?" }],
+    sewdleContext: {
+      channel_knowledge: {
+        knowledge_base: [
+          {
+            question: "## POLÍTICA DE ENVÍOS DOSMICOS",
+            answer: "Bogotá estándar $3.000, express $14.000.",
+          },
+        ],
+      },
+    },
+    now: new Date("2026-05-02T20:30:00.000Z"),
+  });
+
+  assertIncludes(prompt, "BASE DE CONOCIMIENTO DE SEWDLE");
+  assertIncludes(prompt, "Bogotá estándar $3.000, express $14.000");
+  assertIncludes(prompt, "No inventes disponibilidad, precios ni estado de pedidos");
 });

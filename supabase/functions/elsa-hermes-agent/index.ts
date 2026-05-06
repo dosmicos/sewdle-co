@@ -20,6 +20,7 @@ import {
   type ElsaStructuredResponse,
   extractHermesOutputText,
   extractJsonObject,
+  normalizeChannelKnowledge,
   safeSnippet,
 } from "../_shared/elsa-hermes-core.ts";
 
@@ -42,21 +43,25 @@ async function fetchSewdleContext(
   conversationId?: string,
 ) {
   const context: Record<string, unknown> = {};
+  let channelId: string | undefined;
 
   if (conversationId) {
     const { data: conversation } = await supabase
       .from("messaging_conversations")
       .select(
-        "id, customer_name, customer_phone, channel_type, ai_managed, metadata, last_message_at",
+        "id, channel_id, user_name, user_identifier, external_user_id, channel_type, ai_managed, metadata, last_message_at",
       )
       .eq("id", conversationId)
       .maybeSingle();
 
     if (conversation) {
+      channelId = conversation.channel_id;
       context.conversation = {
         id: conversation.id,
-        customer_name_present: Boolean(conversation.customer_name),
-        customer_phone_present: Boolean(conversation.customer_phone),
+        contact_name_present: Boolean(conversation.user_name),
+        contact_identifier_present: Boolean(
+          conversation.user_identifier || conversation.external_user_id,
+        ),
         channel_type: conversation.channel_type,
         ai_managed: conversation.ai_managed,
         metadata: conversation.metadata || {},
@@ -79,6 +84,26 @@ async function fetchSewdleContext(
         sent_at: m.sent_at,
         content: safeSnippet(m.content, 500),
       }));
+    }
+  }
+
+  if (channelId) {
+    const { data: channel } = await supabase
+      .from("messaging_channels")
+      .select("id, channel_name, ai_enabled, ai_config")
+      .eq("id", channelId)
+      .maybeSingle();
+
+    const channelKnowledge = normalizeChannelKnowledge(channel?.ai_config || {});
+    if (Object.keys(channelKnowledge).length) {
+      context.channel_knowledge = channelKnowledge;
+    }
+    if (channel) {
+      context.channel = {
+        id: channel.id,
+        channel_name: channel.channel_name,
+        ai_enabled: channel.ai_enabled,
+      };
     }
   }
 
