@@ -819,7 +819,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       // Get current user for audit
       const { data: { user } } = await supabase.auth.getUser();
 
-      const labelRecord = {
+      const labelFields = {
         organization_id: currentOrganization.id,
         shopify_order_id: shopifyOrderId,
         order_number: orderNumber,
@@ -834,11 +834,41 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         created_by: user?.id || null
       };
 
-      const { data, error } = await supabase
+      // Check if there's already an active label for this order (e.g. a manifest stub
+      // or a previously created API label). If so, update it instead of inserting to
+      // avoid hitting idx_shipping_labels_unique_active_order.
+      const { data: existing } = await supabase
         .from('shipping_labels')
-        .insert(labelRecord)
-        .select()
-        .single();
+        .select('id')
+        .eq('organization_id', currentOrganization.id)
+        .eq('shopify_order_id', shopifyOrderId)
+        .not('status', 'in', '("cancelled","error")')
+        .maybeSingle();
+
+      let data: any, error: any;
+      if (existing?.id) {
+        ({ data, error } = await supabase
+          .from('shipping_labels')
+          .update({
+            tracking_number: labelFields.tracking_number,
+            carrier: labelFields.carrier,
+            status: labelFields.status,
+            destination_city: labelFields.destination_city,
+            destination_department: labelFields.destination_department,
+            destination_address: labelFields.destination_address,
+            recipient_name: labelFields.recipient_name,
+            recipient_phone: labelFields.recipient_phone,
+          })
+          .eq('id', existing.id)
+          .select()
+          .single());
+      } else {
+        ({ data, error } = await supabase
+          .from('shipping_labels')
+          .insert(labelFields)
+          .select()
+          .single());
+      }
 
       if (error) throw error;
 
