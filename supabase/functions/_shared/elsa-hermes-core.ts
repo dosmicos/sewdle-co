@@ -76,6 +76,34 @@ export function safeSnippet(value: unknown, max = 700): string {
     .slice(0, max);
 }
 
+export function normalizeChannelKnowledge(aiConfig: Record<string, any> = {}) {
+  const rules = Array.isArray(aiConfig.rules)
+    ? aiConfig.rules
+      .map((rule) => ({
+        condition: safeSnippet(rule?.condition, 180),
+        response: safeSnippet(rule?.response, 700),
+      }))
+      .filter((rule) => rule.condition && rule.response)
+      .slice(0, 20)
+    : [];
+
+  const knowledge_base = Array.isArray(aiConfig.knowledgeBase)
+    ? aiConfig.knowledgeBase
+      .map((item) => ({
+        category: safeSnippet(item?.category || "general", 80),
+        question: safeSnippet(item?.question || item?.title || item?.name, 240),
+        answer: safeSnippet(item?.answer || item?.content || item?.text, 1800),
+      }))
+      .filter((item) => item.question && item.answer)
+      .slice(0, 30)
+    : [];
+
+  const normalized: Record<string, unknown> = {};
+  if (rules.length) normalized.rules = rules;
+  if (knowledge_base.length) normalized.knowledge_base = knowledge_base;
+  return normalized;
+}
+
 export function buildConversationTranscript(messages: ChatMessage[]): string {
   const transcript = messages
     .filter((m) => m.role !== "system")
@@ -179,6 +207,9 @@ ${
 
 CONTEXTO ESTRUCTURADO DE SEWDLE:
 ${JSON.stringify(params.sewdleContext, null, 2)}
+
+BASE DE CONOCIMIENTO DE SEWDLE:
+Si channel_knowledge aparece en el contexto estructurado, úsalo como fuente principal para políticas, links, envíos, pagos, cambios, horarios y reglas del canal. No inventes ni reemplaces esos datos; si falta una política concreta, pide el dato faltante o escala.
 
 CONVERSACIÓN RECIENTE:
 ${transcript}
