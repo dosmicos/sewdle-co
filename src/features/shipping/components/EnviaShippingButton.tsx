@@ -128,6 +128,14 @@ function levenshteinDistance(a: string, b: string): number {
   return dp[m][n];
 }
 
+function normalizeLocationText(text?: string | null): string {
+  return (text || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
 function fuzzyMatchCity(input: string): string {
   if (ALL_CARRIER_RULE_CITIES.includes(input)) return input;
   let bestMatch = input;
@@ -141,6 +149,36 @@ function fuzzyMatchCity(input: string): string {
     }
   }
   return bestMatch;
+}
+
+const CITY_DEPARTMENT_FALLBACKS: Record<string, string> = {
+  armenia: 'Quindío',
+  barranquilla: 'Atlántico',
+  bogota: 'Bogotá D.C.',
+  bucaramanga: 'Santander',
+  cali: 'Valle del Cauca',
+  cartagena: 'Bolívar',
+  cucuta: 'Norte de Santander',
+  florencia: 'Caquetá',
+  floridablanca: 'Santander',
+  giron: 'Santander',
+  manizales: 'Caldas',
+  medellin: 'Antioquia',
+  monteria: 'Córdoba',
+  pasto: 'Nariño',
+  pereira: 'Risaralda',
+  popayan: 'Cauca',
+  riohacha: 'La Guajira',
+  'santa marta': 'Magdalena',
+  sincelejo: 'Sucre',
+  tunja: 'Boyacá',
+  valledupar: 'Cesar',
+  villavicencio: 'Meta',
+};
+
+function inferDepartmentFromCity(city?: string | null): string | null {
+  const normalizedCity = fuzzyMatchCity(normalizeLocationText(city));
+  return CITY_DEPARTMENT_FALLBACKS[normalizedCity] || null;
 }
 
 export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
@@ -211,6 +249,19 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   const hasTriedQuotesRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isQuoteRequestInProgressRef = useRef(false);
+
+  const destinationDepartment = shippingAddress?.province?.trim() || inferDepartmentFromCity(shippingAddress?.city) || '';
+  const hasInferredDepartment = !shippingAddress?.province?.trim() && !!destinationDepartment;
+
+  const showMissingDestinationToast = useCallback(() => {
+    if (!shippingAddress?.city) {
+      toast.error('Falta la ciudad en la dirección de envío');
+      return;
+    }
+    if (!destinationDepartment) {
+      toast.error('Falta el departamento en la dirección de envío. Completa el pedido o usa guía manual.');
+    }
+  }, [shippingAddress?.city, destinationDepartment]);
 
   // Fetch creator name for active manual label
   useEffect(() => {
@@ -306,17 +357,14 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   // Determine recommended carrier based on business rules
   useEffect(() => {
     const determineCarrier = () => {
-      if (!shippingAddress?.city || !shippingAddress?.province) {
+      if (!shippingAddress?.city || !destinationDepartment) {
         setRecommendedCarrier('coordinadora');
         return;
       }
 
-      const normalizeText = (text: string) =>
-        text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
-
-      const rawCity = normalizeText(shippingAddress.city);
+      const rawCity = normalizeLocationText(shippingAddress.city);
       const city = fuzzyMatchCity(rawCity);
-      const dept = normalizeText(shippingAddress.province);
+      const dept = normalizeLocationText(destinationDepartment);
 
       // Cundinamarca: solo Coordinadora para Bogotá y municipios grandes
       if (dept.includes('cundinamarca') || dept.includes('bogota') || 
@@ -425,7 +473,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     };
 
     determineCarrier();
-  }, [shippingAddress?.city, shippingAddress?.province, isCOD]);
+  }, [shippingAddress?.city, destinationDepartment, isCOD]);
 
   // Auto-select best carrier when quotes load
   useEffect(() => {
@@ -452,6 +500,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   
   // canCreateLabel now includes city validation
   const canCreateLabel = shippingAddress?.city && 
+    destinationDepartment &&
     shippingAddress?.address1 && 
     !userRejectedSuggestion &&
     (cityIsValid || !matchInfo); // Allow if no matchInfo yet (loading) or city is valid
@@ -464,7 +513,10 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     setCorrectedCity(null);
     setLabelCheckError(null);
     
-    if (!shippingAddress?.city || !shippingAddress?.province) return;
+    if (!shippingAddress?.city || !destinationDepartment) {
+      showMissingDestinationToast();
+      return;
+    }
 
     // Anti-double-click lock
     if (isQuoteRequestInProgressRef.current) return;
@@ -480,7 +532,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       const result = await getQuotesWithRetry(
         {
           destination_city: shippingAddress.city,
-          destination_department: shippingAddress.province,
+          destination_department: destinationDepartment,
           destination_postal_code: shippingAddress.zip,
           declared_value: totalPrice || 100000,
         },
@@ -508,7 +560,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     } finally {
       isQuoteRequestInProgressRef.current = false;
     }
-  }, [shippingAddress, totalPrice, getQuotesWithRetry]);
+  }, [shippingAddress, destinationDepartment, totalPrice, getQuotesWithRetry, showMissingDestinationToast]);
 
   // Select the best carrier from a list of quotes based on business rules
   const selectBestCarrier = useCallback((carrierQuotes: typeof quotes): string => {
@@ -527,7 +579,10 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
 
   // Unified flow: quote + auto-select carrier + create label in one click
   const handleQuoteAndCreateLabel = useCallback(async () => {
-    if (!shippingAddress?.city || !shippingAddress?.province || !currentOrganization?.id) return;
+    if (!shippingAddress?.city || !destinationDepartment || !currentOrganization?.id) {
+      showMissingDestinationToast();
+      return;
+    }
 
     // Anti-double-click
     if (isQuoteRequestInProgressRef.current) return;
@@ -544,7 +599,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       const result = await getQuotesWithRetry(
         {
           destination_city: shippingAddress.city,
-          destination_department: shippingAddress.province,
+          destination_department: destinationDepartment,
           destination_postal_code: shippingAddress.zip,
           declared_value: totalPrice || 100000,
         },
@@ -619,7 +674,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         destination_address: shippingAddress.address1 || '',
         destination_address2: shippingAddress.address2 || '',
         destination_city: city,
-        destination_department: shippingAddress.province || '',
+        destination_department: destinationDepartment,
         destination_postal_code: shippingAddress.zip || '',
         declared_value: totalPrice || 0,
         package_content: `Pedido ${orderNumber}`,
@@ -646,7 +701,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       isQuoteRequestInProgressRef.current = false;
       setQuoteAndCreatePhase('idle');
     }
-  }, [shippingAddress, totalPrice, currentOrganization?.id, orderNumber, getQuotesWithRetry, selectBestCarrier, correctedCity, createLabel, shopifyOrderId, customerPhone, customerEmail, isCOD, codAmount, onLabelChange]);
+  }, [shippingAddress, destinationDepartment, totalPrice, currentOrganization?.id, orderNumber, getQuotesWithRetry, selectBestCarrier, correctedCity, createLabel, shopifyOrderId, customerPhone, customerEmail, isCOD, codAmount, onLabelChange, showMissingDestinationToast]);
 
   const handleCreateLabel = async () => {
     if (!currentOrganization?.id || !shippingAddress) {
@@ -663,7 +718,11 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     const recipientEmail = customerEmail || '';
     // Use corrected city if available, otherwise original
     const city = correctedCity || shippingAddress.city || '';
-    const department = shippingAddress.province || '';
+    const department = destinationDepartment;
+    if (!city || !department) {
+      showMissingDestinationToast();
+      return;
+    }
     const postalCode = shippingAddress.zip || '';
 
     let preferredCarrier: string | undefined;
@@ -827,7 +886,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         tracking_number: manualTracking.trim(),
         status: 'manual',
         destination_city: shippingAddress?.city || '',
-        destination_department: shippingAddress?.province || '',
+        destination_department: destinationDepartment,
         destination_address: [shippingAddress?.address1, shippingAddress?.address2].filter(Boolean).join(', '),
         recipient_name: shippingAddress?.name || '',
         recipient_phone: shippingAddress?.phone || customerPhone || '',
@@ -1014,6 +1073,11 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
 
   const isBusy = isLoadingLabel || quoteState.status === 'loading' || isLoadingQuotes;
   const busyMode: 'quoting' | null = quoteState.status === 'loading' ? 'quoting' : null;
+  const inferredDepartmentHint = hasInferredDepartment ? (
+    <p className="text-xs text-amber-700 text-center">
+      Departamento inferido para cotización: {destinationDepartment}
+    </p>
+  ) : null;
 
   // Manual-only initial state (NO auto-fetch)
   if (!showManualEntry && !isActiveLabel && quoteState.status === 'idle' && !hasChecked && !isBusy) {
@@ -1044,6 +1108,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
         <p className="text-xs text-muted-foreground text-center">
           Presiona un botón para consultar el servicio de envío
         </p>
+        {inferredDepartmentHint}
         <p className="text-xs text-muted-foreground text-center">
           Puedes continuar preparando el pedido mientras tanto
         </p>
@@ -1074,6 +1139,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             )}
           </Button>
         </div>
+        {inferredDepartmentHint}
         <p className="text-xs text-muted-foreground text-center">
           Puedes continuar preparando el pedido mientras tanto
         </p>
@@ -1139,6 +1205,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
             Cotizar Envío
           </Button>
         </div>
+        {inferredDepartmentHint}
         <p className="text-xs text-muted-foreground text-center">
           Puedes continuar preparando el pedido mientras tanto
         </p>
