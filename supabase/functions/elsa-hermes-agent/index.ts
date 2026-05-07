@@ -24,6 +24,7 @@ import {
   safeSnippet,
 } from "../_shared/elsa-hermes-core.ts";
 import {
+  buildAddiPaymentRequest,
   buildBoldPaymentLinkRequest,
   type CommerceProduct,
   summarizeCommerceCatalogForPrompt,
@@ -113,7 +114,7 @@ async function findExistingPaymentFlow(
   params: { conversationId?: string; customerPhone?: string },
 ) {
   const columns =
-    "id, status, bold_payment_url, total_amount, shopify_order_number, created_at";
+    "id, status, bold_payment_url, bold_payment_link_id, total_amount, shopify_order_number, created_at";
 
   if (params.conversationId) {
     const { data } = await supabase
@@ -158,33 +159,66 @@ async function executeCommerceActions(
 
   const actions = params.result.actions || [];
   const paymentAction = actions.find((action: any) =>
+    action?.type === "send_addi_payment_request" ||
     action?.type === "send_payment_link" ||
     (action?.type === "create_order_draft" &&
-      ["link_de_pago", "pse", "PSE"].includes(
+      ["link_de_pago", "pse", "PSE", "addi", "Addi"].includes(
         String(action?.payload?.paymentMethod || ""),
       ))
   );
   if (!paymentAction?.payload) return { result: params.result, actionResults };
 
   const payload = paymentAction.payload as Record<string, any>;
+  const paymentMethod = String(payload.paymentMethod || "").toLowerCase();
+  const isAddiAction = paymentAction.type === "send_addi_payment_request" ||
+    paymentMethod === "addi";
   const existing = await findExistingPaymentFlow(supabase, {
     conversationId: params.conversationId,
     customerPhone: payload.phone || payload.customerPhone,
   });
 
-  if (existing?.status === "pending_payment" && existing.bold_payment_url) {
-    params.result.reply =
-      `Listo 😊 tu link de pago sigue activo:\n${existing.bold_payment_url}\n\nTotal: $${
-        Number(existing.total_amount || 0).toLocaleString("es-CO")
-      } COP. Apenas Bold confirme el pago, creamos tu pedido automáticamente 🙌`;
-    actionResults.push({
-      type: String(paymentAction.type),
-      success: true,
-      duplicate_blocked: true,
-      paymentUrl: existing.bold_payment_url,
-      reason: "pending_payment",
-    });
-    return { result: params.result, actionResults };
+  if (existing?.status === "pending_payment") {
+    const existingUrl = isAddiAction
+      ? existing.addi_payment_url || existing.bold_payment_url
+      : existing.bold_payment_url;
+    if (existingUrl) {
+      params.result.reply = isAddiAction
+        ? `Listo 😊 tu solicitud de pago con Addi sigue activa:
+${existingUrl}
+
+Total: $${
+          Number(existing.total_amount || 0).toLocaleString("es-CO")
+        } COP. Cuando Addi apruebe la compra, creamos tu pedido automáticamente 🙌`
+        : `Listo 😊 tu link de pago sigue activo:
+${existingUrl}
+
+Total: $${
+          Number(existing.total_amount || 0).toLocaleString("es-CO")
+        } COP. Apenas Bold confirme el pago, creamos tu pedido automáticamente 🙌`;
+      actionResults.push({
+        type: String(paymentAction.type),
+        success: true,
+        duplicate_blocked: true,
+        paymentUrl: existingUrl,
+        reason: "pending_payment",
+      });
+      return { result: params.result, actionResults };
+    }
+    const existingAddiApplicationId = existing.addi_application_id ||
+      (isAddiAction ? existing.bold_payment_link_id : null);
+    if (isAddiAction && existingAddiApplicationId) {
+      params.result.reply =
+        `Listo 😊 la solicitud con Addi sigue activa. Revisa la notificación de Addi para aprobar la compra. Total: $${
+          Number(existing.total_amount || 0).toLocaleString("es-CO")
+        } COP.`;
+      actionResults.push({
+        type: String(paymentAction.type),
+        success: true,
+        duplicate_blocked: true,
+        reason: "pending_payment",
+      });
+      return { result: params.result, actionResults };
+    }
   }
 
   if (existing?.status === "order_created") {
@@ -205,20 +239,29 @@ async function executeCommerceActions(
       success: false,
       reason: "catalog_unavailable",
     });
-    params.result.reply =
-      "Ya tengo el método de pago por PSE 😊 Te conecto con el equipo para validar disponibilidad y enviarte el link de pago.";
+    params.result.reply = isAddiAction
+      ? "Ya tengo el método de pago por Addi 😊 Te conecto con el equipo para validar disponibilidad y enviarte la solicitud."
+      : "Ya tengo el método de pago por PSE 😊 Te conecto con el equipo para validar disponibilidad y enviarte el link de pago.";
     params.result.handoff_required = true;
-    params.result.handoff_reason =
-      "No hay catálogo Shopify disponible para crear link Bold automáticamente.";
+    params.result.handoff_reason = isAddiAction
+      ? "No hay catálogo Shopify disponible para crear solicitud Addi automáticamente."
+      : "No hay catálogo Shopify disponible para crear link Bold automáticamente.";
     return { result: params.result, actionResults };
   }
 
-  const built = buildBoldPaymentLinkRequest({
-    payload,
-    catalog: params.catalog,
-    organizationId: params.organizationId,
-    conversationId: params.conversationId,
-  });
+  const built = isAddiAction
+    ? buildAddiPaymentRequest({
+      payload,
+      catalog: params.catalog,
+      organizationId: params.organizationId,
+      conversationId: params.conversationId,
+    })
+    : buildBoldPaymentLinkRequest({
+      payload,
+      catalog: params.catalog,
+      organizationId: params.organizationId,
+      conversationId: params.conversationId,
+    });
 
   if (built.ok === false) {
     actionResults.push({
@@ -230,34 +273,61 @@ async function executeCommerceActions(
   }
 
   const { data, error } = await supabase.functions.invoke(
-    "create-bold-payment-link",
+    isAddiAction ? "create-addi-payment-request" : "create-bold-payment-link",
     {
       body: built.request,
     },
   );
 
-  if (error || !data?.paymentUrl) {
+  if (error || (isAddiAction ? !data?.applicationId : !data?.paymentUrl)) {
     console.error(
-      "Elsa commerce payment link failed:",
-      error?.message || "no paymentUrl",
+      "Elsa commerce payment action failed:",
+      error?.message || (isAddiAction ? "no applicationId" : "no paymentUrl"),
     );
     actionResults.push({
       type: String(paymentAction.type),
       success: false,
-      reason: error?.message || "no_payment_url",
+      reason: error?.message ||
+        (isAddiAction ? "no_application_id" : "no_payment_url"),
     });
-    params.result.reply =
-      "Ya tengo el método de pago por PSE 😊 Te conecto con el equipo para enviarte el link de pago.";
+    params.result.reply = isAddiAction
+      ? "Ya tengo el método de pago por Addi 😊 Te conecto con el equipo para enviarte la solicitud."
+      : "Ya tengo el método de pago por PSE 😊 Te conecto con el equipo para enviarte el link de pago.";
     params.result.handoff_required = true;
-    params.result.handoff_reason =
-      "Falló la creación automática del link Bold.";
+    params.result.handoff_reason = isAddiAction
+      ? "Falló la creación automática de la solicitud Addi."
+      : "Falló la creación automática del link Bold.";
     return { result: params.result, actionResults };
   }
 
-  params.result.reply =
-    `¡Listo! Te dejo el link de pago por PSE 😊\n${data.paymentUrl}\n\nTotal: $${
-      Number(built.request.amount).toLocaleString("es-CO")
-    } COP. Apenas Bold confirme el pago, creamos tu pedido automáticamente 🙌`;
+  if (isAddiAction) {
+    params.result.reply = data.paymentUrl
+      ? `¡Listo! Te dejo la solicitud de pago por Addi 😊
+${data.paymentUrl}
+
+Total: $${
+        Number(built.request.amount).toLocaleString("es-CO")
+      } COP. Cuando Addi apruebe la compra, creamos tu pedido automáticamente 🙌`
+      : `¡Listo! Ya enviamos la solicitud por Addi 😊 Revisa la notificación de Addi para aprobar la compra. Total: $${
+        Number(built.request.amount).toLocaleString("es-CO")
+      } COP. Cuando Addi apruebe, creamos tu pedido automáticamente 🙌`;
+    params.result.handoff_required = false;
+    params.result.handoff_reason = "";
+    actionResults.push({
+      type: String(paymentAction.type),
+      success: true,
+      paymentUrl: data.paymentUrl,
+      paymentLinkId: data.applicationId,
+    });
+    return { result: params.result, actionResults };
+  }
+
+  params.result.reply = `¡Listo! Te dejo el link de pago por PSE 😊
+${data.paymentUrl}
+
+Total: $${
+    Number(built.request.amount).toLocaleString("es-CO")
+  } COP. Apenas Bold confirme el pago, creamos tu pedido automáticamente 🙌`;
   params.result.handoff_required = false;
   params.result.handoff_reason = "";
   actionResults.push({
@@ -509,10 +579,12 @@ serve(async (req) => {
       sewdleContext.commerce = {
         capabilities: [
           "send_payment_link_bold_pse",
+          "send_addi_payment_request",
           "create_shopify_order_after_bold_payment",
+          "create_shopify_order_after_addi_approval",
         ],
         payment_flow:
-          "Para PSE/link de pago: generar link Bold y guardar pending_order; Shopify se crea automáticamente solo cuando Bold confirma el pago por webhook.",
+          "Para PSE/link de pago: generar link Bold y guardar pending_order; Shopify se crea automáticamente solo cuando Bold confirma el pago por webhook. Para Addi: generar solicitud Addi y guardar pending_order; Shopify se crea automáticamente solo cuando Addi aprueba la compra por callback.",
         products: summarizeCommerceCatalogForPrompt(commerceCatalog),
       };
     }

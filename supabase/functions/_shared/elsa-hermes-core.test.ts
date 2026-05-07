@@ -203,6 +203,31 @@ Deno.test("buildElsaPrompt teaches Bold PSE payment-link action schema", () => {
   assertIncludes(prompt, "Shopify se crea automáticamente");
 });
 
+Deno.test("buildElsaPrompt teaches Addi payment request action schema", () => {
+  const prompt = buildElsaPrompt({
+    messages: [{ role: "user", content: "Quiero pagar por Addi" }],
+    sewdleContext: {
+      commerce: {
+        capabilities: ["send_addi_payment_request"],
+        products: [
+          {
+            id: 1,
+            title: "Ruana Pollito",
+            variants: [{ id: 2, title: "4", price: 94900, stock: 3 }],
+          },
+        ],
+      },
+    },
+    now: new Date("2026-05-02T20:30:00.000Z"),
+  });
+
+  assertIncludes(prompt, "send_addi_payment_request");
+  assertIncludes(prompt, "Addi");
+  assertIncludes(prompt, 'paymentMethod":"addi');
+  assertIncludes(prompt, "solicitud");
+  assertIncludes(prompt, "Shopify se crea automáticamente cuando Addi aprueba");
+});
+
 Deno.test("buildElsaPrompt requires collecting order data in one message instead of one by one", () => {
   const prompt = buildElsaPrompt({
     messages: [{ role: "user", content: "Lo compro" }],

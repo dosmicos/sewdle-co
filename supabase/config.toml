@@ -135,6 +135,12 @@ verify_jwt = false
 [functions.create-shopify-order]
 verify_jwt = false
 
+[functions.create-addi-payment-request]
+verify_jwt = false
+
+[functions.addi-payment-webhook]
+verify_jwt = false
+
 [functions.create-ugc-discount]
 verify_jwt = false
 

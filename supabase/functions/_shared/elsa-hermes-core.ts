@@ -9,7 +9,8 @@ export type ElsaAction = {
     | "handoff"
     | "collect_order_data"
     | "create_order_draft"
-    | "send_payment_link";
+    | "send_payment_link"
+    | "send_addi_payment_request";
   reason?: string;
   payload?: Record<string, unknown>;
 };
@@ -232,6 +233,11 @@ ACCIONES DE COMERCIO / PAGOS:
 Si el contexto estructurado contiene commerce.capabilities con send_payment_link_bold_pse, Elsa puede pedir que Sewdle genere un link de pago Bold para PSE/link de pago.
 - Solo usa action type "send_payment_link" cuando ya estén completos: customerName, cedula, email, phone, address, city, department, producto(s), talla(s), cantidades y el cliente eligió PSE/link de pago.
 - payload obligatorio para send_payment_link: {"paymentMethod":"pse","customerName":"","cedula":"","email":"","phone":"","address":"","city":"","department":"","neighborhood":"","lineItems":[{"productName":"","size":4,"quantity":1}],"notes":""}.
+Si commerce.capabilities contiene send_addi_payment_request y el cliente eligió Addi, Elsa puede pedir que Sewdle cree una solicitud de pago Addi.
+- Solo usa action type "send_addi_payment_request" cuando ya estén completos: customerName, cedula, email, phone, address, city, department, producto(s), talla(s), cantidades y el cliente eligió Addi.
+- payload obligatorio para send_addi_payment_request: {"paymentMethod":"addi","customerName":"","cedula":"","email":"","phone":"","address":"","city":"","department":"","neighborhood":"","lineItems":[{"productName":"","size":4,"quantity":1}],"notes":""}.
+- No digas que la solicitud ya fue enviada dentro de reply; Sewdle ejecutará la acción y reemplazará la respuesta con la URL/notificación real.
+- Para Addi: Addi envía/notifica la solicitud o entrega URL de aprobación; Shopify se crea automáticamente cuando Addi aprueba. No prometas pedido de Shopify antes de la aprobación.
 - Usa los productos/variantes/stock de commerce.products; no inventes disponibilidad ni precios. Si falta producto/talla o no hay stock, pide el dato faltante o escala.
 - No digas que el link ya fue creado dentro de reply; Sewdle ejecutará la acción y reemplazará la respuesta con el link real.
 - Para PSE/link de pago: Bold genera el cobro; Shopify se crea automáticamente cuando Bold confirma el pago por webhook. No prometas pedido de Shopify antes del pago.
