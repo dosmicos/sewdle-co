@@ -71,6 +71,7 @@ export const useUgcCreators = () => {
 
   const updateCreator = useMutation({
     mutationFn: async ({ id, ...formData }: UgcCreatorFormData & { id: string }) => {
+      if (!orgId) throw new Error('No organization');
       const avatarUrl = formData.instagram_handle
         ? `https://unavatar.io/instagram/${formData.instagram_handle}`
         : null;
@@ -91,12 +92,16 @@ export const useUgcCreators = () => {
           tiktok_handle: formData.tiktok_handle || null,
         })
         .eq('id', id)
+        .eq('organization_id', orgId)
         .select()
         .single();
       if (error) throw error;
-      return data;
+      return data as UgcCreator;
     },
-    onSuccess: () => {
+    onSuccess: (updatedCreator) => {
+      queryClient.setQueryData<UgcCreator[]>(['ugc-creators', orgId], (current = []) =>
+        current.map((creator) => (creator.id === updatedCreator.id ? updatedCreator : creator))
+      );
       queryClient.invalidateQueries({ queryKey: ['ugc-creators'] });
       toast.success('Creador actualizado');
     },
