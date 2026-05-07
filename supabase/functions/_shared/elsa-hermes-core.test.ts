@@ -202,3 +202,26 @@ Deno.test("buildElsaPrompt teaches Bold PSE payment-link action schema", () => {
   assertIncludes(prompt, "lineItems");
   assertIncludes(prompt, "Shopify se crea automáticamente");
 });
+
+Deno.test("buildElsaPrompt requires collecting order data in one message instead of one by one", () => {
+  const prompt = buildElsaPrompt({
+    messages: [{ role: "user", content: "Lo compro" }],
+    sewdleContext: { conversation: { channel_type: "whatsapp" } },
+    now: new Date("2026-05-02T20:30:00.000Z"),
+  });
+
+  assertIncludes(
+    prompt,
+    "no pidas cédula, dirección, ciudad, teléfono o email uno por uno",
+  );
+  assertIncludes(prompt, "Me das porfa los siguientes datos para tu compra 🛍️");
+  assertIncludes(prompt, "Correo electrónico:");
+  assertIncludes(prompt, "Nombre y apellido:");
+  assertIncludes(prompt, "Cédula:");
+  assertIncludes(
+    prompt,
+    "Dirección con barrio (especificar si es casa, conjunto, local, etc):",
+  );
+  assertIncludes(prompt, "Ciudad/Departamento:");
+  assertIncludes(prompt, "Número de celular:");
+});
