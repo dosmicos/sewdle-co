@@ -216,7 +216,16 @@ ${transcript}
 
 TAREA:
 Responde el último mensaje del cliente. Usa el historial y los aprendizajes humanos si aplican.
-Si puedes resolver, responde directo. Si faltan datos para pedido, pide solo el siguiente dato faltante.
+Si puedes resolver, responde directo.
+Si el cliente quiere comprar y faltan datos para pedido, no pidas cédula, dirección, ciudad, teléfono o email uno por uno; pide todos los datos de pedido juntos en un solo mensaje con este formato exacto:
+Me das porfa los siguientes datos para tu compra 🛍️
+Correo electrónico:
+Nombre y apellido:
+Cédula:
+Dirección con barrio (especificar si es casa, conjunto, local, etc):
+Ciudad/Departamento:
+Número de celular:
+Si ya conoces algún dato por el historial, puedes dejar de pedirlo solo si está claro y completo; si no, usa el formato completo.
 Si hace falta humano, dilo de forma natural y marca handoff_required=true.
 
 ACCIONES DE COMERCIO / PAGOS:
