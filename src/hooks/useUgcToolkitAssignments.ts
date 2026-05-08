@@ -32,24 +32,28 @@ export const useUgcToolkitAssignments = (creatorId: string | undefined) => {
   const { currentOrganization } = useOrganization();
   const orgId = currentOrganization?.id;
 
-  const queryKey = ['ugc-toolkit-assignments', creatorId];
+  const queryKey = ['ugc-toolkit-assignments', orgId, creatorId];
 
   const { data: assignments = [], isLoading } = useQuery({
     queryKey,
     queryFn: async () => {
-      if (!creatorId) return [];
+      if (!creatorId || !orgId) return [];
       const { data, error } = await (supabase.from('ugc_toolkit_assignments' as any) as any)
         .select('*')
+        .eq('organization_id', orgId)
         .eq('creator_id', creatorId)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false });
       if (error) throw error;
       return (data || []) as UgcToolkitAssignment[];
     },
-    enabled: !!creatorId,
+    enabled: !!creatorId && !!orgId,
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey });
+    queryClient.invalidateQueries({ queryKey: ['ugc-toolkit-assignments-summary'] });
+  };
 
   const upsertAssignment = useMutation({
     mutationFn: async (input: UpsertToolkitAssignmentInput) => {

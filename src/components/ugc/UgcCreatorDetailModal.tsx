@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { ExternalLink, MessageSquare, Edit, Pencil, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2, Download, Image, Copy, Check } from 'lucide-react';
+import { ExternalLink, MessageSquare, Edit, Pencil, Plus, Video, Eye, Heart, MessageCircle, Package, CheckCircle, Trash2, Loader2, Download, Image, Copy, Check, Lightbulb } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { UgcCreator, UgcCampaign, CampaignStatus } from '@/types/ugc';
@@ -86,14 +86,32 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
   const [pickingOrderId, setPickingOrderId] = useState<string | null>(null);
   const [pickingModalOpen, setPickingModalOpen] = useState(false);
   const [loadingPickingOrder, setLoadingPickingOrder] = useState(false);
+  const [activeTab, setActiveTab] = useState('info');
   const [videoFilter, setVideoFilter] = useState<'all' | 'pending_organic' | 'pending_ads' | 'published_organic' | 'published_ads'>('all');
+  const [ideaDraftCampaignId, setIdeaDraftCampaignId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewSource, setPreviewSource] = useState<string | null>(null);
   const [previewOriginalUrl, setPreviewOriginalUrl] = useState<string | null>(null);
   const [previewIsPhoto, setPreviewIsPhoto] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const ideasSectionRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setActiveTab('info');
+      setIdeaDraftCampaignId(null);
+    }
+  }, [creator?.id, open]);
+
+  const handleGoToIdeas = (campaignId?: string) => {
+    if (campaignId) setIdeaDraftCampaignId(campaignId);
+    setActiveTab('ideas');
+    window.setTimeout(() => {
+      ideasSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  };
 
   const openContentPreview = (url: string, platform: string | null) => {
     setPreviewOriginalUrl(url);
@@ -311,6 +329,14 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
             <CreatorPortalLinkButton creatorId={creator.id} creatorName={creator.name} />
             <GenerateUploadLinkButton creatorId={creator.id} creatorName={creator.name} />
             <DiscountLinkButton creatorId={creator.id} creatorName={creator.name} accessCode={creator.access_code} />
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800"
+              onClick={handleGoToIdeas}
+            >
+              <Lightbulb className="h-3.5 w-3.5 mr-1" /> Ideas
+            </Button>
             <Button variant="outline" size="sm" onClick={onEdit}>
               <Edit className="h-3.5 w-3.5 mr-1" /> Editar
             </Button>
@@ -344,12 +370,23 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
           </div>
         </DialogHeader>
 
-        <Tabs defaultValue="info" className="mt-4">
-          <TabsList className="w-full grid grid-cols-4">
-            <TabsTrigger value="info">Información</TabsTrigger>
-            <TabsTrigger value="campaigns">Campañas</TabsTrigger>
-            <TabsTrigger value="videos">Contenido</TabsTrigger>
-            <TabsTrigger value="metrics">Métricas</TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
+          <TabsList className="w-full grid grid-cols-5">
+            <TabsTrigger value="info" className="px-1 text-[11px] sm:px-3 sm:text-sm">
+              <span className="sm:hidden">Info</span><span className="hidden sm:inline">Información</span>
+            </TabsTrigger>
+            <TabsTrigger value="ideas" className="px-1 text-[11px] sm:px-3 sm:text-sm">
+              <Lightbulb className="mr-1 h-3 w-3" /> Ideas
+            </TabsTrigger>
+            <TabsTrigger value="campaigns" className="px-1 text-[11px] sm:px-3 sm:text-sm">
+              <span className="sm:hidden">Camp.</span><span className="hidden sm:inline">Campañas</span>
+            </TabsTrigger>
+            <TabsTrigger value="videos" className="px-1 text-[11px] sm:px-3 sm:text-sm">
+              <span className="sm:hidden">Cont.</span><span className="hidden sm:inline">Contenido</span>
+            </TabsTrigger>
+            <TabsTrigger value="metrics" className="px-1 text-[11px] sm:px-3 sm:text-sm">
+              <span className="sm:hidden">Métr.</span><span className="hidden sm:inline">Métricas</span>
+            </TabsTrigger>
           </TabsList>
 
           {/* Tab: Info */}
@@ -417,8 +454,23 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
             {/* Children */}
             <UgcChildrenManager creatorId={creator.id} />
 
-            {/* Club creator toolkits */}
-            <UgcToolkitAssignmentsManager creatorId={creator.id} campaigns={creatorCampaigns} />
+            <div className="rounded-lg border border-amber-100 bg-amber-50/40 p-3 text-xs text-muted-foreground">
+              Las ideas de contenido se administran en la pestaña <span className="font-medium text-amber-700">Ideas</span> y se sincronizan con Club Dosmicos.
+            </div>
+          </TabsContent>
+
+          {/* Tab: Ideas */}
+          <TabsContent value="ideas" className="space-y-4 mt-4">
+            <div ref={ideasSectionRef} id="ugc-ideas-section" className="scroll-mt-4">
+              <UgcToolkitAssignmentsManager
+                creatorId={creator.id}
+                campaigns={creatorCampaigns}
+                compact
+                title="Ideas de contenido"
+                draftCampaignId={ideaDraftCampaignId}
+                onDraftCampaignHandled={() => setIdeaDraftCampaignId(null)}
+              />
+            </div>
           </TabsContent>
 
           {/* Tab: Campaigns */}
@@ -448,7 +500,15 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                               {config?.label}
                             </Badge>
                           </div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                              onClick={() => handleGoToIdeas(campaign.id)}
+                            >
+                              <Lightbulb className="h-3 w-3 mr-1" /> Idea
+                            </Button>
                             {!['completado', 'cancelado'].includes(campaign.status) && (
                               <Button size="sm" variant="outline" onClick={() => onNewVideo(campaign.id)}>
                                 <Plus className="h-3 w-3 mr-1" /> Subir Contenido
