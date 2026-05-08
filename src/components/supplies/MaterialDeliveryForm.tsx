@@ -16,12 +16,14 @@ import { useWorkshops } from '@/hooks/useWorkshops';
 import { useMaterials } from '@/hooks/useMaterials';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
+import { extractRollNumberFromNotes } from '@/lib/materialRollNumber';
 import SearchableMaterialSelector from './SearchableMaterialSelector';
 
 interface MaterialDeliveryItem {
   materialId: string;
   quantity: number;
   unit: string;
+  rollNumber?: string;
   notes?: string;
 }
 
@@ -42,7 +44,7 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
     isWorkshopUser ? workshopFilter || '' : prefilledData?.workshopId || ''
   );
   const [deliveryItems, setDeliveryItems] = useState<MaterialDeliveryItem[]>(
-    prefilledData?.materials || [{ materialId: '', quantity: 0, unit: '', notes: '' }]
+    prefilledData?.materials || [{ materialId: '', quantity: 0, unit: '', rollNumber: '', notes: '' }]
   );
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [workshopPopoverOpen, setWorkshopPopoverOpen] = useState(false);
@@ -59,7 +61,7 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
   };
 
   const addDeliveryItem = () => {
-    setDeliveryItems([...deliveryItems, { materialId: '', quantity: 0, unit: '', notes: '' }]);
+    setDeliveryItems([...deliveryItems, { materialId: '', quantity: 0, unit: '', rollNumber: '', notes: '' }]);
   };
 
   const removeDeliveryItem = (index: number) => {
@@ -71,6 +73,10 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
   const updateDeliveryItem = (index: number, field: keyof MaterialDeliveryItem, value: string | number) => {
     const updated = [...deliveryItems];
     updated[index] = { ...updated[index], [field]: value };
+
+    if (field === 'notes' && typeof value === 'string' && !updated[index].rollNumber) {
+      updated[index].rollNumber = extractRollNumberFromNotes(value) || '';
+    }
     
     // Auto-update unit when material is selected
     if (field === 'materialId') {
@@ -107,6 +113,7 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
           materialId: item.materialId,
           quantity: Number(item.quantity),
           unit: item.unit,
+          rollNumber: item.rollNumber?.trim() || undefined,
           notes: item.notes || undefined
         })),
         deliveredBy: selectedWorkshop, // Using workshop as deliveredBy for now
@@ -266,7 +273,7 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div>
                         <Label className="text-sm font-medium text-black mb-2">
                           Material *
@@ -302,6 +309,17 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
                           readOnly
                           className="bg-gray-50"
                           placeholder="Selecciona un material"
+                        />
+                      </div>
+
+                      <div>
+                        <Label className="text-sm font-medium text-black mb-2">
+                          # de Rollo
+                        </Label>
+                        <Input
+                          value={item.rollNumber || ''}
+                          onChange={(e) => updateDeliveryItem(index, 'rollNumber', e.target.value)}
+                          placeholder="Ej: 12"
                         />
                       </div>
                     </div>

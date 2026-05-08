@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Package, Calendar, Palette, AlertTriangle, CheckCircle, Trash2 } from 'lucide-react';
+import { Plus, Search, Package, Calendar, Palette, AlertTriangle, CheckCircle, Trash2, Hash } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,6 +43,7 @@ interface IndividualMaterialDelivery {
   material_category: string;
   workshop_name: string;
   order_number?: string;
+  roll_number?: string;
 }
 
 interface MaterialDeliveryProps {
@@ -110,6 +111,7 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
         delivery.material_name?.toLowerCase().includes(searchLower) ||
         delivery.material_sku?.toLowerCase().includes(searchLower) ||
         delivery.material_color?.toLowerCase().includes(searchLower) ||
+        delivery.roll_number?.toLowerCase().includes(searchLower) ||
         delivery.workshop_name?.toLowerCase().includes(searchLower) ||
         delivery.order_number?.toLowerCase().includes(searchLower);
       if (!matchesSearch) return false;
@@ -185,7 +187,7 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4" />
             <Input
               type="text"
-              placeholder="Buscar por material, color, taller u orden..."
+              placeholder="Buscar por material, color, rollo, taller u orden..."
               className="w-80 pl-10"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -246,6 +248,7 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
                 <TableRow>
                   <TableHead>Material y Color</TableHead>
                   <TableHead>SKU</TableHead>
+                  <TableHead>Rollo</TableHead>
                   <TableHead>Taller</TableHead>
                   <TableHead>Orden</TableHead>
                   <TableHead>Entregado</TableHead>
@@ -288,6 +291,16 @@ const MaterialDelivery = ({ canCreateDeliveries = false }: MaterialDeliveryProps
                       </TableCell>
                       <TableCell className="font-mono text-sm">
                         {delivery.material_sku || 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        {delivery.roll_number ? (
+                          <Badge variant="outline" className="flex items-center gap-1 w-fit">
+                            <Hash className="w-3 h-3" />
+                            <span>{delivery.roll_number}</span>
+                          </Badge>
+                        ) : (
+                          <span className="text-gray-400 italic">Sin rollo</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <span className="font-medium">{delivery.workshop_name || 'N/A'}</span>

@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useUserContext } from '@/hooks/useUserContext';
+import { extractRollNumberFromNotes } from '@/lib/materialRollNumber';
 
 interface MaterialDeliveryData {
   workshopId: string;
@@ -15,6 +16,7 @@ interface MaterialDeliveryData {
     quantity: number;
     unit: string;
     notes?: string;
+    rollNumber?: string;
   }[];
   supportDocument?: File;
 }
@@ -39,6 +41,7 @@ interface MaterialDeliveryWithBalance {
   material_category: string;
   workshop_name: string;
   order_number?: string;
+  roll_number?: string;
 }
 
 interface IndividualMaterialDelivery {
@@ -61,6 +64,7 @@ interface IndividualMaterialDelivery {
   material_category: string;
   workshop_name: string;
   order_number?: string;
+  roll_number?: string;
 }
 
 export const useMaterialDeliveries = () => {
@@ -104,6 +108,7 @@ export const useMaterialDeliveries = () => {
 
       // Create material deliveries for each material
       const deliveryPromises = deliveryData.materials.map(async (material, index) => {
+        const rollNumber = material.rollNumber?.trim() || extractRollNumberFromNotes(material.notes);
         const deliveryRecord = {
           material_id: material.materialId,
           workshop_id: deliveryData.workshopId,
@@ -111,14 +116,15 @@ export const useMaterialDeliveries = () => {
           quantity_delivered: material.quantity,
           quantity_remaining: material.quantity,
           delivered_by: session.user.id,
-          notes: material.notes || deliveryData.notes || null
+          notes: material.notes || deliveryData.notes || null,
+          roll_number: rollNumber || null
         };
 
         console.log(`Creating delivery ${index + 1}/${deliveryData.materials.length}:`, deliveryRecord);
 
         const { data, error } = await supabase
           .from('material_deliveries')
-          .insert(deliveryRecord)
+          .insert(deliveryRecord as any)
           .select()
           .single();
 
@@ -306,6 +312,7 @@ export const useMaterialDeliveries = () => {
           delivery_date,
           delivered_by,
           notes,
+          roll_number,
           created_at,
           updated_at,
           quantity_delivered,
@@ -360,6 +367,7 @@ export const useMaterialDeliveries = () => {
         delivery_date: delivery.delivery_date,
         delivered_by: delivery.delivered_by,
         notes: delivery.notes,
+        roll_number: (delivery as any).roll_number || extractRollNumberFromNotes(delivery.notes) || undefined,
         created_at: delivery.created_at,
         updated_at: delivery.updated_at,
         quantity_delivered: delivery.quantity_delivered,
