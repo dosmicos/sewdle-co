@@ -65,6 +65,26 @@ export type AddiPaymentRequest = {
   orderData: PendingPaymentOrderData;
 };
 
+export type ShopifyCodOrderRequest = {
+  organizationId: string;
+  conversationId?: string;
+  orderData: {
+    customerName: string;
+    cedula?: string;
+    email: string;
+    phone: string;
+    address: string;
+    city: string;
+    department: string;
+    neighborhood?: string;
+    lineItems: ResolvedLineItem[];
+    notes?: string;
+    shippingCost: number;
+    paymentMethod: "contra_entrega";
+  };
+  totalAmount: number;
+};
+
 export function normalizeCommerceText(value: unknown): string {
   return String(value ?? "")
     .toLowerCase()
@@ -450,6 +470,42 @@ export function buildAddiPaymentRequest(params: {
     request: {
       ...built.base,
       customerCedula: String(params.payload?.cedula || "").trim(),
+    },
+  };
+}
+
+export function buildShopifyCodOrderRequest(params: {
+  payload: Record<string, any>;
+  catalog: CommerceProduct[];
+  organizationId: string;
+  conversationId?: string;
+}): { ok: true; request: ShopifyCodOrderRequest } | {
+  ok: false;
+  errors: string[];
+} {
+  const built = buildPendingPaymentRequestBase(params);
+  if (built.ok === false) return built;
+  const payload = params.payload || {};
+  return {
+    ok: true,
+    request: {
+      organizationId: params.organizationId,
+      conversationId: params.conversationId,
+      totalAmount: built.base.amount,
+      orderData: {
+        customerName: built.base.customerName,
+        cedula: built.base.orderData.cedula,
+        email: built.base.customerEmail,
+        phone: built.base.customerPhone,
+        address: built.base.orderData.address,
+        city: built.base.orderData.city,
+        department: built.base.orderData.department,
+        neighborhood: built.base.orderData.neighborhood,
+        lineItems: built.base.orderData.lineItems,
+        notes: payload.notes ? String(payload.notes).trim() : undefined,
+        shippingCost: built.base.orderData.shippingCost,
+        paymentMethod: "contra_entrega",
+      },
     },
   };
 }

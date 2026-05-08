@@ -26,6 +26,7 @@ import {
 import {
   buildAddiPaymentRequest,
   buildBoldPaymentLinkRequest,
+  buildShopifyCodOrderRequest,
   type CommerceProduct,
   summarizeCommerceCatalogForPrompt,
 } from "../_shared/elsa-commerce.ts";
@@ -50,6 +51,8 @@ type CommerceActionResult = {
   duplicate_blocked?: boolean;
   paymentUrl?: string;
   paymentLinkId?: string;
+  orderNumber?: string;
+  orderId?: string | number;
 };
 
 async function fetchCommerceCatalog(
@@ -158,20 +161,32 @@ async function executeCommerceActions(
   if (!params.organizationId) return { result: params.result, actionResults };
 
   const actions = params.result.actions || [];
-  const paymentAction = actions.find((action: any) =>
-    action?.type === "send_addi_payment_request" ||
-    action?.type === "send_payment_link" ||
-    (action?.type === "create_order_draft" &&
-      ["link_de_pago", "pse", "PSE", "addi", "Addi"].includes(
-        String(action?.payload?.paymentMethod || ""),
-      ))
-  );
+  const paymentAction = actions.find((action: any) => {
+    const method = String(action?.payload?.paymentMethod || "").toLowerCase();
+    return action?.type === "send_addi_payment_request" ||
+      action?.type === "send_payment_link" ||
+      action?.type === "create_shopify_order" ||
+      (action?.type === "create_order_draft" &&
+        [
+          "link_de_pago",
+          "pse",
+          "addi",
+          "contra_entrega",
+          "contra entrega",
+          "cod",
+          "cash_on_delivery",
+        ].includes(method));
+  });
   if (!paymentAction?.payload) return { result: params.result, actionResults };
 
   const payload = paymentAction.payload as Record<string, any>;
   const paymentMethod = String(payload.paymentMethod || "").toLowerCase();
   const isAddiAction = paymentAction.type === "send_addi_payment_request" ||
     paymentMethod === "addi";
+  const isCodAction = paymentAction.type === "create_shopify_order" ||
+    ["contra_entrega", "contra entrega", "cod", "cash_on_delivery"].includes(
+      paymentMethod,
+    );
   const existing = await findExistingPaymentFlow(supabase, {
     conversationId: params.conversationId,
     customerPhone: payload.phone || payload.customerPhone,
@@ -239,17 +254,28 @@ Total: $${
       success: false,
       reason: "catalog_unavailable",
     });
-    params.result.reply = isAddiAction
+    params.result.reply = isCodAction
+      ? "Ya tengo tus datos para pago contra entrega 😊 Te conecto con el equipo para validar disponibilidad y crear el pedido."
+      : isAddiAction
       ? "Ya tengo el método de pago por Addi 😊 Te conecto con el equipo para validar disponibilidad y enviarte la solicitud."
       : "Ya tengo el método de pago por PSE 😊 Te conecto con el equipo para validar disponibilidad y enviarte el link de pago.";
     params.result.handoff_required = true;
-    params.result.handoff_reason = isAddiAction
+    params.result.handoff_reason = isCodAction
+      ? "No hay catálogo Shopify disponible para crear pedido contra entrega automáticamente."
+      : isAddiAction
       ? "No hay catálogo Shopify disponible para crear solicitud Addi automáticamente."
       : "No hay catálogo Shopify disponible para crear link Bold automáticamente.";
     return { result: params.result, actionResults };
   }
 
-  const built = isAddiAction
+  const built = isCodAction
+    ? buildShopifyCodOrderRequest({
+      payload,
+      catalog: params.catalog,
+      organizationId: params.organizationId,
+      conversationId: params.conversationId,
+    })
+    : isAddiAction
     ? buildAddiPaymentRequest({
       payload,
       catalog: params.catalog,
@@ -272,10 +298,70 @@ Total: $${
     return { result: params.result, actionResults };
   }
 
+  if (isCodAction) {
+    const codRequest = built.request as any;
+    const { data, error } = await supabase.functions.invoke(
+      "create-shopify-order",
+      { body: codRequest },
+    );
+
+    if (error || !data?.orderNumber) {
+      console.error(
+        "Elsa COD Shopify order action failed:",
+        error?.message || "no_order_number",
+      );
+      actionResults.push({
+        type: String(paymentAction.type),
+        success: false,
+        reason: error?.message || "no_order_number",
+      });
+      params.result.reply =
+        "Ya tengo tus datos para pago contra entrega 😊 Te conecto con el equipo para crear el pedido.";
+      params.result.handoff_required = true;
+      params.result.handoff_reason =
+        "Falló la creación automática del pedido contra entrega en Shopify.";
+      return { result: params.result, actionResults };
+    }
+
+    await supabase.from("pending_orders").insert({
+      organization_id: params.organizationId,
+      conversation_id: params.conversationId,
+      customer_phone: codRequest.orderData.phone,
+      customer_name: codRequest.orderData.customerName,
+      customer_email: codRequest.orderData.email,
+      cedula: codRequest.orderData.cedula,
+      address: codRequest.orderData.address,
+      city: codRequest.orderData.city,
+      department: codRequest.orderData.department,
+      neighborhood: codRequest.orderData.neighborhood,
+      line_items: codRequest.orderData.lineItems,
+      notes: codRequest.orderData.notes,
+      shipping_cost: codRequest.orderData.shippingCost,
+      total_amount: codRequest.totalAmount,
+      status: "order_created",
+      shopify_order_id: String(data.orderId || ""),
+      shopify_order_number: String(data.orderNumber || ""),
+    });
+
+    params.result.reply = `¡Listo! Tu pedido #${data.orderNumber} quedó creado contra entrega 😊 Total: $${
+      Number(data.totalPrice || codRequest.totalAmount).toLocaleString("es-CO")
+    } COP. Te enviaremos la guía cuando sea despachado 🙌`;
+    params.result.handoff_required = false;
+    params.result.handoff_reason = "";
+    actionResults.push({
+      type: String(paymentAction.type),
+      success: true,
+      orderId: data.orderId,
+      orderNumber: String(data.orderNumber),
+    });
+    return { result: params.result, actionResults };
+  }
+
+  const paymentRequest = built.request as any;
   const { data, error } = await supabase.functions.invoke(
     isAddiAction ? "create-addi-payment-request" : "create-bold-payment-link",
     {
-      body: built.request,
+      body: paymentRequest,
     },
   );
 
@@ -306,10 +392,10 @@ Total: $${
 ${data.paymentUrl}
 
 Total: $${
-        Number(built.request.amount).toLocaleString("es-CO")
+        Number(paymentRequest.amount).toLocaleString("es-CO")
       } COP. Cuando Addi apruebe la compra, creamos tu pedido automáticamente 🙌`
       : `¡Listo! Ya enviamos la solicitud por Addi 😊 Revisa la notificación de Addi para aprobar la compra. Total: $${
-        Number(built.request.amount).toLocaleString("es-CO")
+        Number(paymentRequest.amount).toLocaleString("es-CO")
       } COP. Cuando Addi apruebe, creamos tu pedido automáticamente 🙌`;
     params.result.handoff_required = false;
     params.result.handoff_reason = "";
@@ -326,7 +412,7 @@ Total: $${
 ${data.paymentUrl}
 
 Total: $${
-    Number(built.request.amount).toLocaleString("es-CO")
+    Number(paymentRequest.amount).toLocaleString("es-CO")
   } COP. Apenas Bold confirme el pago, creamos tu pedido automáticamente 🙌`;
   params.result.handoff_required = false;
   params.result.handoff_reason = "";

@@ -18,6 +18,7 @@ function assertObjectMatch(
 import {
   buildAddiPaymentRequest,
   buildBoldPaymentLinkRequest,
+  buildShopifyCodOrderRequest,
   calculateOrderTotals,
   resolveCommerceLineItems,
 } from "./elsa-commerce.ts";
@@ -212,4 +213,33 @@ Deno.test("buildAddiPaymentRequest reports missing cedula for Addi", () => {
   assertEquals(built.ok, false);
   if (built.ok === true) throw new Error("expected validation failure");
   assertEquals(built.errors.includes("cedula"), true);
+});
+
+Deno.test("buildShopifyCodOrderRequest builds Cash on Delivery Shopify order request", () => {
+  const built = buildShopifyCodOrderRequest({
+    payload: {
+      paymentMethod: "contra_entrega",
+      customerName: "Cliente Dosmicos",
+      cedula: "123456789",
+      email: "cliente@example.com",
+      phone: "+57 300 111 2233",
+      address: "Calle 1 #2-3",
+      city: "Roldanillo",
+      department: "Valle del Cauca",
+      neighborhood: "Centro",
+      lineItems: [{ productName: "pollito", size: 4, quantity: 1 }],
+    },
+    catalog,
+    organizationId: "org-1",
+    conversationId: "conv-1",
+  });
+
+  assertEquals(built.ok, true);
+  if (built.ok === false) throw new Error("expected ok");
+  assertEquals(built.request.organizationId, "org-1");
+  assertEquals(built.request.conversationId, "conv-1");
+  assertEquals(built.request.orderData.paymentMethod, "contra_entrega");
+  assertEquals(built.request.orderData.lineItems[0].variantId, 1004);
+  assertEquals(built.request.orderData.shippingCost, 5000);
+  assertEquals(built.request.totalAmount, 99900);
 });

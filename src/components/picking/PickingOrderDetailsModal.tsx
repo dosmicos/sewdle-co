@@ -17,6 +17,7 @@ import { EnviaShippingButton, ShippingLabel, CARRIER_NAMES, CarrierCode } from '
 import type { EnviaShippingButtonRef } from '@/features/shipping';
 import { invokeEdgeFunction } from '@/features/shipping/lib/invokeEdgeFunction';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { detectEffectivePaymentMethod } from '@/lib/paymentMethod';
 
 interface ShopifyLineItem {
   id: string;
@@ -1427,17 +1428,14 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     ? rawPaymentGateways 
     : (typeof rawPaymentGateways === 'string' ? [rawPaymentGateways] : []);
   
-  const formatPaymentMethod = (gateway: string): string => {
-    if (gateway.toLowerCase().includes('cash on delivery')) {
-      return 'Contraentrega';
-    }
-    return gateway;
-  };
-  
-  // El ÚLTIMO método de pago en el array es el efectivo (orden cronológico de Shopify)
-  const actualPaymentMethod = paymentGateways.length > 0 
-    ? formatPaymentMethod(paymentGateways[paymentGateways.length - 1]) 
-    : null;
+  const orderTags = effectiveOrder.shopify_order?.tags || '';
+  const isPendingPayment = effectiveOrder.shopify_order?.financial_status === 'pending';
+  const actualPaymentMethod = detectEffectivePaymentMethod({
+    paymentGatewayNames: paymentGateways,
+    gateway: effectiveOrder.shopify_order?.raw_data?.gateway,
+    tags: orderTags,
+    financialStatus: effectiveOrder.shopify_order?.financial_status,
+  });
 
   console.log('🔍 DEBUG Payment Method:', {
     rawPaymentGateways,
@@ -1448,14 +1446,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     has_raw_data: !!effectiveOrder.shopify_order?.raw_data
   });
 
-  // Determine if order is COD (Contraentrega) based on the EFFECTIVE (last) payment method
-  const orderTags = effectiveOrder.shopify_order?.tags || '';
-  const hasContraentregaTag = orderTags.toLowerCase().includes('contraentrega');
-  const isPendingPayment = effectiveOrder.shopify_order?.financial_status === 'pending';
-  
-  // isCODOrder is true if the LAST payment method is COD, or has contraentrega tag with pending status
-  const isCODOrder = actualPaymentMethod === 'Contraentrega' || 
-    (isPendingPayment && hasContraentregaTag);
+  // Determine if order is COD (Contraentrega) based on gateway or the pending Contraentrega tag fallback
+  const isCODOrder = actualPaymentMethod === 'Contraentrega';
 
   return (
     <>
