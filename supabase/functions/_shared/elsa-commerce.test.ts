@@ -20,6 +20,7 @@ import {
   buildBoldPaymentLinkRequest,
   buildShopifyCodOrderRequest,
   calculateOrderTotals,
+  formatShopifyOrderCreatedReply,
   resolveCommerceLineItems,
 } from "./elsa-commerce.ts";
 
@@ -242,4 +243,24 @@ Deno.test("buildShopifyCodOrderRequest builds Cash on Delivery Shopify order req
   assertEquals(built.request.orderData.lineItems[0].variantId, 1004);
   assertEquals(built.request.orderData.shippingCost, 5000);
   assertEquals(built.request.totalAmount, 99900);
+});
+
+Deno.test("formatShopifyOrderCreatedReply includes order number, summary and thanks", () => {
+  const reply = formatShopifyOrderCreatedReply({
+    orderNumber: "75966",
+    totalAmount: 99900,
+    lineItems: [{
+      productId: 101,
+      productName: "Ruana Pollito",
+      variantId: 1004,
+      variantName: "4",
+      quantity: 1,
+    }],
+  });
+
+  assertEquals(reply.includes("#75966"), true);
+  assertEquals(reply.includes("Resumen:"), true);
+  assertEquals(reply.includes("1 x Ruana Pollito talla 4"), true);
+  assertEquals(reply.includes("Total: $99.900 COP"), true);
+  assertEquals(reply.includes("Gracias por tu compra"), true);
 });

@@ -28,6 +28,7 @@ import {
   buildBoldPaymentLinkRequest,
   buildShopifyCodOrderRequest,
   type CommerceProduct,
+  formatShopifyOrderCreatedReply,
   summarizeCommerceCatalogForPrompt,
 } from "../_shared/elsa-commerce.ts";
 
@@ -117,7 +118,7 @@ async function findExistingPaymentFlow(
   params: { conversationId?: string; customerPhone?: string },
 ) {
   const columns =
-    "id, status, bold_payment_url, bold_payment_link_id, total_amount, shopify_order_number, created_at";
+    "id, status, bold_payment_url, bold_payment_link_id, total_amount, line_items, shipping_cost, shopify_order_number, created_at";
 
   if (params.conversationId) {
     const { data } = await supabase
@@ -143,6 +144,58 @@ async function findExistingPaymentFlow(
   }
 
   return null;
+}
+
+function shouldReplaceGenericOrderHandoff(
+  result: ElsaStructuredResponse,
+): boolean {
+  const reply = String(result.reply || "").toLowerCase();
+  if (!reply) return false;
+  return reply.includes("no tengo esa información") ||
+    reply.includes("no tengo esa informacion") ||
+    reply.includes("te conecto con el equipo") ||
+    reply.includes("crear el pedido");
+}
+
+async function findLatestCreatedOrderForConversation(
+  supabase: any,
+  conversationId?: string,
+) {
+  if (!conversationId) return null;
+  const { data } = await supabase
+    .from("pending_orders")
+    .select(
+      "id, status, total_amount, line_items, shipping_cost, shopify_order_number, created_at",
+    )
+    .eq("conversation_id", conversationId)
+    .eq("status", "order_created")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  return data?.[0] || null;
+}
+
+async function maybeReplyWithExistingCreatedOrder(
+  supabase: any,
+  params: {
+    result: ElsaStructuredResponse & { provider: string; raw?: string };
+    conversationId?: string;
+  },
+) {
+  if (!shouldReplaceGenericOrderHandoff(params.result)) return null;
+  const existing = await findLatestCreatedOrderForConversation(
+    supabase,
+    params.conversationId,
+  );
+  if (!existing?.shopify_order_number) return null;
+
+  params.result.reply = formatShopifyOrderCreatedReply({
+    orderNumber: existing.shopify_order_number,
+    totalAmount: existing.total_amount,
+    lineItems: existing.line_items,
+  });
+  params.result.handoff_required = false;
+  params.result.handoff_reason = "";
+  return existing;
 }
 
 async function executeCommerceActions(
@@ -177,7 +230,21 @@ async function executeCommerceActions(
           "cash_on_delivery",
         ].includes(method));
   });
-  if (!paymentAction?.payload) return { result: params.result, actionResults };
+  if (!paymentAction?.payload) {
+    const existing = await maybeReplyWithExistingCreatedOrder(supabase, {
+      result: params.result,
+      conversationId: params.conversationId,
+    });
+    if (existing) {
+      actionResults.push({
+        type: "existing_shopify_order_reply",
+        success: true,
+        duplicate_blocked: true,
+        orderNumber: String(existing.shopify_order_number),
+      });
+    }
+    return { result: params.result, actionResults };
+  }
 
   const payload = paymentAction.payload as Record<string, any>;
   const paymentMethod = String(payload.paymentMethod || "").toLowerCase();
@@ -237,8 +304,11 @@ Total: $${
   }
 
   if (existing?.status === "order_created") {
-    params.result.reply =
-      `Ese pedido ya quedó creado 😊 Número de pedido: #${existing.shopify_order_number}. Te enviaremos la guía cuando sea despachado 🙌`;
+    params.result.reply = formatShopifyOrderCreatedReply({
+      orderNumber: existing.shopify_order_number,
+      totalAmount: existing.total_amount,
+      lineItems: existing.line_items,
+    });
     actionResults.push({
       type: String(paymentAction.type),
       success: true,
@@ -343,9 +413,11 @@ Total: $${
       shopify_order_number: String(data.orderNumber || ""),
     });
 
-    params.result.reply = `¡Listo! Tu pedido #${data.orderNumber} quedó creado contra entrega 😊 Total: $${
-      Number(data.totalPrice || codRequest.totalAmount).toLocaleString("es-CO")
-    } COP. Te enviaremos la guía cuando sea despachado 🙌`;
+    params.result.reply = formatShopifyOrderCreatedReply({
+      orderNumber: data.orderNumber,
+      totalAmount: data.totalPrice || codRequest.totalAmount,
+      lineItems: codRequest.orderData.lineItems,
+    });
     params.result.handoff_required = false;
     params.result.handoff_reason = "";
     actionResults.push({
@@ -473,6 +545,21 @@ async function fetchSewdleContext(
         sent_at: m.sent_at,
         content: safeSnippet(m.content, 500),
       }));
+    }
+
+    const latestCreatedOrder = await findLatestCreatedOrderForConversation(
+      supabase,
+      conversationId,
+    );
+    if (latestCreatedOrder?.shopify_order_number) {
+      context.order_status = {
+        latest_created_order: {
+          orderNumber: latestCreatedOrder.shopify_order_number,
+          totalAmount: latestCreatedOrder.total_amount,
+          lineItems: latestCreatedOrder.line_items || [],
+          createdAt: latestCreatedOrder.created_at,
+        },
+      };
     }
   }
 
@@ -666,11 +753,12 @@ serve(async (req) => {
         capabilities: [
           "send_payment_link_bold_pse",
           "send_addi_payment_request",
+          "create_shopify_order_cod",
           "create_shopify_order_after_bold_payment",
           "create_shopify_order_after_addi_approval",
         ],
         payment_flow:
-          "Para PSE/link de pago: generar link Bold y guardar pending_order; Shopify se crea automáticamente solo cuando Bold confirma el pago por webhook. Para Addi: generar solicitud Addi y guardar pending_order; Shopify se crea automáticamente solo cuando Addi aprueba la compra por callback.",
+          "Para contra entrega/COD: crear pedido Shopify inmediatamente con gateway Cash on Delivery (COD), estado financiero pending y responder con número de pedido, resumen y agradecimiento. Para PSE/link de pago: generar link Bold y guardar pending_order; Shopify se crea automáticamente solo cuando Bold confirma el pago por webhook. Para Addi: generar solicitud Addi y guardar pending_order; Shopify se crea automáticamente solo cuando Addi aprueba la compra por callback.",
         products: summarizeCommerceCatalogForPrompt(commerceCatalog),
       };
     }

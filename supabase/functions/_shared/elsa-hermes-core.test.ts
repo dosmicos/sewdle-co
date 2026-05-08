@@ -253,6 +253,32 @@ Deno.test("buildElsaPrompt teaches COD Shopify order action schema", () => {
   assertIncludes(prompt, "no escales a humano si tienes todos los datos");
 });
 
+Deno.test("buildElsaPrompt instructs post-created-order replies to include number summary and thanks", () => {
+  const prompt = buildElsaPrompt({
+    messages: [{ role: "user", content: "[imagen adjunta]" }],
+    sewdleContext: {
+      order_status: {
+        latest_created_order: {
+          orderNumber: "75966",
+          totalAmount: 99900,
+          lineItems: [{
+            productName: "Ruana Pollito",
+            variantName: "4",
+            quantity: 1,
+          }],
+        },
+      },
+    },
+    now: new Date("2026-05-02T20:30:00.000Z"),
+  });
+
+  assertIncludes(prompt, "pedido Shopify ya fue creado");
+  assertIncludes(prompt, "número de pedido");
+  assertIncludes(prompt, "resumen del pedido");
+  assertIncludes(prompt, "agradece la compra");
+  assertIncludes(prompt, "75966");
+});
+
 Deno.test("buildElsaPrompt requires collecting order data in one message instead of one by one", () => {
   const prompt = buildElsaPrompt({
     messages: [{ role: "user", content: "Lo compro" }],
