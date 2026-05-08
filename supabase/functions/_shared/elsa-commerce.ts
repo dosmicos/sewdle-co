@@ -510,6 +510,52 @@ export function buildShopifyCodOrderRequest(params: {
   };
 }
 
+export function formatShopifyOrderLineItemsForCustomer(
+  lineItems: unknown,
+): string[] {
+  if (!Array.isArray(lineItems)) return [];
+
+  return lineItems
+    .map((item) => {
+      const typed = item && typeof item === "object"
+        ? item as Record<string, unknown>
+        : {};
+      const quantity = Math.max(
+        1,
+        Math.floor(Number(typed.quantity || 1)) || 1,
+      );
+      const productName = String(
+        typed.productName || typed.title || typed.name || "producto",
+      ).trim();
+      const variantName = String(
+        typed.variantName || typed.size || typed.variantTitle || "",
+      ).trim();
+      const sizeSuffix = variantName ? ` talla ${variantName}` : "";
+      return `${quantity} x ${productName}${sizeSuffix}`;
+    })
+    .filter((line) => line.trim() !== "1 x producto");
+}
+
+export function formatShopifyOrderCreatedReply(params: {
+  orderNumber: string | number;
+  totalAmount?: string | number | null;
+  lineItems?: unknown;
+  paymentLabel?: string;
+}) {
+  const orderNumber = String(params.orderNumber || "").replace(/^#/, "");
+  const paymentLabel = params.paymentLabel || "contra entrega";
+  const itemLines = formatShopifyOrderLineItemsForCustomer(params.lineItems);
+  const summary = itemLines.length
+    ? `\nResumen:\n${itemLines.map((line) => `- ${line}`).join("\n")}`
+    : "";
+  const total = Number(params.totalAmount || 0);
+  const totalLine = total > 0
+    ? `\nTotal: $${total.toLocaleString("es-CO")} COP`
+    : "";
+
+  return `¡Listo! Tu pedido #${orderNumber} quedó creado ${paymentLabel} 😊${summary}${totalLine}\n\nGracias por tu compra 🧡 Te enviaremos la guía cuando sea despachado 🙌`;
+}
+
 export function summarizeCommerceCatalogForPrompt(
   catalog: CommerceProduct[],
   maxProducts = 80,
