@@ -33,7 +33,7 @@ import { CARRIER_NAMES, type CarrierCode } from '@/features/shipping/types/envia
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ManifestPrintView } from './ManifestPrintView';
+import { openManifestPrintWindow } from './ManifestPrintView';
 
 interface ManifestDetailViewProps {
   manifest: ManifestWithItems;
@@ -61,24 +61,34 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   const [extraScans, setExtraScans] = useState<string[]>([]);
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [closingManifest, setClosingManifest] = useState(false);
-  const [showPrintView, setShowPrintView] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus input
+  // Auto-focus on mount
   useEffect(() => {
     if (inputRef.current) {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, []);
 
+  // Re-focus input after each scan completes.
+  // Must live in a useEffect so it runs after React commits the DOM update
+  // that removes `disabled` from the input — calling focus() while the element
+  // is still disabled is a no-op, which is why the field felt "dead" after scans.
+  useEffect(() => {
+    if (!scanning) {
+      inputRef.current?.focus();
+    }
+  }, [scanning]);
+
   // Refresh items when manifest changes
   useEffect(() => {
     setItems(manifest.items);
   }, [manifest.items]);
 
-  const handleScan = useCallback(async () => {
-    const trackingNumber = scanInput.trim().toUpperCase();
+  // Core scan function — takes a resolved tracking number directly so
+  // auto-scan can pass the full number even when input only has 4 digits.
+  const triggerScan = useCallback(async (trackingNumber: string) => {
     if (!trackingNumber || scanning) return;
 
     setScanning(true);
@@ -108,8 +118,45 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     }
 
     setScanning(false);
-    inputRef.current?.focus();
-  }, [scanInput, scanning, manifest.id, scanTrackingNumber, extraScans]);
+    // Focus is restored by the useEffect watching `scanning` — calling it
+    // here would be a no-op because the input is still `disabled` at this point.
+  }, [scanning, manifest.id, scanTrackingNumber, extraScans]);
+
+  // Enter key — resolves tracking from current input and delegates to triggerScan.
+  const handleScan = useCallback(async () => {
+    const trackingNumber = scanInput.trim().toUpperCase();
+    if (!trackingNumber || scanning) return;
+    await triggerScan(trackingNumber);
+  }, [scanInput, scanning, triggerScan]);
+
+  // Instant auto-scan: fires without Enter when the input unambiguously
+  // identifies a pending guide (full match) or its last 4 digits (suffix match).
+  useEffect(() => {
+    if (scanning) return;
+    const input = scanInput.trim();
+    if (!input) return;
+
+    const pendingTrackings = items
+      .filter(i => i.scan_status === 'pending' || i.scan_status === null)
+      .map(i => i.tracking_number.toUpperCase());
+
+    const inputUpper = input.toUpperCase();
+
+    // Full match → verify immediately (handles barcode scanners sending the whole number)
+    if (pendingTrackings.includes(inputUpper)) {
+      triggerScan(inputUpper);
+      return;
+    }
+
+    // Exactly 4 digits → check for unique suffix match among pending guides
+    if (/^\d{4}$/.test(input)) {
+      const matches = pendingTrackings.filter(t => t.endsWith(input));
+      if (matches.length === 1) {
+        triggerScan(matches[0]);
+      }
+      // If 0 or 2+ matches: wait — user can keep typing or press Enter
+    }
+  }, [scanInput, scanning, items, triggerScan]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -148,16 +195,6 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   const hasMissing = pendingItems.length > 0;
   const hasExtras = extraScans.length > 0;
 
-  // Show print view
-  if (showPrintView) {
-    return (
-      <ManifestPrintView
-        manifest={manifest}
-        onClose={() => setShowPrintView(false)}
-      />
-    );
-  }
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -190,7 +227,7 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
         <Button
           variant="outline"
           size="icon"
-          onClick={() => setShowPrintView(true)}
+          onClick={() => openManifestPrintWindow(manifest)}
           title="Imprimir manifiesto"
         >
           <Printer className="h-4 w-4" />

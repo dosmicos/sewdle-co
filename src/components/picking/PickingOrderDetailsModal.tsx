@@ -787,10 +787,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       
     } catch (error) {
       console.error('Error updating status:', error);
-      // ONLY on error: Refetch to get actual state and rollback.
-      // Never let a refetch failure mask the original error.
+      // Refetch to get actual DB state after failure.
+      // MUST use withTimeout — an un-guarded await here blocks the finally block,
+      // preventing setUpdatingStatus(false) from ever running (permanent loading state).
       try {
-        await refetchOrder(orderId);
+        await withTimeout(refetchOrder(orderId), 5000, 'Refetch timeout post-error');
       } catch (refetchError) {
         console.error('⚠️ Refetch también falló durante rollback:', refetchError);
       }

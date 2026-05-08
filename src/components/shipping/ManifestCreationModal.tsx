@@ -111,25 +111,14 @@ export const ManifestCreationModal: React.FC<ManifestCreationModalProps> = ({
         throw new Error(data.error || 'Error al cargar guías');
       }
 
-      // Get tracking numbers already included in any existing manifest
-      const { data: manifestedItems } = await supabase
-        .from('manifest_items')
-        .select('tracking_number')
-        .not('tracking_number', 'is', null);
-
-      const manifestedTrackings = new Set(
-        (manifestedItems || []).map((i: any) => i.tracking_number)
-      );
-
       // Preserve manually-added shipments
       const prevManual = shipments.filter(s => s.source === 'manual');
-      const rawShipments: EnviaShipment[] = data.data || [];
+      const apiShipments: EnviaShipment[] = data.data || [];
 
-      // Exclude guides already in an existing manifest
-      const apiShipments = rawShipments.filter(
-        s => !manifestedTrackings.has(s.tracking_number)
-      );
-
+      // NOTE: we intentionally do NOT filter out guides already in other manifests.
+      // Guides disappear naturally once their Envia status leaves 'created'
+      // (previous-day in-transit guides are excluded by the edge function filter).
+      // This allows re-creating manifests freely without being blocked by existing ones.
       setShipments([...apiShipments, ...prevManual]);
       setDataSource(data.source);
 
@@ -254,14 +243,19 @@ export const ManifestCreationModal: React.FC<ManifestCreationModalProps> = ({
 
     const selected = shipments.filter(s => selectedIds.has(s.id));
 
-    // Only pass real DB label IDs (not synthetic envia_xxx or manual_xxx)
-    const dbLabelIds = selected
-      .filter(s => !s.id.startsWith('envia_') && !s.id.startsWith('manual_'))
-      .map(s => s.id);
-
+    // Pass all selected shipments (including envia_xxx / manual_xxx).
+    // createManifest will upsert stub shipping_labels records for guides that
+    // only exist in the Envia portal and have no DB record yet.
     const result = await createManifest({
       carrier,
-      labelIds: dbLabelIds,
+      shipments: selected.map(s => ({
+        id: s.id,
+        tracking_number: s.tracking_number,
+        shopify_order_id: s.shopify_order_id,
+        order_number: s.order_number,
+        recipient_name: s.recipient_name,
+        destination_city: s.destination_city,
+      })),
       notes: notes || undefined,
     });
 

@@ -27,7 +27,14 @@ const formatCOP = (amount: number | null | undefined) => {
 
 type FilterTab = 'all' | 'sent' | 'recovered' | 'opted_out';
 
+const isRecoveredAfterWhatsApp = (cart: AbandonedCart) => {
+  if (!cart.recovered_at || (cart.last_message_step ?? 0) < 1) return false;
+  if (!cart.last_message_sent_at) return true;
+  return new Date(cart.recovered_at).getTime() >= new Date(cart.last_message_sent_at).getTime();
+};
+
 const cartStatus = (cart: AbandonedCart): { label: string; tone: 'success' | 'warning' | 'muted' | 'danger' } => {
+  if (isRecoveredAfterWhatsApp(cart)) return { label: 'Recuperado por WhatsApp', tone: 'success' };
   if (cart.recovered_at) return { label: 'Recuperado', tone: 'success' };
   if (cart.opted_out) return { label: 'Opt-out', tone: 'danger' };
   if ((cart.last_message_step ?? 0) >= 1) return { label: 'Mensaje enviado', tone: 'warning' };
@@ -74,14 +81,30 @@ const CartRecoveryDashboardPage: React.FC = () => {
     const sent = carts.filter(c => (c.last_message_step ?? 0) >= 1).length;
     const recovered = carts.filter(c => !!c.recovered_at).length;
     const optedOut = carts.filter(c => c.opted_out).length;
+    const recoveredAfterWhatsApp = carts.filter(isRecoveredAfterWhatsApp);
     const recoveredGmv = carts
       .filter(c => !!c.recovered_at)
       .reduce((sum, c) => sum + (Number(c.total_price) || 0), 0);
     const abandonedGmv = carts
       .filter(c => c.is_abandoned && !c.recovered_at)
       .reduce((sum, c) => sum + (Number(c.total_price) || 0), 0);
+    const whatsappRecoveredGmv = recoveredAfterWhatsApp
+      .reduce((sum, c) => sum + (Number(c.total_price) || 0), 0);
     const recoveryRate = sent > 0 ? (recovered / sent) * 100 : 0;
-    return { abandoned, sent, recovered, optedOut, recoveredGmv, abandonedGmv, recoveryRate, total: carts.length };
+    const whatsappRecoveryRate = sent > 0 ? (recoveredAfterWhatsApp.length / sent) * 100 : 0;
+    return {
+      abandoned,
+      sent,
+      recovered,
+      optedOut,
+      recoveredGmv,
+      abandonedGmv,
+      whatsappRecovered: recoveredAfterWhatsApp.length,
+      whatsappRecoveredGmv,
+      recoveryRate,
+      whatsappRecoveryRate,
+      total: carts.length,
+    };
   }, [carts]);
 
   const series = useMemo(() => {
@@ -165,14 +188,15 @@ const CartRecoveryDashboardPage: React.FC = () => {
           icon={<CheckCircle2 className="h-4 w-4" />}
           label="Recuperados"
           value={String(stats.recovered)}
+          subtitle={`WhatsApp: ${stats.whatsappRecovered}`}
         />
         <MetricCard
-          label="Recovery rate"
-          value={`${stats.recoveryRate.toFixed(1)}%`}
+          label="Recovery rate WA"
+          value={`${stats.whatsappRecoveryRate.toFixed(1)}%`}
         />
         <MetricCard
-          label="GMV recuperado"
-          value={formatCOP(stats.recoveredGmv)}
+          label="GMV por WhatsApp"
+          value={formatCOP(stats.whatsappRecoveredGmv)}
         />
       </div>
 

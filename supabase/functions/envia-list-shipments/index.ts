@@ -57,7 +57,7 @@ serve(async (req) => {
       const { data: { user } } = await supabase.auth.getUser(token);
       if (user) {
         const { data: membership } = await supabase
-          .from('organization_members')
+          .from('organization_users')  // NOTE: correct table (not organization_members)
           .select('organization_id')
           .eq('user_id', user.id)
           .limit(1)
@@ -97,13 +97,31 @@ serve(async (req) => {
 
         // Filter to last 7 days (API returns full month).
         // created_at format: "2026-05-03 12:19:36" — extract date prefix for comparison.
-        // Only include "Created" status — exclude Cancelled, In transit, Delivered, etc.
+        //
+        // Rules (for manifest purposes):
+        //   • TODAY's guides  → include if non-terminal (carrier may have picked up same day)
+        //   • Previous days   → include ONLY if still 'created' (not yet picked up)
+        //   • Terminal states → always exclude (delivered, cancelled, returned)
+        const TERMINAL_STATUSES = new Set([
+          'delivered', 'entregado',
+          'cancelled', 'cancelado',
+          'returned', 'devuelto',
+        ]);
+
         const recentShipments = all.filter((s: any) => {
           const created = s.created_at || s.createdAt || '';
           // Normalize to YYYY-MM-DD prefix (works for both "2026-05-03 12:19:36" and ISO)
           const createdDate = created.slice(0, 10);
-          const statusOk = (s.status || '').toLowerCase() === 'created';
-          return createdDate >= cutoffDate && statusOk;
+          if (createdDate < cutoffDate) return false;
+
+          const status = (s.status || '').toLowerCase();
+          if (TERMINAL_STATUSES.has(status)) return false;
+
+          // Previous days: only show if still pending with the shipper
+          if (createdDate < today) return status === 'created';
+
+          // Today: show regardless of status (carrier may have scanned same day)
+          return true;
         });
 
         // Apply carrier filter — carrier name is in `name` field (e.g. "interRapidisimo")
@@ -116,7 +134,7 @@ serve(async (req) => {
 
         enviaShipments = filtered;
         enviaOk = true;
-        console.log(`✅ Envia Queries API OK — ${all.length} total this month, ${recentShipments.length} with status=created in last 7 days, ${filtered.length} after carrier filter`);
+        console.log(`✅ Envia Queries API OK — ${all.length} total this month, ${recentShipments.length} eligible in last 7 days, ${filtered.length} after carrier filter`);
       } else {
         console.warn(`⚠️ Envia Queries API returned unexpected response: status=${res.status}, data type=${typeof data?.data}`);
       }
@@ -131,7 +149,8 @@ serve(async (req) => {
         .from('shipping_labels')
         .select('id, shopify_order_id, order_number, tracking_number, carrier, recipient_name, destination_city, created_at, shipment_id, status')
         .eq('organization_id', orgId)
-        .eq('status', 'created')
+        // Include all non-terminal statuses (same logic as Envia API filter above)
+        .not('status', 'in', '("delivered","cancelled","returned")')
         .not('tracking_number', 'is', null)
         .gte('created_at', `${cutoffDate}T00:00:00.000Z`)
         .lte('created_at', `${today}T23:59:59.999Z`)

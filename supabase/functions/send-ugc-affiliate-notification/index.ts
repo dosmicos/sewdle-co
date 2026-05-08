@@ -45,7 +45,7 @@ type AttributedOrder = {
 };
 
 const DEFAULT_LANGUAGE = 'es_CO';
-const PUBLIC_LINK_BASE = 'https://ads.dosmicos.com/ugc';
+const PUBLIC_LINK_BASE = 'https://club.dosmicos.com/ugc';
 const UPLOAD_LINK_BASE = 'https://upload.dosmicos.com/upload';
 const RANK_PROXIMITY_MAX_GAP_COP = 50_000;
 

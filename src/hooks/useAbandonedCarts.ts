@@ -31,7 +31,16 @@ export interface CartRecoveryStats {
   recoveryRate: number;
   recoveredGmv: number;
   abandonedGmv: number;
+  whatsappRecoveredCarts: number;
+  whatsappRecoveredGmv: number;
+  whatsappRecoveryRate: number;
 }
+
+const isRecoveredAfterWhatsApp = (cart: AbandonedCart) => {
+  if (!cart.recovered_at || (cart.last_message_step ?? 0) < 1) return false;
+  if (!cart.last_message_sent_at) return true;
+  return new Date(cart.recovered_at).getTime() >= new Date(cart.last_message_sent_at).getTime();
+};
 
 const DAYS_WINDOW = 30;
 
@@ -60,6 +69,8 @@ export function useAbandonedCarts() {
 
       const carts = (data || []) as AbandonedCart[];
 
+      const recoveredAfterWhatsApp = carts.filter(isRecoveredAfterWhatsApp);
+
       const stats: CartRecoveryStats = {
         totalCarts: carts.length,
         abandonedCarts: carts.filter(c => c.is_abandoned).length,
@@ -73,10 +84,15 @@ export function useAbandonedCarts() {
         abandonedGmv: carts
           .filter(c => c.is_abandoned && !c.recovered_at)
           .reduce((sum, c) => sum + (Number(c.total_price) || 0), 0),
+        whatsappRecoveredCarts: recoveredAfterWhatsApp.length,
+        whatsappRecoveredGmv: recoveredAfterWhatsApp
+          .reduce((sum, c) => sum + (Number(c.total_price) || 0), 0),
+        whatsappRecoveryRate: 0,
       };
 
       const sentBase = stats.messagesSent;
       stats.recoveryRate = sentBase > 0 ? (stats.recoveredCarts / sentBase) * 100 : 0;
+      stats.whatsappRecoveryRate = sentBase > 0 ? (stats.whatsappRecoveredCarts / sentBase) * 100 : 0;
 
       return { carts, stats };
     },
@@ -93,5 +109,8 @@ function emptyStats(): CartRecoveryStats {
     recoveryRate: 0,
     recoveredGmv: 0,
     abandonedGmv: 0,
+    whatsappRecoveredCarts: 0,
+    whatsappRecoveredGmv: 0,
+    whatsappRecoveryRate: 0,
   };
 }

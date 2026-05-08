@@ -26,7 +26,7 @@ function AccessCodeBadge({ code }: { code: string }) {
         setTimeout(() => setCopied(false), 2000);
       }}
       className="flex items-center gap-1.5 shrink-0 rounded-lg border border-dashed border-gray-300 bg-gray-50 px-2.5 py-1.5 text-xs font-mono font-semibold text-gray-700 hover:bg-gray-100 transition-colors"
-      title="Código de acceso para ads.dosmicos.com — click para copiar"
+      title="Código de acceso para club.dosmicos.com — click para copiar"
     >
       <KeyRound className="h-3 w-3 text-gray-400" />
       {code}
@@ -69,7 +69,7 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
     useUgcDiscountLinks(creatorId);
 
   const redirectUrl = discountLink
-    ? `https://ads.dosmicos.com/ugc/${discountLink.redirect_token}`
+    ? `https://club.dosmicos.com/ugc/${discountLink.redirect_token}`
     : '';
 
   const balance = discountLink

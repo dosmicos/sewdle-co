@@ -1544,6 +1544,65 @@ serve(async (req) => {
     if (body.object === 'whatsapp_business_account') {
       for (const entry of body.entry || []) {
         for (const change of entry.changes || []) {
+          // Process WhatsApp status updates (sent/delivered/read/failed).
+          // These arrive in value.statuses, not value.messages, so they must be handled
+          // before the inbound-message branch below.
+          if (change.field === 'messages' && change.value?.statuses) {
+            const statuses = Array.isArray(change.value.statuses)
+              ? change.value.statuses
+              : Object.values(change.value.statuses || {});
+
+            for (const status of statuses as any[]) {
+              const messageId = status?.id;
+              const statusType = status?.status;
+              if (!messageId || !statusType) continue;
+
+              const timestampRaw = Number(status?.timestamp);
+              const statusAt = Number.isFinite(timestampRaw) && timestampRaw > 0
+                ? new Date(timestampRaw * 1000).toISOString()
+                : new Date().toISOString();
+
+              const updateData: any = {};
+              if (statusType === 'delivered') updateData.delivered_at = statusAt;
+              if (statusType === 'read') {
+                updateData.read_at = statusAt;
+                // If Meta skipped/lagged the delivered event, read implies delivered.
+                updateData.delivered_at = statusAt;
+              }
+
+              if (Object.keys(updateData).length > 0) {
+                const { error: msgStatusError } = await supabase
+                  .from('messaging_messages')
+                  .update(updateData)
+                  .eq('external_message_id', messageId);
+
+                if (msgStatusError) {
+                  console.error('Error updating WhatsApp message status:', msgStatusError);
+                }
+
+                const { error: attemptStatusError } = await supabase
+                  .from('cart_recovery_attempts')
+                  .update(updateData)
+                  .eq('whatsapp_message_id', messageId);
+
+                if (attemptStatusError) {
+                  console.error('Error updating cart recovery attempt status:', attemptStatusError);
+                }
+
+                console.log(`✅ WhatsApp status ${statusType} applied to ${messageId}`);
+              } else if (statusType === 'failed') {
+                const errorText = JSON.stringify(status?.errors || status).slice(0, 500);
+                await supabase
+                  .from('cart_recovery_attempts')
+                  .update({ error: errorText })
+                  .eq('whatsapp_message_id', messageId);
+                console.log(`⚠️ WhatsApp failed status recorded for ${messageId}: ${errorText}`);
+              } else {
+                console.log(`ℹ️ WhatsApp status ${statusType} received for ${messageId}`);
+              }
+            }
+          }
+
           if (change.field === 'messages' && change.value?.messages) {
             const phoneNumberId = change.value.metadata?.phone_number_id;
             

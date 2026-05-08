@@ -42,7 +42,7 @@ import {
 import { useShippingManifests, ShippingManifest, ManifestWithItems } from '@/hooks/useShippingManifests';
 import { ManifestCreationModal } from './ManifestCreationModal';
 import { ManifestDetailView } from './ManifestDetailView';
-import { ManifestPrintView } from './ManifestPrintView';
+import { openManifestPrintWindow } from './ManifestPrintView';
 import { CARRIER_NAMES, type CarrierCode } from '@/features/shipping/types/envia';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -66,7 +66,6 @@ export const ShippingManifestManager: React.FC = () => {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedManifest, setSelectedManifest] = useState<ManifestWithItems | null>(null);
-  const [printManifest, setPrintManifest] = useState<ManifestWithItems | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
@@ -109,10 +108,10 @@ export const ShippingManifestManager: React.FC = () => {
   const handlePrint = async (manifest: ShippingManifest) => {
     setActionLoading(manifest.id);
     const fullManifest = await fetchManifestWithItems(manifest.id);
-    if (fullManifest) {
-      setPrintManifest(fullManifest);
-    }
     setActionLoading(null);
+    if (fullManifest) {
+      openManifestPrintWindow(fullManifest);
+    }
   };
 
   // Filter manifests
@@ -376,13 +375,6 @@ export const ShippingManifestManager: React.FC = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Print View */}
-      {printManifest && (
-        <ManifestPrintView
-          manifest={printManifest}
-          onClose={() => setPrintManifest(null)}
-        />
-      )}
     </div>
   );
 };

@@ -6,19 +6,24 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Package, Truck } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
+import { Check, ChevronDown, Plus, Trash2, Package, Truck, Store } from 'lucide-react';
 import { useWorkshops } from '@/hooks/useWorkshops';
 import { useMaterials } from '@/hooks/useMaterials';
 import { useMaterialDeliveries } from '@/hooks/useMaterialDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
+import { extractRollNumberFromNotes } from '@/lib/materialRollNumber';
 import SearchableMaterialSelector from './SearchableMaterialSelector';
 
 interface MaterialDeliveryItem {
   materialId: string;
   quantity: number;
   unit: string;
+  rollNumber?: string;
   notes?: string;
 }
 
@@ -39,9 +44,11 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
     isWorkshopUser ? workshopFilter || '' : prefilledData?.workshopId || ''
   );
   const [deliveryItems, setDeliveryItems] = useState<MaterialDeliveryItem[]>(
-    prefilledData?.materials || [{ materialId: '', quantity: 0, unit: '', notes: '' }]
+    prefilledData?.materials || [{ materialId: '', quantity: 0, unit: '', rollNumber: '', notes: '' }]
   );
   const [deliveryNotes, setDeliveryNotes] = useState('');
+  const [workshopPopoverOpen, setWorkshopPopoverOpen] = useState(false);
+  const [workshopSearchTerm, setWorkshopSearchTerm] = useState('');
 
   const { workshops, loading: workshopsLoading } = useWorkshops();
   const { materials, loading: materialsLoading } = useMaterials();
@@ -54,7 +61,7 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
   };
 
   const addDeliveryItem = () => {
-    setDeliveryItems([...deliveryItems, { materialId: '', quantity: 0, unit: '', notes: '' }]);
+    setDeliveryItems([...deliveryItems, { materialId: '', quantity: 0, unit: '', rollNumber: '', notes: '' }]);
   };
 
   const removeDeliveryItem = (index: number) => {
@@ -66,6 +73,10 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
   const updateDeliveryItem = (index: number, field: keyof MaterialDeliveryItem, value: string | number) => {
     const updated = [...deliveryItems];
     updated[index] = { ...updated[index], [field]: value };
+
+    if (field === 'notes' && typeof value === 'string' && !updated[index].rollNumber) {
+      updated[index].rollNumber = extractRollNumberFromNotes(value) || '';
+    }
     
     // Auto-update unit when material is selected
     if (field === 'materialId') {
@@ -102,6 +113,7 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
           materialId: item.materialId,
           quantity: Number(item.quantity),
           unit: item.unit,
+          rollNumber: item.rollNumber?.trim() || undefined,
           notes: item.notes || undefined
         })),
         deliveredBy: selectedWorkshop, // Using workshop as deliveredBy for now
@@ -147,24 +159,83 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
           {/* Selección de Taller */}
           <Card className="p-6">
             <h3 className="text-lg font-semibold mb-4 text-black">Taller Destino</h3>
-            <Select 
-              value={selectedWorkshop} 
-              onValueChange={setSelectedWorkshop}
-              disabled={isWorkshopUser} // Deshabilitar para usuarios de taller
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={isWorkshopUser ? "Tu taller" : "Seleccionar taller..."} />
-              </SelectTrigger>
-              <SelectContent>
-                {workshops
-                  .filter(workshop => !isWorkshopUser || workshop.id === workshopFilter)
-                  .map((workshop) => (
-                    <SelectItem key={workshop.id} value={workshop.id}>
-                      {workshop.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+            {(() => {
+              const availableWorkshops = workshops.filter(
+                (workshop) => !isWorkshopUser || workshop.id === workshopFilter
+              );
+              const selectedWorkshopObj = availableWorkshops.find((w) => w.id === selectedWorkshop);
+              const filteredWorkshops = availableWorkshops.filter((w) =>
+                w.name.toLowerCase().includes(workshopSearchTerm.toLowerCase())
+              );
+
+              return (
+                <Popover open={workshopPopoverOpen} onOpenChange={setWorkshopPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={workshopPopoverOpen}
+                      className="w-full justify-between h-auto min-h-[2.5rem] p-3"
+                      disabled={isWorkshopUser}
+                    >
+                      <div className="flex items-center flex-1 min-w-0">
+                        <Store className="mr-2 h-4 w-4 shrink-0" />
+                        {selectedWorkshopObj ? (
+                          <span className="font-medium truncate">{selectedWorkshopObj.name}</span>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {isWorkshopUser ? 'Tu taller' : 'Seleccionar taller...'}
+                          </span>
+                        )}
+                      </div>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-full p-0 z-50"
+                    side="bottom"
+                    align="start"
+                    style={{ width: 'var(--radix-popover-trigger-width)' }}
+                  >
+                    <Command className="w-full">
+                      <CommandInput
+                        placeholder="Buscar taller..."
+                        value={workshopSearchTerm}
+                        onValueChange={setWorkshopSearchTerm}
+                        className="h-12"
+                      />
+                      <ScrollArea className="h-[300px]">
+                        <CommandList>
+                          <CommandEmpty>No se encontraron talleres.</CommandEmpty>
+                          <CommandGroup>
+                            {filteredWorkshops.map((workshop) => (
+                              <CommandItem
+                                key={workshop.id}
+                                value={workshop.name}
+                                onSelect={() => {
+                                  setSelectedWorkshop(workshop.id);
+                                  setWorkshopPopoverOpen(false);
+                                  setWorkshopSearchTerm('');
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <Check
+                                  className={cn(
+                                    'mr-2 h-4 w-4 shrink-0',
+                                    selectedWorkshop === workshop.id ? 'opacity-100' : 'opacity-0'
+                                  )}
+                                />
+                                <span className="font-medium truncate">{workshop.name}</span>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </ScrollArea>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              );
+            })()}
           </Card>
 
           {/* Materiales a Entregar */}
@@ -202,7 +273,7 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div>
                         <Label className="text-sm font-medium text-black mb-2">
                           Material *
@@ -238,6 +309,17 @@ const MaterialDeliveryForm = ({ onClose, onDeliveryCreated, prefilledData }: Mat
                           readOnly
                           className="bg-gray-50"
                           placeholder="Selecciona un material"
+                        />
+                      </div>
+
+                      <div>
+                        <Label className="text-sm font-medium text-black mb-2">
+                          # de Rollo
+                        </Label>
+                        <Input
+                          value={item.rollNumber || ''}
+                          onChange={(e) => updateDeliveryItem(index, 'rollNumber', e.target.value)}
+                          placeholder="Ej: 12"
                         />
                       </div>
                     </div>

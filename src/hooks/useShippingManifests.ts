@@ -43,9 +43,18 @@ export interface ManifestWithItems extends ShippingManifest {
   items: ManifestItem[];
 }
 
+export interface ShipmentInput {
+  id: string;             // may be 'envia_xxx' or 'manual_xxx' for portal-only guides
+  tracking_number: string;
+  shopify_order_id: number | null;
+  order_number: string | null;
+  recipient_name: string | null;
+  destination_city: string | null;
+}
+
 interface CreateManifestParams {
   carrier: string;
-  labelIds: string[];
+  shipments: ShipmentInput[];
   notes?: string;
 }
 
@@ -147,7 +156,10 @@ export const useShippingManifests = () => {
   }, []);
 
   // Create a new manifest
-  const createManifest = useCallback(async ({ carrier, labelIds, notes }: CreateManifestParams) => {
+  // Accepts full shipment objects (including portal-only guides with synthetic IDs).
+  // For guides not in shipping_labels (envia_xxx / manual_xxx IDs), stub records are
+  // inserted first so that the manifest_items FK constraint can be satisfied.
+  const createManifest = useCallback(async ({ carrier, shipments, notes }: CreateManifestParams) => {
     if (!currentOrganization?.id || !user?.id) {
       toast.error('Sesión no válida');
       return null;
@@ -157,7 +169,80 @@ export const useShippingManifests = () => {
     setError(null);
 
     try {
-      // Generate manifest number
+      // ── Step 1: Resolve real shipping_labels UUIDs for every shipment ────────
+      const isSynthetic = (id: string) =>
+        id.startsWith('envia_') || id.startsWith('manual_');
+
+      const externalShipments = shipments.filter(s => isSynthetic(s.id));
+      const dbShipments       = shipments.filter(s => !isSynthetic(s.id));
+
+      // Mapping tracking_number → real UUID (populated below)
+      const trackingToUUID = new Map<string, string>();
+
+      // DB shipments already carry real UUIDs
+      dbShipments.forEach(s => trackingToUUID.set(s.tracking_number, s.id));
+
+      if (externalShipments.length > 0) {
+        const trackingNumbers = externalShipments.map(s => s.tracking_number);
+
+        // Look up any existing labels by tracking number (may have been created earlier)
+        const { data: existingLabels } = await supabase
+          .from('shipping_labels')
+          .select('id, tracking_number')
+          .eq('organization_id', currentOrganization.id)
+          .in('tracking_number', trackingNumbers);
+
+        const foundByTracking = new Map<string, string>(
+          (existingLabels || []).map(l => [l.tracking_number, l.id])
+        );
+
+        // For shipments with no existing label, create lightweight stub records
+        const toCreate = externalShipments.filter(s => !foundByTracking.has(s.tracking_number));
+
+        if (toCreate.length > 0) {
+          const stubs = toCreate.map(s => {
+            // shopify_order_id is NOT NULL and has a unique constraint per (org, order_id).
+            // For portal-only guides (no real Shopify order) we derive a safe unique value
+            // from the tracking number:
+            //   • Numeric tracking (e.g. Coordinadora 57214551667) → parse as int.
+            //     These are in the 10-billion range, far from Shopify IDs (~75000).
+            //   • Non-numeric → use real shopify_order_id if available, else 0.
+            //     (Multiple non-numeric guides from same org with shopify_order_id=0
+            //      would still conflict; if that ever occurs, a migration to allow NULL
+            //      is the correct long-term fix.)
+            const numericTracking = /^\d+$/.test(s.tracking_number)
+              ? parseInt(s.tracking_number, 10)
+              : null;
+            const shopifyOrderId = s.shopify_order_id ?? numericTracking ?? 0;
+
+            return {
+              organization_id: currentOrganization.id,
+              shopify_order_id: shopifyOrderId,
+              order_number: s.order_number || s.tracking_number,
+              carrier,
+              tracking_number: s.tracking_number,
+              status: 'created',
+            };
+          });
+
+          const { data: createdStubs, error: stubError } = await supabase
+            .from('shipping_labels')
+            .insert(stubs)
+            .select('id, tracking_number');
+
+          if (stubError) throw stubError;
+
+          (createdStubs || []).forEach(l => foundByTracking.set(l.tracking_number, l.id));
+        }
+
+        // Register all external shipments in the main map
+        externalShipments.forEach(s => {
+          const uuid = foundByTracking.get(s.tracking_number);
+          if (uuid) trackingToUUID.set(s.tracking_number, uuid);
+        });
+      }
+
+      // ── Step 2: Generate manifest number ─────────────────────────────────────
       const { data: manifestNumber, error: numError } = await supabase
         .rpc('generate_manifest_number', {
           org_id: currentOrganization.id,
@@ -166,7 +251,7 @@ export const useShippingManifests = () => {
 
       if (numError) throw numError;
 
-      // Create manifest
+      // ── Step 3: Create the manifest record ───────────────────────────────────
       const { data: manifest, error: createError } = await supabase
         .from('shipping_manifests')
         .insert({
@@ -175,30 +260,32 @@ export const useShippingManifests = () => {
           carrier,
           notes,
           created_by: user.id,
-          total_packages: labelIds.length
+          total_packages: shipments.length
         })
         .select()
         .single();
 
       if (createError) throw createError;
 
-      // Fetch label details and create items
-      const { data: labels, error: labelsError } = await supabase
-        .from('shipping_labels')
-        .select('id, shopify_order_id, order_number, tracking_number, recipient_name, destination_city')
-        .in('id', labelIds);
-
-      if (labelsError) throw labelsError;
-
-      const itemsToInsert = (labels || []).map(label => ({
-        manifest_id: manifest.id,
-        shipping_label_id: label.id,
-        shopify_order_id: label.shopify_order_id,
-        order_number: label.order_number,
-        tracking_number: label.tracking_number || '',
-        recipient_name: label.recipient_name,
-        destination_city: label.destination_city
-      }));
+      // ── Step 4: Create manifest items ─────────────────────────────────────────
+      const itemsToInsert = shipments
+        .map(s => {
+          const labelId = trackingToUUID.get(s.tracking_number);
+          if (!labelId) {
+            console.warn(`⚠️ No UUID resolved for tracking ${s.tracking_number} — skipping`);
+            return null;
+          }
+          return {
+            manifest_id: manifest.id,
+            shipping_label_id: labelId,
+            shopify_order_id: s.shopify_order_id ?? 0,
+            order_number: s.order_number || s.tracking_number,
+            tracking_number: s.tracking_number,
+            recipient_name: s.recipient_name,
+            destination_city: s.destination_city,
+          };
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null);
 
       if (itemsToInsert.length > 0) {
         const { error: itemsError } = await supabase
@@ -208,7 +295,7 @@ export const useShippingManifests = () => {
         if (itemsError) throw itemsError;
       }
 
-      toast.success(`Manifiesto ${manifestNumber} creado con ${labelIds.length} guías`);
+      toast.success(`Manifiesto ${manifestNumber} creado con ${itemsToInsert.length} guías`);
       await fetchManifests();
       return manifest;
     } catch (err: any) {
