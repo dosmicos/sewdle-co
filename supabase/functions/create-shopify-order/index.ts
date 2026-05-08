@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { buildShopifyOrderPayload } from "../_shared/shopify-order-payload.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,7 +43,11 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { orderData, organizationId } = body as { orderData: OrderData; organizationId: string };
+    const { orderData, organizationId, totalAmount } = body as {
+      orderData: OrderData;
+      organizationId: string;
+      totalAmount?: number;
+    };
 
     if (!orderData || !organizationId) {
       return new Response(
@@ -237,85 +242,12 @@ serve(async (req) => {
       }
     }
 
-    // Build tags based on payment method
-    const isContraEntrega = orderData.paymentMethod === 'contra_entrega';
-    const isLinkDePago = orderData.paymentMethod === 'link_de_pago';
-    const isAddi = orderData.paymentMethod === 'addi';
-    const isBankTransfer = ['bank_transfer', 'bancolombia', 'nequi', 'manual_transfer'].includes(String(orderData.paymentMethod || ''));
-    const orderTags = ['whatsapp', 'messaging'];
-    if (isContraEntrega) {
-      orderTags.push('Contraentrega');
-    }
-    if (isLinkDePago) {
-      orderTags.push('Link de pago', 'Bold');
-    }
-    if (isAddi) {
-      orderTags.push('Addi', 'Financiación');
-    }
-    if (isBankTransfer) {
-      orderTags.push('Transferencia', 'Pago recibido');
-    }
-
-    // Create the order
-    const orderPayload: any = {
-      order: {
-        line_items: validatedLineItems,
-        customer: customerId ? { id: customerId } : undefined,
-        email: orderData.email,
-        shipping_address: {
-          first_name: orderData.customerName.split(' ')[0],
-          last_name: orderData.customerName.split(' ').slice(1).join(' ') || '',
-          company: orderData.cedula || '',
-          address1: orderData.address,
-          city: orderData.city,
-          province: orderData.department,
-          country: 'CO',
-          phone: orderData.phone,
-        },
-        billing_address: {
-          first_name: orderData.customerName.split(' ')[0],
-          last_name: orderData.customerName.split(' ').slice(1).join(' ') || '',
-          company: orderData.cedula || '',
-          address1: orderData.address,
-          city: orderData.city,
-          province: orderData.department,
-          country: 'CO',
-          phone: orderData.phone,
-        },
-        shipping_lines: orderData.shippingCost && orderData.shippingCost > 0 ? [{
-          title: "Envío",
-          price: String(orderData.shippingCost),
-          code: "SHIPPING",
-        }] : [],
-        note: orderData.notes || 'Pedido creado desde WhatsApp',
-        tags: orderTags.join(', '),
-        financial_status: isLinkDePago || isAddi || isBankTransfer ? 'paid' : 'pending',
-      }
-    };
-
-    // For contra entrega, set the payment gateway to Cash on Delivery (COD)
-    if (isContraEntrega) {
-      orderPayload.order.gateway = 'Cash on Delivery (COD)';
-      orderPayload.order.note = (orderData.notes ? orderData.notes + ' | ' : '') + 'Pedido creado desde WhatsApp - Pago contra entrega';
-    }
-
-    // For link de pago (Bold), mark as paid
-    if (isLinkDePago) {
-      orderPayload.order.gateway = 'Bold';
-      orderPayload.order.note = (orderData.notes ? orderData.notes + ' | ' : '') + 'Pedido creado desde WhatsApp - Pagado via Bold';
-    }
-
-    // For Addi, mark as paid only after Addi callback approval
-    if (isAddi) {
-      orderPayload.order.gateway = 'Addi Payment';
-      orderPayload.order.note = (orderData.notes ? orderData.notes + ' | ' : '') + 'Pedido creado desde WhatsApp - Aprobado via Addi';
-    }
-
-    // For bank transfers / manual paid orders, mark as paid
-    if (isBankTransfer) {
-      orderPayload.order.gateway = 'Bancolombia / Transferencia';
-      orderPayload.order.note = (orderData.notes ? orderData.notes + ' | ' : '') + 'Pedido creado desde WhatsApp - Pago recibido por transferencia';
-    }
+    const orderPayload = buildShopifyOrderPayload({
+      orderData,
+      validatedLineItems,
+      customerId,
+      totalAmount,
+    });
 
     const orderResponse = await fetch(`https://${shopifyDomain}/admin/api/2024-01/orders.json`, {
       method: 'POST',

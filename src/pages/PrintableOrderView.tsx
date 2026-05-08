@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 import dosmicosLogo from '@/assets/dosmicos-logo.png';
+import { detectEffectivePaymentMethod } from '@/lib/paymentMethod';
 
 const PrintableOrderView = () => {
   const { orderId } = useParams<{ orderId: string }>();
@@ -65,20 +66,13 @@ const PrintableOrderView = () => {
 
   const shippingAddress = order.raw_data?.shipping_address;
   const paymentGateways = order.raw_data?.payment_gateway_names || [];
+  const paymentMethod = detectEffectivePaymentMethod({
+    paymentGatewayNames: paymentGateways,
+    gateway: order.raw_data?.gateway,
+    tags: order.tags,
+    financialStatus: order.financial_status,
+  });
 
-  const formatPaymentMethod = (gateway: string): string => {
-    if (gateway.toLowerCase().includes('cash on delivery')) {
-      return 'Contraentrega';
-    }
-    return gateway;
-  };
-
-  // El ÚLTIMO método de pago en el array es el efectivo (orden cronológico de Shopify)
-  const paymentMethod = paymentGateways.length > 0 
-    ? formatPaymentMethod(paymentGateways[paymentGateways.length - 1]) 
-    : null;
-
-  // isCOD is true if the LAST payment method is COD
   const isCOD = paymentMethod === 'Contraentrega';
 
   return (

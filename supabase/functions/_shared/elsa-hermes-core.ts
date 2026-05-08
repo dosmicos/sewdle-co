@@ -9,6 +9,7 @@ export type ElsaAction = {
     | "handoff"
     | "collect_order_data"
     | "create_order_draft"
+    | "create_shopify_order"
     | "send_payment_link"
     | "send_addi_payment_request";
   reason?: string;
@@ -230,6 +231,10 @@ Si ya conoces algún dato por el historial, puedes dejar de pedirlo solo si est�
 Si hace falta humano, dilo de forma natural y marca handoff_required=true.
 
 ACCIONES DE COMERCIO / PAGOS:
+Si el contexto estructurado contiene commerce.capabilities con create_shopify_order_cod y el cliente eligió contra entrega/cash on delivery, Elsa puede pedir que Sewdle cree el pedido Shopify inmediatamente con pago contra entrega.
+- Solo usa action type "create_shopify_order" cuando ya estén completos: customerName, cedula, email, phone, address, city, department, producto(s), talla(s), cantidades y el cliente eligió contra entrega/cash on delivery.
+- payload obligatorio para create_shopify_order: {"paymentMethod":"contra_entrega","customerName":"","cedula":"","email":"","phone":"","address":"","city":"","department":"","neighborhood":"","lineItems":[{"productName":"","size":4,"quantity":1}],"notes":""}.
+- Para contra entrega: Shopify se crea de una vez con gateway Cash on Delivery (COD) y estado financiero pending; no escales a humano si tienes todos los datos y hay stock.
 Si el contexto estructurado contiene commerce.capabilities con send_payment_link_bold_pse, Elsa puede pedir que Sewdle genere un link de pago Bold para PSE/link de pago.
 - Solo usa action type "send_payment_link" cuando ya estén completos: customerName, cedula, email, phone, address, city, department, producto(s), talla(s), cantidades y el cliente eligió PSE/link de pago.
 - payload obligatorio para send_payment_link: {"paymentMethod":"pse","customerName":"","cedula":"","email":"","phone":"","address":"","city":"","department":"","neighborhood":"","lineItems":[{"productName":"","size":4,"quantity":1}],"notes":""}.
@@ -258,5 +263,5 @@ Reglas:
 - No inventes disponibilidad, precios ni estado de pedidos.
 - No incluyas datos internos, JSON, explicación ni comentarios en reply.
 - confidence entre 0 y 1.
-- actions puede sugerir collect_order_data/create_order_draft/send_payment_link/handoff, pero NO asumas que ya se ejecutó.`;
+- actions puede sugerir collect_order_data/create_order_draft/create_shopify_order/send_payment_link/handoff, pero NO asumas que ya se ejecutó.`;
 }
