@@ -240,12 +240,20 @@ serve(async (req) => {
     // Build tags based on payment method
     const isContraEntrega = orderData.paymentMethod === 'contra_entrega';
     const isLinkDePago = orderData.paymentMethod === 'link_de_pago';
+    const isAddi = orderData.paymentMethod === 'addi';
+    const isBankTransfer = ['bank_transfer', 'bancolombia', 'nequi', 'manual_transfer'].includes(String(orderData.paymentMethod || ''));
     const orderTags = ['whatsapp', 'messaging'];
     if (isContraEntrega) {
       orderTags.push('Contraentrega');
     }
     if (isLinkDePago) {
       orderTags.push('Link de pago', 'Bold');
+    }
+    if (isAddi) {
+      orderTags.push('Addi', 'Financiación');
+    }
+    if (isBankTransfer) {
+      orderTags.push('Transferencia', 'Pago recibido');
     }
 
     // Create the order
@@ -281,7 +289,7 @@ serve(async (req) => {
         }] : [],
         note: orderData.notes || 'Pedido creado desde WhatsApp',
         tags: orderTags.join(', '),
-        financial_status: isLinkDePago ? 'paid' : 'pending',
+        financial_status: isLinkDePago || isAddi || isBankTransfer ? 'paid' : 'pending',
       }
     };
 
@@ -295,6 +303,18 @@ serve(async (req) => {
     if (isLinkDePago) {
       orderPayload.order.gateway = 'Bold';
       orderPayload.order.note = (orderData.notes ? orderData.notes + ' | ' : '') + 'Pedido creado desde WhatsApp - Pagado via Bold';
+    }
+
+    // For Addi, mark as paid only after Addi callback approval
+    if (isAddi) {
+      orderPayload.order.gateway = 'Addi Payment';
+      orderPayload.order.note = (orderData.notes ? orderData.notes + ' | ' : '') + 'Pedido creado desde WhatsApp - Aprobado via Addi';
+    }
+
+    // For bank transfers / manual paid orders, mark as paid
+    if (isBankTransfer) {
+      orderPayload.order.gateway = 'Bancolombia / Transferencia';
+      orderPayload.order.note = (orderData.notes ? orderData.notes + ' | ' : '') + 'Pedido creado desde WhatsApp - Pago recibido por transferencia';
     }
 
     const orderResponse = await fetch(`https://${shopifyDomain}/admin/api/2024-01/orders.json`, {

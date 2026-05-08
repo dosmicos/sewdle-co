@@ -3,9 +3,14 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 Deno.test("WhatsApp AI routing honors Elsa supervised runtime instead of hardcoded OpenAI send", async () => {
-  const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
   const start = source.indexOf("// Generate and send AI response if enabled");
-  const end = source.indexOf("// NOTE: Order creation is handled by messaging-ai-openai", start);
+  const end = source.indexOf(
+    "// NOTE: Order creation is handled by messaging-ai-openai",
+    start,
+  );
 
   assert(start !== -1, "WhatsApp AI response block was not found");
   assert(end !== -1, "WhatsApp AI response block end marker was not found");
@@ -31,5 +36,42 @@ Deno.test("WhatsApp AI routing honors Elsa supervised runtime instead of hardcod
   assert(
     block.includes("shouldPersistSuggestion"),
     "WhatsApp AI block must branch on supervised suggestion persistence before sending",
+  );
+});
+
+Deno.test("WhatsApp audio messages are transcribed before invoking Elsa", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const start = source.indexOf(
+    "// If message includes media_id, download and cache it now",
+  );
+  const end = source.indexOf(
+    "// Resolve reply_to_message_id from WAMID to internal UUID",
+    start,
+  );
+
+  assert(start !== -1, "media download block was not found");
+  assert(end !== -1, "media download block end marker was not found");
+
+  const block = source.slice(start, end);
+
+  assert(
+    source.includes("../_shared/audio-transcription.ts"),
+    "whatsapp-webhook must import the shared audio transcription helper",
+  );
+  assert(
+    block.includes("messageType === 'audio'") &&
+      block.includes("transcribeAudioFromUrl"),
+    "audio media must be sent to transcription after being downloaded",
+  );
+  assert(
+    block.includes("buildAudioTranscriptionContent") &&
+      block.includes("content ="),
+    "the inbound message content must be replaced with the transcript before Elsa sees it",
+  );
+  assert(
+    source.includes("audio_transcription"),
+    "the saved messaging message must include transcription metadata for review/debugging",
   );
 });

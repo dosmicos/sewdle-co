@@ -6,6 +6,10 @@ import {
   resolveAiRuntime,
   shouldDisableAiForElsaEscalation,
 } from "../_shared/elsa-supervision.ts";
+import {
+  buildAudioTranscriptionContent,
+  transcribeAudioFromUrl,
+} from "../_shared/audio-transcription.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1614,6 +1618,7 @@ serve(async (req) => {
               let mediaMimeType: string | null = null;
               let mediaId: string | null = null;
               let mediaError: string | null = null;
+              let audioTranscriptionMetadata: Record<string, unknown> | null = null;
               
               if (message.type === 'text') {
                 content = message.text?.body || '';
@@ -1763,6 +1768,26 @@ serve(async (req) => {
                 mediaMimeType = res.mimeType;
                 mediaError = res.error || null;
                 console.log(`📦 Inbound media result: url=${mediaUrl ? 'ok' : 'null'} error=${mediaError || 'none'}`);
+
+                if (messageType === 'audio' && mediaUrl) {
+                  console.log('🎙️ Transcribing inbound WhatsApp audio before invoking Elsa');
+                  const transcription = await transcribeAudioFromUrl({
+                    mediaUrl,
+                    mimeType: mediaMimeType,
+                  });
+                  audioTranscriptionMetadata = transcription.metadata;
+
+                  if (transcription.text) {
+                    content = buildAudioTranscriptionContent(transcription.text);
+                    console.log(`🎙️ Audio transcription ok: ${transcription.text.substring(0, 80)}...`);
+                    await supabase
+                      .from('messaging_conversations')
+                      .update({ last_message_preview: content.substring(0, 100) })
+                      .eq('id', conversation.id);
+                  } else {
+                    console.warn(`⚠️ Audio transcription failed/skipped: ${audioTranscriptionMetadata?.error || audioTranscriptionMetadata?.status || 'unknown'}`);
+                  }
+                }
               }
 
               // Resolve reply_to_message_id from WAMID to internal UUID
@@ -1817,6 +1842,7 @@ serve(async (req) => {
                     original_message: message,
                     original_media_id: mediaId,
                     media_download_error: mediaError,
+                    audio_transcription: audioTranscriptionMetadata,
                   }
                 });
 

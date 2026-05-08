@@ -31,6 +31,17 @@ export type ResolvedLineItem = {
   quantity: number;
 };
 
+export type PendingPaymentOrderData = {
+  cedula?: string;
+  address: string;
+  city: string;
+  department: string;
+  neighborhood?: string;
+  lineItems: ResolvedLineItem[];
+  notes?: string;
+  shippingCost: number;
+};
+
 export type BoldPaymentLinkRequest = {
   amount: number;
   description: string;
@@ -39,16 +50,19 @@ export type BoldPaymentLinkRequest = {
   customerPhone: string;
   organizationId: string;
   conversationId?: string;
-  orderData: {
-    cedula?: string;
-    address: string;
-    city: string;
-    department: string;
-    neighborhood?: string;
-    lineItems: ResolvedLineItem[];
-    notes?: string;
-    shippingCost: number;
-  };
+  orderData: PendingPaymentOrderData;
+};
+
+export type AddiPaymentRequest = {
+  amount: number;
+  description: string;
+  customerEmail: string;
+  customerName: string;
+  customerPhone: string;
+  customerCedula: string;
+  organizationId: string;
+  conversationId?: string;
+  orderData: PendingPaymentOrderData;
 };
 
 export function normalizeCommerceText(value: unknown): string {
@@ -323,12 +337,18 @@ export function calculateOrderTotals(params: {
   };
 }
 
-export function buildBoldPaymentLinkRequest(params: {
+function buildPendingPaymentRequestBase(params: {
   payload: Record<string, any>;
   catalog: CommerceProduct[];
   organizationId: string;
   conversationId?: string;
-}): { ok: true; request: BoldPaymentLinkRequest } | {
+  requireCedula?: boolean;
+}): {
+  ok: true;
+  base: Omit<BoldPaymentLinkRequest, "orderData"> & {
+    orderData: PendingPaymentOrderData;
+  };
+} | {
   ok: false;
   errors: string[];
 } {
@@ -340,6 +360,7 @@ export function buildBoldPaymentLinkRequest(params: {
     "address",
     "city",
     "department",
+    ...(params.requireCedula ? ["cedula"] : []),
   ];
   const errors = required.filter((field) =>
     !String(payload[field] || "").trim()
@@ -372,7 +393,7 @@ export function buildBoldPaymentLinkRequest(params: {
 
   return {
     ok: true,
-    request: {
+    base: {
       amount: Math.round(totals.totalAmount),
       description: `Pedido Dosmicos - ${productDescription}`.substring(0, 100),
       customerEmail: String(payload.email).trim().toLowerCase(),
@@ -392,6 +413,43 @@ export function buildBoldPaymentLinkRequest(params: {
         notes: payload.notes ? String(payload.notes).trim() : undefined,
         shippingCost: totals.shippingCost,
       },
+    },
+  };
+}
+
+export function buildBoldPaymentLinkRequest(params: {
+  payload: Record<string, any>;
+  catalog: CommerceProduct[];
+  organizationId: string;
+  conversationId?: string;
+}): { ok: true; request: BoldPaymentLinkRequest } | {
+  ok: false;
+  errors: string[];
+} {
+  const built = buildPendingPaymentRequestBase(params);
+  if (built.ok === false) return built;
+  return { ok: true, request: built.base };
+}
+
+export function buildAddiPaymentRequest(params: {
+  payload: Record<string, any>;
+  catalog: CommerceProduct[];
+  organizationId: string;
+  conversationId?: string;
+}): { ok: true; request: AddiPaymentRequest } | {
+  ok: false;
+  errors: string[];
+} {
+  const built = buildPendingPaymentRequestBase({
+    ...params,
+    requireCedula: true,
+  });
+  if (built.ok === false) return built;
+  return {
+    ok: true,
+    request: {
+      ...built.base,
+      customerCedula: String(params.payload?.cedula || "").trim(),
     },
   };
 }

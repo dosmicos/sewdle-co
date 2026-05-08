@@ -16,6 +16,7 @@ function assertObjectMatch(
 }
 
 import {
+  buildAddiPaymentRequest,
   buildBoldPaymentLinkRequest,
   calculateOrderTotals,
   resolveCommerceLineItems,
@@ -157,4 +158,58 @@ Deno.test("buildBoldPaymentLinkRequest reports missing required order fields", (
   assertEquals(built.errors.includes("phone"), true);
   assertEquals(built.errors.includes("address"), true);
   assertEquals(built.errors.includes("city"), true);
+});
+
+Deno.test("buildAddiPaymentRequest requires cedula and builds Addi request from catalog", () => {
+  const built = buildAddiPaymentRequest({
+    payload: {
+      paymentMethod: "addi",
+      customerName: "Cliente Dosmicos",
+      cedula: "123456789",
+      email: "cliente@example.com",
+      phone: "+57 300 111 2233",
+      address: "Calle 1 #2-3",
+      city: "Bogotá",
+      department: "Bogotá D.C.",
+      neighborhood: "Chapinero",
+      lineItems: [{ productName: "pollito", size: 4, quantity: 2 }],
+    },
+    catalog,
+    organizationId: "org-1",
+    conversationId: "conv-1",
+  });
+
+  assertEquals(built.ok, true);
+  if (built.ok === false) throw new Error("expected ok");
+  assertObjectMatch(built.request, {
+    amount: 189800,
+    customerEmail: "cliente@example.com",
+    customerName: "Cliente Dosmicos",
+    customerPhone: "573001112233",
+    customerCedula: "123456789",
+    organizationId: "org-1",
+    conversationId: "conv-1",
+  });
+  assertEquals(built.request.orderData.lineItems[0].sku, "POLLITO-4");
+  assertEquals(built.request.orderData.shippingCost, 0);
+});
+
+Deno.test("buildAddiPaymentRequest reports missing cedula for Addi", () => {
+  const built = buildAddiPaymentRequest({
+    payload: {
+      customerName: "Cliente Dosmicos",
+      email: "cliente@example.com",
+      phone: "573001112233",
+      address: "Calle 1 #2-3",
+      city: "Bogotá",
+      department: "Bogotá D.C.",
+      lineItems: [{ productName: "pollito", size: 4 }],
+    },
+    catalog,
+    organizationId: "org-1",
+  });
+
+  assertEquals(built.ok, false);
+  if (built.ok === true) throw new Error("expected validation failure");
+  assertEquals(built.errors.includes("cedula"), true);
 });
