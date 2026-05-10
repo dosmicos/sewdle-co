@@ -142,6 +142,14 @@ serve(async (req) => {
 
           if (TERMINAL_STATUSES.has(status)) return false;
 
+          // Exclude incoming/collection guides where the destination is our own
+          // office. These are guides created in Envia to pick up merchandise from
+          // suppliers — the consignee is Dosmicos SAS, not a customer.
+          // Detected via consignee name OR NIT (901412407 = Dosmicos SAS).
+          const consigneeName = (s.consignee_name || s.consignee_company_name || '').toLowerCase();
+          const consigneeNit = String(s.consignee_identification_number || '');
+          if (consigneeName.includes('dosmicos') || consigneeNit === '901412407') return false;
+
           // For guides from PREVIOUS days, also exclude statuses that mean the
           // carrier physically collected the package. Today's guides always show
           // (carrier may scan same day). Unknown/empty status → show (inclusive).
