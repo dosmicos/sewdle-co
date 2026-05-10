@@ -40,6 +40,19 @@ interface ProphitMetricsResponse {
       gateway: string;
       handling: string;
     };
+    ad_spend_freshness?: {
+      meta?: {
+        isFresh: boolean;
+        warnings: string[];
+        lastSyncAt: string | null;
+        lastSyncStatus: string | null;
+        lastSyncError: string | null;
+        latestMetricDate: string | null;
+        latestMetricSyncedAt: string | null;
+        needsReconnect: boolean;
+        isActive: boolean;
+      };
+    };
   };
 }
 

@@ -9,8 +9,12 @@ export interface MetaAdAccount {
   accountId: string;
   accountName: string;
   isActive: boolean;
+  needsReconnect: boolean;
   tokenExpiresAt: string | null;
   updatedAt: string;
+  lastSyncAt: string | null;
+  lastSyncStatus: string | null;
+  lastSyncError: string | null;
 }
 
 export function useMetaAdsConnection() {
@@ -28,7 +32,8 @@ export function useMetaAdsConnection() {
         .select('*')
         .eq('organization_id', orgId!)
         .eq('platform', 'meta')
-        .eq('is_active', true)
+        .order('updated_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (error || !data) return null;
@@ -38,18 +43,23 @@ export function useMetaAdsConnection() {
         accountId: data.account_id || '',
         accountName: data.account_name || '',
         isActive: data.is_active ?? false,
+        needsReconnect: data.needs_reconnect ?? false,
         tokenExpiresAt: data.token_expires_at,
         updatedAt: data.updated_at || '',
+        lastSyncAt: data.last_sync_at ?? null,
+        lastSyncStatus: data.last_sync_status ?? null,
+        lastSyncError: data.last_sync_error ?? null,
       };
     },
     enabled: !!orgId,
     staleTime: 1000 * 60 * 5,
   });
 
-  const isConnected = !!account;
   const isTokenExpired = account?.tokenExpiresAt
     ? new Date(account.tokenExpiresAt) < new Date()
     : false;
+  const needsReconnect = !!account && (account.needsReconnect || isTokenExpired);
+  const isConnected = !!account && account.isActive && !needsReconnect;
 
   // Disconnect Meta Ads
   const disconnect = useCallback(async () => {
@@ -58,7 +68,12 @@ export function useMetaAdsConnection() {
     try {
       const { error } = await supabase
         .from('ad_accounts')
-        .update({ is_active: false })
+        .update({
+          is_active: false,
+          needs_reconnect: false,
+          last_sync_status: 'disconnected',
+          last_sync_error: null,
+        })
         .eq('id', account.id);
 
       if (error) throw error;
@@ -102,8 +117,10 @@ export function useMetaAdsConnection() {
           toast.success(
             `Sincronización completada: ${data.syncedDays} días sincronizados`
           );
-          // Invalidate ad metrics cache so dashboard refreshes
+          // Invalidate ad metrics/prophit cache so dashboard refreshes
           queryClient.invalidateQueries({ queryKey: ['ad-metrics', 'meta'] });
+          queryClient.invalidateQueries({ queryKey: ['prophit-metrics'] });
+          queryClient.invalidateQueries({ queryKey: ['meta-ads-connection'] });
           return true;
         } else {
           toast.error(data.error || 'Error al sincronizar métricas');
@@ -129,6 +146,7 @@ export function useMetaAdsConnection() {
   return {
     isConnected,
     isTokenExpired,
+    needsReconnect,
     account,
     isCheckingConnection,
     syncing,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Loader2, Settings, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
+import { RefreshCw, Loader2, Settings, ExternalLink, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
 import FinanceDatePicker from '@/components/finance-dashboard/FinanceDatePicker';
@@ -144,6 +144,8 @@ const FinanceDashboardPage: React.FC = () => {
   // CM + all derived metrics now come from the server-side Edge Function
   // (single source of truth shared with the Growth Manager).
   const cmData = prophitMetrics.current;
+  const metaFreshness = prophitMetrics.metadata?.ad_spend_freshness?.meta;
+  const metaFreshnessWarnings = metaFreshness?.warnings ?? [];
 
   const customerHealth = useCustomerHealth(
     storeMetrics.current.newCustomerRevenue,
@@ -296,11 +298,15 @@ const FinanceDashboardPage: React.FC = () => {
             ) : (
               <Button
                 size="sm"
-                className="bg-[#1877F2] hover:bg-[#166FE5] text-white"
+                className={metaConnection.needsReconnect
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                  : 'bg-[#1877F2] hover:bg-[#166FE5] text-white'}
                 onClick={() => setMetaModalOpen(true)}
               >
                 <MetaIcon />
-                <span className="ml-1.5">Conectar Meta</span>
+                <span className="ml-1.5">
+                  {metaConnection.needsReconnect ? 'Reconectar Meta' : 'Conectar Meta'}
+                </span>
               </Button>
             )}
             {googleConnection.isConnected ? (
@@ -391,6 +397,27 @@ const FinanceDashboardPage: React.FC = () => {
             </Button>
           </div>
         </div>
+
+        {metaFreshnessWarnings.length > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+              <div className="space-y-1">
+                <p className="font-medium">Meta spend necesita validación</p>
+                <ul className="list-disc space-y-0.5 pl-4">
+                  {metaFreshnessWarnings.slice(0, 3).map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+                {metaFreshness?.lastSyncAt && (
+                  <p className="text-xs text-amber-700">
+                    Último sync financiero: {new Date(metaFreshness.lastSyncAt).toLocaleString('es-CO')}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ========== SECTION 1: THE SCOREBOARD ========== */}
         <section className="space-y-4">
