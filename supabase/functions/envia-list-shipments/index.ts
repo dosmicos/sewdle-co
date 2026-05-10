@@ -117,53 +117,29 @@ serve(async (req) => {
         const all = data.data as any[];
 
         // Filter to last 7 days (API returns full month).
-        // created_at format: "2026-05-03 12:19:36" — extract date prefix for comparison.
-        //
-        // Rules (for manifest purposes):
-        //   • TODAY's guides  → include if non-terminal (carrier may have picked up same day)
-        //   • Previous days   → include ONLY if still 'created' (not yet picked up)
-        //   • Terminal states → always exclude (delivered, cancelled, returned)
-        const TERMINAL_STATUSES = new Set([
-          'delivered', 'entregado',
-          'cancelled', 'cancelado',
-          'returned', 'devuelto',
-        ]);
-
+        // Only include guides with status "created" — guides already picked up,
+        // in transit, delivered, or cancelled must not appear in the manifest dialog.
+        // Also exclude incoming collection guides (consignee = our own office).
         const recentShipments = all.filter((s: any) => {
+          // ── Date range ─────────────────────────────────────────────────────────
           const created = s.created_at || s.createdAt || s.date || '';
           // Normalize to YYYY-MM-DD prefix (works for both "2026-05-03 12:19:36" and ISO)
           const createdDate = created.slice(0, 10);
           if (createdDate < cutoffDate) return false;
 
-          // Envia API may use different field names for status across carriers.
-          // Check all known variants so we don't accidentally discard valid guides.
+          // ── Status: only "created" ─────────────────────────────────────────────
+          // Envia API may use different field names across carriers; check all variants.
           const rawStatus = s.status || s.status_id || s.status_label || s.statusLabel || '';
           const status = String(rawStatus).toLowerCase();
+          if (status !== 'created') return false;
 
-          if (TERMINAL_STATUSES.has(status)) return false;
-
-          // Exclude incoming/collection guides where the destination is our own
-          // office. These are guides created in Envia to pick up merchandise from
-          // suppliers — the consignee is Dosmicos SAS, not a customer.
+          // ── Exclude incoming/collection guides (destination = our own office) ──
+          // These guides are created in Envia to collect merchandise from suppliers;
+          // the consignee is Dosmicos SAS, not a customer.
           // Detected via consignee name OR NIT (901412407 = Dosmicos SAS).
           const consigneeName = (s.consignee_name || s.consignee_company_name || '').toLowerCase();
           const consigneeNit = String(s.consignee_identification_number || '');
           if (consigneeName.includes('dosmicos') || consigneeNit === '901412407') return false;
-
-          // For guides from PREVIOUS days, also exclude statuses that mean the
-          // carrier physically collected the package. Today's guides always show
-          // (carrier may scan same day). Unknown/empty status → show (inclusive).
-          if (createdDate < today) {
-            // Statuses that mean "carrier already has it" across Envia carriers
-            const COLLECTED_STATUSES = new Set([
-              'in_transit', 'intransit', 'in transit',
-              'dispatched', 'picked_up', 'pickedup', 'picked up',
-              'out_for_delivery', 'outfordelivery', 'out for delivery',
-              'with_carrier', 'collected', 'en_camino',
-              'en_transito', 'en transito',
-            ]);
-            if (status && COLLECTED_STATUSES.has(status)) return false;
-          }
 
           return true;
         });
@@ -195,11 +171,8 @@ serve(async (req) => {
         .from('shipping_labels')
         .select('id, shopify_order_id, order_number, tracking_number, carrier, recipient_name, destination_city, created_at, shipment_id, status')
         .eq('organization_id', orgId)
-        // Only exclude truly terminal statuses. "in_transit" stays visible because
-        // some carriers (e.g. Deprisa) mark labels in_transit immediately after
-        // creation — excluding them would hide all Deprisa guides from the dialog.
-        // The "already shipped" signal comes from the picked_up manifest filter below.
-        .not('status', 'in', '("delivered","cancelled","returned")')
+        // Only show guides with status 'created' — same rule as the Envia API path.
+        .eq('status', 'created')
         .not('tracking_number', 'is', null)
         .gte('created_at', `${cutoffDate}T00:00:00.000Z`)
         .lte('created_at', `${today}T23:59:59.999Z`)
