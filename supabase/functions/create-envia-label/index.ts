@@ -468,14 +468,14 @@ function extractDistrict(address: string, city: string): string {
   for (const pattern of patterns) {
     const match = address.match(pattern);
     if (match && match[1]) {
-      const district = match[1].trim().replace(/[,\n].*$/, '');
+      const district = match[1].trim().replace(/[,\\n].*$/, '');
       console.log(`📍 Extracted district "${district}" from address`);
       return district;
     }
   }
   
   // If no pattern matched, try to extract from address parts
-  const parts = address.split(/[,\-]/);
+  const parts = address.split(/[,\\-]/);
   if (parts.length >= 3) {
     // Usually the neighborhood is in the 2nd or 3rd part
     const possibleDistrict = parts[1]?.trim() || parts[2]?.trim();
@@ -697,7 +697,7 @@ function selectCarrierByRules(city: string, department: string, isCOD: boolean):
   // Check if it's a main city
   const isMainCity = MAIN_CITIES.some(mainCity => {
     const normalizedMainCity = normalizeText(mainCity);
-    return normalizedCity.includes(normalizedMainCity) || normalizedMainCity.includes(normalizedCity);
+    return normalizedCity.includes(normalizedMainCity) || normalizedMainCity.includes(normalizedMainCity);
   });
 
   // Rule 3: Main cities + PAID orders → Deprisa (Deprisa does NOT accept COD)
@@ -897,7 +897,7 @@ serve(async (req) => {
       number: "",
       city: DOSMICOS_ORIGIN.city,
       state: DOSMICOS_ORIGIN.state,
-      country: DOSMICOS_ORIGIN.country,
+      country: "CO",
       postalCode: DOSMICOS_ORIGIN.postalCode,
       reference: DOSMICOS_ORIGIN.reference,
       identification_number: "901412407",
@@ -1176,7 +1176,7 @@ serve(async (req) => {
           }
 
           let shopDomain = org.shopify_store_url
-            .replace('https://', '').replace('http://', '').replace(/\/$/, '');
+            .replace('https://', '').replace('http://', '').replace(/\//$/, '');
           if (!shopDomain.includes('.myshopify.com')) {
             shopDomain = `${shopDomain}.myshopify.com`;
           }
@@ -1271,7 +1271,14 @@ serve(async (req) => {
               .update({
                 shopify_fulfillment_id: shopifyFulfillmentId,
                 shopify_fulfillment_status: shopifyFulfillmentStatus,
-                shopify_fulfillment_error: shopifyFulfillmentError
+                shopify_fulfillment_error: shopifyFulfillmentError,
+                status: shopifyFulfillmentStatus === 'success'
+                        ? 'fulfilled'
+                        : shopifyFulfillmentStatus === 'failed'
+                            ? 'shopify_fulfillment_failed'
+                            : shopifyFulfillmentStatus === 'skipped'
+                                ? 'shopify_fulfillment_skipped'
+                                : 'created'
               })
               .eq('id', savedLabel.id) : Promise.resolve()
           ]);
