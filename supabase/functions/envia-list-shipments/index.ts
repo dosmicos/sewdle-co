@@ -142,13 +142,11 @@ serve(async (req) => {
 
           if (TERMINAL_STATUSES.has(status)) return false;
 
-          // Previous days: exclude only if we KNOW the guide is non-created.
-          // If status is unknown/empty we include it (safer than hiding a valid guide).
-          if (createdDate < today) {
-            if (status && status !== 'created') return false;
-          }
-
-          // Today (or unknown date): show regardless of status
+          // Show all non-terminal guides regardless of date or sub-status.
+          // Restricting by 'created' status excluded valid guides from carriers
+          // that advance status quickly (e.g. Interrapidísimo goes to 'dispatched'
+          // before physical pickup). The picked_up manifest filter below is the
+          // authoritative signal for "already handed to carrier".
           return true;
         });
 
@@ -179,9 +177,11 @@ serve(async (req) => {
         .from('shipping_labels')
         .select('id, shopify_order_id, order_number, tracking_number, carrier, recipient_name, destination_city, created_at, shipment_id, status')
         .eq('organization_id', orgId)
-        // Exclude statuses that mean the carrier already has the package.
-        // "in_transit" / "shipped" = carrier picked up → should NOT appear in a new manifest.
-        .not('status', 'in', '("delivered","cancelled","returned","in_transit","shipped","transit")')
+        // Only exclude truly terminal statuses. "in_transit" stays visible because
+        // some carriers (e.g. Deprisa) mark labels in_transit immediately after
+        // creation — excluding them would hide all Deprisa guides from the dialog.
+        // The "already shipped" signal comes from the picked_up manifest filter below.
+        .not('status', 'in', '("delivered","cancelled","returned")')
         .not('tracking_number', 'is', null)
         .gte('created_at', `${cutoffDate}T00:00:00.000Z`)
         .lte('created_at', `${today}T23:59:59.999Z`)
