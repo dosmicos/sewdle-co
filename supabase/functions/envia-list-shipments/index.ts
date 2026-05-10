@@ -142,11 +142,21 @@ serve(async (req) => {
 
           if (TERMINAL_STATUSES.has(status)) return false;
 
-          // Show all non-terminal guides regardless of date or sub-status.
-          // Restricting by 'created' status excluded valid guides from carriers
-          // that advance status quickly (e.g. Interrapidísimo goes to 'dispatched'
-          // before physical pickup). The picked_up manifest filter below is the
-          // authoritative signal for "already handed to carrier".
+          // For guides from PREVIOUS days, also exclude statuses that mean the
+          // carrier physically collected the package. Today's guides always show
+          // (carrier may scan same day). Unknown/empty status → show (inclusive).
+          if (createdDate < today) {
+            // Statuses that mean "carrier already has it" across Envia carriers
+            const COLLECTED_STATUSES = new Set([
+              'in_transit', 'intransit', 'in transit',
+              'dispatched', 'picked_up', 'pickedup', 'picked up',
+              'out_for_delivery', 'outfordelivery', 'out for delivery',
+              'with_carrier', 'collected', 'en_camino',
+              'en_transito', 'en transito',
+            ]);
+            if (status && COLLECTED_STATUSES.has(status)) return false;
+          }
+
           return true;
         });
 
