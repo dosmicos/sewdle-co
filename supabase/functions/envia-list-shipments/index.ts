@@ -85,22 +85,33 @@ serve(async (req) => {
 
     let enviaShipments: any[] = [];
     let enviaOk = false;
+    let apiDebugInfo: any = null; // surfaced in response for diagnostics
 
     try {
       const res = await fetch(queriesUrl, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${ENVIA_API_KEY}`,
-          'Content-Type': 'application/json',
           'accept': 'application/json',
         },
       });
 
       const raw = await res.text();
-      console.log(`  → status ${res.status}, preview: ${raw.slice(0, 300)}`);
+      console.log(`  → status ${res.status}, preview: ${raw.slice(0, 500)}`);
 
       let data: any = null;
       try { data = JSON.parse(raw); } catch { data = null; }
+
+      // Capture debug info: include full first item so we can see all field names
+      const firstItem = Array.isArray(data?.data) ? data.data[0] : null;
+      apiDebugInfo = {
+        status: res.status,
+        ok: res.ok,
+        dataType: data === null ? 'null' : Array.isArray(data?.data) ? 'array' : typeof data?.data,
+        totalFromApi: Array.isArray(data?.data) ? data.data.length : 0,
+        firstItemKeys: firstItem ? Object.keys(firstItem) : [],
+        firstItem: firstItem,  // full first guide so we see exact field names
+      };
 
       if (res.ok && Array.isArray(data?.data)) {
         const all = data.data as any[];
@@ -119,18 +130,25 @@ serve(async (req) => {
         ]);
 
         const recentShipments = all.filter((s: any) => {
-          const created = s.created_at || s.createdAt || '';
+          const created = s.created_at || s.createdAt || s.date || '';
           // Normalize to YYYY-MM-DD prefix (works for both "2026-05-03 12:19:36" and ISO)
           const createdDate = created.slice(0, 10);
           if (createdDate < cutoffDate) return false;
 
-          const status = (s.status || '').toLowerCase();
+          // Envia API may use different field names for status across carriers.
+          // Check all known variants so we don't accidentally discard valid guides.
+          const rawStatus = s.status || s.status_id || s.status_label || s.statusLabel || '';
+          const status = String(rawStatus).toLowerCase();
+
           if (TERMINAL_STATUSES.has(status)) return false;
 
-          // Previous days: only show if still pending with the shipper
-          if (createdDate < today) return status === 'created';
+          // Previous days: exclude only if we KNOW the guide is non-created.
+          // If status is unknown/empty we include it (safer than hiding a valid guide).
+          if (createdDate < today) {
+            if (status && status !== 'created') return false;
+          }
 
-          // Today: show regardless of status (carrier may have scanned same day)
+          // Today (or unknown date): show regardless of status
           return true;
         });
 
@@ -161,8 +179,9 @@ serve(async (req) => {
         .from('shipping_labels')
         .select('id, shopify_order_id, order_number, tracking_number, carrier, recipient_name, destination_city, created_at, shipment_id, status')
         .eq('organization_id', orgId)
-        // Include all non-terminal statuses (same logic as Envia API filter above)
-        .not('status', 'in', '("delivered","cancelled","returned")')
+        // Exclude statuses that mean the carrier already has the package.
+        // "in_transit" / "shipped" = carrier picked up → should NOT appear in a new manifest.
+        .not('status', 'in', '("delivered","cancelled","returned","in_transit","shipped","transit")')
         .not('tracking_number', 'is', null)
         .gte('created_at', `${cutoffDate}T00:00:00.000Z`)
         .lte('created_at', `${today}T23:59:59.999Z`)
@@ -285,6 +304,9 @@ serve(async (req) => {
         total: result.length,
         source: finalSource,
         data: result,
+        // diagnostic: shows in browser Network tab / console so we can see
+        // exactly why the Envia API succeeded or failed without needing log access
+        _apiDebug: apiDebugInfo,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
