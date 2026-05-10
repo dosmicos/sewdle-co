@@ -135,7 +135,13 @@ serve(async (req) => {
       // Deactivate any existing meta accounts for this org
       await supabase
         .from("ad_accounts")
-        .update({ is_active: false })
+        .update({
+          is_active: false,
+          needs_reconnect: false,
+          last_sync_status: "disconnected",
+          last_sync_error: null,
+          updated_at: new Date().toISOString(),
+        })
         .eq("organization_id", organizationId)
         .eq("platform", "meta");
 
@@ -154,6 +160,9 @@ serve(async (req) => {
             access_token: accessToken,
             token_expires_at: tokenExpiresAt,
             is_active: true,
+            needs_reconnect: false,
+            last_sync_status: "connected",
+            last_sync_error: null,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "organization_id,platform" }
@@ -173,6 +182,9 @@ serve(async (req) => {
             access_token: accessToken,
             token_expires_at: tokenExpiresAt,
             is_active: true,
+            needs_reconnect: false,
+            last_sync_status: "connected",
+            last_sync_error: null,
           })
           .select()
           .single();

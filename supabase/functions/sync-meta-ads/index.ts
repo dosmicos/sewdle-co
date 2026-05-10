@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  recordMetaReconnectRequired,
+  recordMetaSyncError,
+  recordMetaSyncSuccess,
+} from "../_shared/meta-sync-health.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -67,6 +72,38 @@ function extractCPA(costPerAction: any[] | undefined): number {
   return extractFromActions(costPerAction, "purchase");
 }
 
+/** Fetch with retry and exponential backoff for transient Meta API throttling */
+async function fetchWithRetry(
+  url: string,
+  maxRetries = 3
+): Promise<Response> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch(url);
+
+    if (res.ok) return res;
+
+    const body = await res.json().catch(() => null);
+    const errorCode = body?.error?.code;
+
+    // Rate limit errors (32 = API Too Many Calls, 17 = User request limit)
+    if ((errorCode === 32 || errorCode === 17) && attempt < maxRetries) {
+      const delay = Math.pow(2, attempt + 1) * 1000;
+      console.log(
+        `Rate limited (code ${errorCode}), retrying in ${delay}ms...`
+      );
+      await new Promise((r) => setTimeout(r, delay));
+      continue;
+    }
+
+    return new Response(JSON.stringify(body), {
+      status: res.status,
+      headers: res.headers,
+    });
+  }
+
+  throw new Error("Max retries exceeded");
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -108,11 +145,11 @@ serve(async (req) => {
 
     // Check token expiration
     if (adAccount.token_expires_at && new Date(adAccount.token_expires_at) < new Date()) {
-      // Mark account as inactive
-      await supabase
-        .from("ad_accounts")
-        .update({ is_active: false })
-        .eq("id", adAccount.id);
+      await recordMetaReconnectRequired(
+        supabase,
+        adAccount.id,
+        "El token de Meta Ads ha expirado. Reconecta tu cuenta."
+      );
 
       return new Response(
         JSON.stringify({
@@ -131,26 +168,25 @@ serve(async (req) => {
 
     console.log(`Fetching Meta insights for account ${accountId} from ${startDate} to ${endDate}`);
 
-    const insightsRes = await fetch(insightsUrl);
+    const insightsRes = await fetchWithRetry(insightsUrl);
     const insightsData = await insightsRes.json();
 
     // Handle Meta API errors
     if (insightsData.error) {
       console.error("Meta API error:", insightsData.error);
 
-      // Token expired or invalid
-      if (
-        insightsData.error.code === 190 ||
-        insightsData.error.type === "OAuthException"
-      ) {
-        await supabase
-          .from("ad_accounts")
-          .update({ is_active: false })
-          .eq("id", adAccount.id);
+      const syncError = await recordMetaSyncError(
+        supabase,
+        adAccount.id,
+        insightsData.error,
+        "Error de la API de Meta"
+      );
 
+      if (syncError.needsReconnect) {
         return new Response(
           JSON.stringify({
             error: "Token de Meta inválido o expirado. Reconecta tu cuenta.",
+            details: syncError.message,
             needsReconnect: true,
           }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -159,8 +195,9 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({
-          error: "Error de la API de Meta",
-          details: insightsData.error.message,
+          error: "Error de la API de Meta. La conexión sigue activa; se reintentará automáticamente.",
+          details: syncError.message,
+          needsReconnect: false,
         }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -176,7 +213,7 @@ serve(async (req) => {
     let nextPage = insightsData.paging?.next;
 
     while (nextPage) {
-      const nextRes = await fetch(nextPage);
+      const nextRes = await fetchWithRetry(nextPage);
       const nextData = await nextRes.json();
       if (nextData.data) {
         allInsights = [...allInsights, ...nextData.data];
@@ -224,6 +261,7 @@ serve(async (req) => {
               ctr,
               roas,
               cpa,
+              synced_at: new Date().toISOString(),
             },
             { onConflict: "organization_id,platform,date" }
           );
@@ -242,11 +280,7 @@ serve(async (req) => {
       }
     }
 
-    // Update last sync timestamp on the ad account
-    await supabase
-      .from("ad_accounts")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", adAccount.id);
+    await recordMetaSyncSuccess(supabase, adAccount.id);
 
     return new Response(
       JSON.stringify({

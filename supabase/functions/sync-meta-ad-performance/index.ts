@@ -1,5 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  recordMetaReconnectRequired,
+  recordMetaSyncError,
+  recordMetaSyncSuccess,
+} from "../_shared/meta-sync-health.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -135,34 +140,16 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Get Meta ad account (try active first, then any inactive)
-    let { data: adAccount, error: accountError } = await supabase
+    // Get the active Meta ad account for this organization.
+    // Do not auto-reactivate inactive accounts here: `is_active=false` can mean
+    // a deliberate manual disconnect or a real reconnect-required token state.
+    const { data: adAccount } = await supabase
       .from("ad_accounts")
       .select("*")
       .eq("organization_id", organizationId)
       .eq("platform", "meta")
       .eq("is_active", true)
       .single();
-
-    // Fallback: try inactive account (may have been deactivated by transient error)
-    if (!adAccount) {
-      const { data: inactiveAccount } = await supabase
-        .from("ad_accounts")
-        .select("*")
-        .eq("organization_id", organizationId)
-        .eq("platform", "meta")
-        .eq("is_active", false)
-        .single();
-
-      if (inactiveAccount) {
-        console.log("[sync-perf] Found inactive Meta account, reactivating...");
-        adAccount = inactiveAccount;
-        await supabase
-          .from("ad_accounts")
-          .update({ is_active: true })
-          .eq("id", inactiveAccount.id);
-      }
-    }
 
     if (!adAccount) {
       return new Response(
@@ -182,10 +169,11 @@ serve(async (req) => {
       adAccount.token_expires_at &&
       new Date(adAccount.token_expires_at) < new Date()
     ) {
-      await supabase
-        .from("ad_accounts")
-        .update({ is_active: false })
-        .eq("id", adAccount.id);
+      await recordMetaReconnectRequired(
+        supabase,
+        adAccount.id,
+        "El token de Meta Ads ha expirado. Reconecta tu cuenta."
+      );
 
       return new Response(
         JSON.stringify({
@@ -243,19 +231,19 @@ serve(async (req) => {
     if (insightsData.error) {
       console.error("Meta API error:", insightsData.error);
 
-      if (
-        insightsData.error.code === 190 ||
-        insightsData.error.type === "OAuthException"
-      ) {
-        await supabase
-          .from("ad_accounts")
-          .update({ is_active: false })
-          .eq("id", adAccount.id);
+      const syncError = await recordMetaSyncError(
+        supabase,
+        adAccount.id,
+        insightsData.error,
+        "Error de la API de Meta"
+      );
 
+      if (syncError.needsReconnect) {
         return new Response(
           JSON.stringify({
             error:
               "Token de Meta inválido o expirado. Reconecta tu cuenta.",
+            details: syncError.message,
             needsReconnect: true,
           }),
           {
@@ -270,8 +258,9 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({
-          error: "Error de la API de Meta",
-          details: insightsData.error.message,
+          error: "Error de la API de Meta. La conexión sigue activa; se reintentará automáticamente.",
+          details: syncError.message,
+          needsReconnect: false,
         }),
         {
           status: 502,
@@ -440,11 +429,7 @@ serve(async (req) => {
 
     const errors = [...parseErrors, ...upsertErrors];
 
-    // Update last sync timestamp
-    await supabase
-      .from("ad_accounts")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", adAccount.id);
+    await recordMetaSyncSuccess(supabase, adAccount.id);
 
     return new Response(
       JSON.stringify({
