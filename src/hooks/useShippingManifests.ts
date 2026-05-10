@@ -318,73 +318,86 @@ export const useShippingManifests = () => {
     }
 
     try {
-      // First check if this tracking exists in any manifest
-      const { data: existingItem, error: checkError } = await supabase
+      // ── Fast path: check current manifest directly ────────────────────────
+      // Querying by (manifest_id, tracking_number) is indexed and avoids the
+      // cross-manifest JOIN that could fail with maybeSingle() when the same
+      // tracking number appears in multiple manifests.
+      const { data: currentItem, error: currentError } = await supabase
         .from('manifest_items')
-        .select('*, shipping_manifests!inner(manifest_number)')
+        .select('*')
+        .eq('manifest_id', manifestId)
         .eq('tracking_number', trackingNumber)
         .maybeSingle();
 
-      if (checkError) throw checkError;
+      if (currentError) throw currentError;
 
-      if (!existingItem) {
+      if (currentItem) {
+        // Found in current manifest
+        if (currentItem.scanned_at) {
+          return {
+            success: false,
+            status: 'already_scanned',
+            message: `Guía ya escaneada el ${new Date(currentItem.scanned_at).toLocaleString()}`,
+            item: currentItem
+          };
+        }
+
+        // Mark as scanned
+        const { data: updatedItem, error: updateError } = await supabase
+          .from('manifest_items')
+          .update({
+            scanned_at: new Date().toISOString(),
+            scanned_by: user.id,
+            scan_status: 'verified'
+          })
+          .eq('id', currentItem.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+
+        // Increment total_verified counter on the manifest
+        const { data: manifestData } = await supabase
+          .from('shipping_manifests')
+          .select('total_verified')
+          .eq('id', manifestId)
+          .single();
+
+        if (manifestData) {
+          await supabase
+            .from('shipping_manifests')
+            .update({ total_verified: (manifestData.total_verified || 0) + 1 })
+            .eq('id', manifestId);
+        }
+
         return {
-          success: false,
-          status: 'not_found',
-          message: `Guía ${trackingNumber} no encontrada en ningún manifiesto`
+          success: true,
+          status: 'verified',
+          message: `✓ Guía ${trackingNumber} verificada - Pedido ${currentItem.order_number}`,
+          item: updatedItem
         };
       }
 
-      if (existingItem.manifest_id !== manifestId) {
+      // ── Slow path: not in current manifest — check others ─────────────────
+      const { data: otherItem } = await supabase
+        .from('manifest_items')
+        .select('manifest_id, shipping_manifests!inner(manifest_number)')
+        .eq('tracking_number', trackingNumber)
+        .limit(1)
+        .maybeSingle();
+
+      if (otherItem) {
         return {
           success: false,
           status: 'wrong_manifest',
-          message: `Guía pertenece al manifiesto ${(existingItem as any).shipping_manifests.manifest_number}`
+          message: `Guía pertenece al manifiesto ${(otherItem as any).shipping_manifests.manifest_number}`
         };
-      }
-
-      if (existingItem.scanned_at) {
-        return {
-          success: false,
-          status: 'already_scanned',
-          message: `Guía ya escaneada el ${new Date(existingItem.scanned_at).toLocaleString()}`,
-          item: existingItem
-        };
-      }
-
-      // Update item as scanned
-      const { data: updatedItem, error: updateError } = await supabase
-        .from('manifest_items')
-        .update({
-          scanned_at: new Date().toISOString(),
-          scanned_by: user.id,
-          scan_status: 'verified'
-        })
-        .eq('id', existingItem.id)
-        .select()
-        .single();
-
-      if (updateError) throw updateError;
-
-      // Update manifest totals
-      const { data: currentManifestData } = await supabase
-        .from('shipping_manifests')
-        .select('total_verified')
-        .eq('id', manifestId)
-        .single();
-
-      if (currentManifestData) {
-        await supabase
-          .from('shipping_manifests')
-          .update({ total_verified: (currentManifestData.total_verified || 0) + 1 })
-          .eq('id', manifestId);
       }
 
       return {
-        success: true,
-        status: 'verified',
-        message: `✓ Guía ${trackingNumber} verificada - Pedido ${existingItem.order_number}`,
-        item: updatedItem
+        success: false,
+        status: 'not_found',
+        message: `Guía ${trackingNumber} no encontrada en ningún manifiesto`
       };
     } catch (err: any) {
       console.error('Error scanning:', err);

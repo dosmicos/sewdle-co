@@ -63,18 +63,20 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   const [closingManifest, setClosingManifest] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
+  // Ref-based in-flight guard: more reliable than `scanning` state for preventing
+  // double-execution, and avoids adding `scanning` to useCallback/useEffect deps
+  // (which caused triggerScan to get a new reference on every state change, making
+  // the auto-scan effect re-fire unnecessarily and the spinner animation glitch).
+  const scanInFlightRef = useRef(false);
 
   // Auto-focus on mount
   useEffect(() => {
-    if (inputRef.current) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
+    setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
   // Re-focus input after each scan completes.
   // Must live in a useEffect so it runs after React commits the DOM update
-  // that removes `disabled` from the input — calling focus() while the element
-  // is still disabled is a no-op, which is why the field felt "dead" after scans.
+  // that removes `disabled` from the input.
   useEffect(() => {
     if (!scanning) {
       inputRef.current?.focus();
@@ -88,21 +90,24 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
 
   // Core scan function — takes a resolved tracking number directly so
   // auto-scan can pass the full number even when input only has 4 digits.
+  // Uses scanInFlightRef (not `scanning` state) as the guard so this callback
+  // stays stable across renders and doesn't cascade unnecessary effect re-runs.
   const triggerScan = useCallback(async (trackingNumber: string) => {
-    if (!trackingNumber || scanning) return;
+    if (!trackingNumber || scanInFlightRef.current) return;
 
+    scanInFlightRef.current = true;
     setScanning(true);
     setScanInput('');
 
     try {
-      // Race against a 12-second timeout so a hung Supabase query never
+      // Race against an 8-second timeout so a hung Supabase query never
       // leaves the UI in the permanent "scanning" state.
       const timeout = new Promise<{ success: false; status: 'error'; message: string }>(resolve =>
         setTimeout(() => resolve({
           success: false,
-          status: 'error',
+          status: 'error' as const,
           message: 'Tiempo de espera agotado. Intenta de nuevo.',
-        }), 12000)
+        }), 8000)
       );
 
       const result = await Promise.race([
@@ -125,28 +130,30 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
             : item
         ));
       } else if (result.status === 'not_found') {
-        // Track extra scans (guides not in manifest)
         if (!extraScans.includes(trackingNumber)) {
           setExtraScans(prev => [...prev, trackingNumber]);
         }
       }
     } finally {
-      // Always unblock scanning — focus restored by the useEffect on `scanning`.
+      scanInFlightRef.current = false;
       setScanning(false);
     }
-  }, [scanning, manifest.id, scanTrackingNumber, extraScans]);
+  }, [manifest.id, scanTrackingNumber, extraScans]); // no `scanning` — ref handles guard
 
   // Enter key — resolves tracking from current input and delegates to triggerScan.
   const handleScan = useCallback(async () => {
     const trackingNumber = scanInput.trim().toUpperCase();
-    if (!trackingNumber || scanning) return;
+    if (!trackingNumber) return;
     await triggerScan(trackingNumber);
-  }, [scanInput, scanning, triggerScan]);
+  }, [scanInput, triggerScan]); // no `scanning` dep
 
   // Instant auto-scan: fires without Enter when the input unambiguously
   // identifies a pending guide (full match) or its last 4 digits (suffix match).
+  // Uses scanInFlightRef directly so `scanning` state is not a dep — this prevents
+  // triggerScan from being recreated on every scanning toggle, which was causing
+  // the effect to re-run and the spinner animation to reset mid-rotation.
   useEffect(() => {
-    if (scanning) return;
+    if (scanInFlightRef.current) return;
     const input = scanInput.trim();
     if (!input) return;
 
@@ -170,7 +177,7 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
       }
       // If 0 or 2+ matches: wait — user can keep typing or press Enter
     }
-  }, [scanInput, scanning, items, triggerScan]);
+  }, [scanInput, items, triggerScan]); // no `scanning` — ref handles guard
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -285,9 +292,11 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
               autoFocus
               disabled={scanning}
             />
-            {scanning && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin" />
-            )}
+            {/* Always in DOM so animate-spin never resets mid-rotation; opacity toggles visibility */}
+            <Loader2 className={cn(
+              "absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin transition-opacity duration-150",
+              scanning ? "opacity-100" : "opacity-0"
+            )} />
           </div>
         )}
 
