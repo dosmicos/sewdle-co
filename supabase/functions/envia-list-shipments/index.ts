@@ -201,11 +201,15 @@ serve(async (req) => {
     let finalSource: string;
 
     if (enviaOk) {
-      const apiTrackingSet = new Set(enviaShipments.map((s: any) => s.tracking_number));
+      // Envia API is the single source of truth for guide status.
+      // DB metadata (order_number, recipient_name, etc.) is used to enrich
+      // the API results, but the status filter comes from the API only.
+      // We do NOT supplement with DB guides — shipping_labels.status is never
+      // updated when the carrier picks up a package, so it goes stale and would
+      // surface already-collected guides that should no longer appear.
       const dbByTracking = new Map(dbShipments.map(s => [s.tracking_number, s]));
 
-      // 1. API guides enriched with DB metadata (order_number, recipient_name, etc.)
-      const fromApi = enviaShipments.map((s: any) => {
+      result = enviaShipments.map((s: any) => {
         const db = dbByTracking.get(s.tracking_number);
         return {
           id: db?.id || `envia_${s.tracking_number}`,
@@ -222,31 +226,10 @@ serve(async (req) => {
         };
       });
 
-      // 2. DB guides NOT yet in the API (just created, not yet indexed by Envia)
-      const fromDbOnly = dbShipments
-        .filter(s => !apiTrackingSet.has(s.tracking_number))
-        .map(s => ({
-          id: s.id,
-          shipment_id: s.shipment_id,
-          tracking_number: s.tracking_number,
-          carrier: s.carrier,
-          status: s.status,
-          created_at: s.created_at,
-          shopify_order_id: s.shopify_order_id,
-          order_number: s.order_number,
-          recipient_name: s.recipient_name,
-          destination_city: s.destination_city,
-          source: 'database',
-        }));
-
-      result = [...fromApi, ...fromDbOnly];
-      // API was reachable and used — show "API Envia" badge even if we
-      // supplemented with freshly created DB guides.
       finalSource = 'envia_api';
-
-      console.log(`🔀 Merge: ${fromApi.length} from Envia API + ${fromDbOnly.length} DB-only supplements`);
+      console.log(`✅ Using Envia API: ${result.length} guides`);
     } else {
-      // API failed — fall back to DB only
+      // API failed — fall back to DB as emergency measure
       result = dbShipments.map(s => ({
         id: s.id,
         shipment_id: s.shipment_id,
