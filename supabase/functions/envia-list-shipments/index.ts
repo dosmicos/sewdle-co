@@ -48,6 +48,16 @@ serve(async (req) => {
 
     console.log(`📋 Listing Envia shipments — today: ${today}, cutoff: ${cutoffDate}, carrier: ${body.carrier || 'all'}`);
 
+    // Accent-insensitive normalization for carrier name matching.
+    // Without this, "Interrapidísimo" (with accent) vs "interrapidisimo" (without)
+    // causes the carrier filter to drop all Interrapidísimo guides from the API
+    // result, resulting in an empty enviaShipments array and a DB-only fallback.
+    const normalizeCarrier = (s: string) =>
+      s.toLowerCase()
+       .normalize('NFD')
+       .replace(/[̀-ͯ]/g, '') // strip combining diacritics
+       .replace(/\s/g, '');
+
     // ─── Resolve org from auth token ─────────────────────────────────────────
     const authHeader = req.headers.get('Authorization') || '';
     const token = authHeader.replace('Bearer ', '');
@@ -124,12 +134,14 @@ serve(async (req) => {
           return true;
         });
 
-        // Apply carrier filter — carrier name is in `name` field (e.g. "interRapidisimo")
+        // Apply carrier filter — carrier name is in `name` field (e.g. "interRapidisimo").
+        // Use accent-insensitive comparison so "Interrapidísimo" matches "interrapidisimo".
         const filtered = body.carrier
-          ? recentShipments.filter((s: any) =>
-              (s.name || s.carrier || '').toLowerCase().includes(body.carrier!.toLowerCase()) ||
-              body.carrier!.toLowerCase().includes((s.name || s.carrier || '').toLowerCase().replace(/\s/g, ''))
-            )
+          ? recentShipments.filter((s: any) => {
+              const apiCarrier = normalizeCarrier(s.name || s.carrier || '');
+              const filterCarrier = normalizeCarrier(body.carrier!);
+              return apiCarrier.includes(filterCarrier) || filterCarrier.includes(apiCarrier);
+            })
           : recentShipments;
 
         enviaShipments = filtered;
@@ -225,6 +237,43 @@ serve(async (req) => {
         source: 'database',
       }));
       finalSource = 'database';
+    }
+
+    // ─── 4. Exclude guides already processed in closed/picked-up manifests ────
+    // Guides in those manifests have already been handed to the carrier.
+    // They still appear as 'created' in shipping_labels (we don't update their
+    // status on manifest pickup), so without this filter they keep showing up
+    // in the manifest creation dialog even after they've shipped.
+    if (orgId && result.length > 0) {
+      try {
+        const { data: closedManifests } = await supabase
+          .from('shipping_manifests')
+          .select('id')
+          .eq('organization_id', orgId)
+          .in('status', ['closed', 'picked_up']);
+
+        if (closedManifests && closedManifests.length > 0) {
+          const closedIds = closedManifests.map((m: any) => m.id);
+          const { data: manifestedItems } = await supabase
+            .from('manifest_items')
+            .select('tracking_number')
+            .in('manifest_id', closedIds);
+
+          const manifestedSet = new Set(
+            (manifestedItems || []).map((i: any) => i.tracking_number)
+          );
+
+          const before = result.length;
+          result = result.filter(s => !manifestedSet.has(s.tracking_number));
+          const removed = before - result.length;
+          if (removed > 0) {
+            console.log(`🚫 Excluded ${removed} guides already in closed/picked_up manifests`);
+          }
+        }
+      } catch (e) {
+        // Non-fatal — better to show extra guides than to crash
+        console.warn('⚠️ Could not filter manifested guides:', e);
+      }
     }
 
     console.log(`📤 Returning ${result.length} shipments (source: ${finalSource})`);

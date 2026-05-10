@@ -94,32 +94,46 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     setScanning(true);
     setScanInput('');
 
-    const result = await scanTrackingNumber(manifest.id, trackingNumber);
+    try {
+      // Race against a 12-second timeout so a hung Supabase query never
+      // leaves the UI in the permanent "scanning" state.
+      const timeout = new Promise<{ success: false; status: 'error'; message: string }>(resolve =>
+        setTimeout(() => resolve({
+          success: false,
+          status: 'error',
+          message: 'Tiempo de espera agotado. Intenta de nuevo.',
+        }), 12000)
+      );
 
-    const feedback: ScanFeedback = {
-      type: result.success ? 'success' : result.status === 'already_scanned' ? 'warning' : 'error',
-      message: result.message,
-      trackingNumber,
-    };
+      const result = await Promise.race([
+        scanTrackingNumber(manifest.id, trackingNumber),
+        timeout,
+      ]);
 
-    setScanHistory(prev => [feedback, ...prev.slice(0, 49)]);
+      const feedback: ScanFeedback = {
+        type: result.success ? 'success' : result.status === 'already_scanned' ? 'warning' : 'error',
+        message: result.message,
+        trackingNumber,
+      };
 
-    if (result.success) {
-      setItems(prev => prev.map(item =>
-        item.tracking_number === trackingNumber
-          ? { ...item, scanned_at: new Date().toISOString(), scan_status: 'verified' }
-          : item
-      ));
-    } else if (result.status === 'not_found') {
-      // Track extra scans (guides not in manifest)
-      if (!extraScans.includes(trackingNumber)) {
-        setExtraScans(prev => [...prev, trackingNumber]);
+      setScanHistory(prev => [feedback, ...prev.slice(0, 49)]);
+
+      if (result.success) {
+        setItems(prev => prev.map(item =>
+          item.tracking_number === trackingNumber
+            ? { ...item, scanned_at: new Date().toISOString(), scan_status: 'verified' }
+            : item
+        ));
+      } else if (result.status === 'not_found') {
+        // Track extra scans (guides not in manifest)
+        if (!extraScans.includes(trackingNumber)) {
+          setExtraScans(prev => [...prev, trackingNumber]);
+        }
       }
+    } finally {
+      // Always unblock scanning — focus restored by the useEffect on `scanning`.
+      setScanning(false);
     }
-
-    setScanning(false);
-    // Focus is restored by the useEffect watching `scanning` — calling it
-    // here would be a no-op because the input is still `disabled` at this point.
   }, [scanning, manifest.id, scanTrackingNumber, extraScans]);
 
   // Enter key — resolves tracking from current input and delegates to triggerScan.
