@@ -1271,7 +1271,14 @@ serve(async (req) => {
               .update({
                 shopify_fulfillment_id: shopifyFulfillmentId,
                 shopify_fulfillment_status: shopifyFulfillmentStatus,
-                shopify_fulfillment_error: shopifyFulfillmentError
+                shopify_fulfillment_error: shopifyFulfillmentError,
+                status: shopifyFulfillmentStatus === 'success'
+                        ? 'fulfilled'
+                        : shopifyFulfillmentStatus === 'failed'
+                            ? 'shopify_fulfillment_failed'
+                            : shopifyFulfillmentStatus === 'skipped'
+                                ? 'shopify_fulfillment_skipped'
+                                : 'created'
               })
               .eq('id', savedLabel.id) : Promise.resolve()
           ]);
