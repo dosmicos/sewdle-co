@@ -346,13 +346,6 @@ export const useOrders = () => {
           *,
           order_items (
             *,
-            delivery_items!left (
-              quantity_approved,
-              deliveries (
-                workshop_id,
-                status
-              )
-            ),
             product_variants (
               *,
               products (*)
@@ -378,11 +371,11 @@ export const useOrders = () => {
 
       setOrders(data || []);
       return data;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching orders:', error);
       toast({
         title: "Error al cargar las órdenes",
-        description: "No se pudieron cargar las órdenes de producción.",
+        description: error?.message || "No se pudieron cargar las órdenes de producción.",
         variant: "destructive",
       });
       setOrders([]);
