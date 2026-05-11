@@ -7,7 +7,11 @@ import AppSidebar from '@/components/AppSidebar';
 import { Outlet } from 'react-router-dom';
 import SewdleCopilot from '@/components/copilot/SewdleCopilot';
 
-const MainLayout = () => {
+interface MainLayoutProps {
+  children?: React.ReactNode;
+}
+
+const MainLayout = ({ children }: MainLayoutProps) => {
   const { user } = useAuth();
   const { isLoading } = useOrganization();
   
@@ -33,7 +37,7 @@ const MainLayout = () => {
             <SidebarTrigger />
           </div>
           <div className="flex-1" style={{ backgroundColor: '#ffffff' }}>
-            <Outlet />
+            {children ?? <Outlet />}
           </div>
         </main>
         <SewdleCopilot />
