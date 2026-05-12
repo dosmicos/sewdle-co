@@ -143,6 +143,7 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean, authorized
 
   const totalOrders = await countCreatorOrders(supabase, creator.id);
   const notificationType: NotificationType = totalOrders <= 1 ? 'first_sale' : 'sale';
+  const internalOnly = body.internalOnly === true;
 
   const [ranking, weeklyProgress] = await Promise.all([
     computeMonthlyRanking(supabase, order.organization_id, creator.id),
@@ -158,41 +159,45 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean, authorized
     : [creator.name, commission, pendingBalance, String(ranking.creatorRank || '-'), uploadLink];
 
   const primaryPreview = fillSample(TEMPLATE_DEFAULTS[notificationType].sample_message || '', primaryParams);
-  const primary = await maybeSendNotification(supabase, {
-    organizationId: order.organization_id,
-    creator,
-    link,
-    type: notificationType,
-    params: primaryParams,
-    preview: primaryPreview,
-    dryRun,
-    authorized,
-    attributedOrderId: order.id,
-    metadata: {
-      shopify_order_id: order.shopify_order_id,
-      shopify_order_number: order.shopify_order_number,
-      order_total: numberValue(order.order_total),
-      commission_amount: numberValue(order.commission_amount),
-      upload_link: uploadLink,
-      creator_link: creatorLink,
-      monthly_rank: ranking.creatorRank,
-      monthly_commission: ranking.creatorMonthlyCommission,
-      monthly_period_start: ranking.periodStart,
-      weekly_orders: weeklyProgress.weeklyOrders,
-      weekly_commission: weeklyProgress.weeklyCommission,
-      weekly_period_start: weeklyProgress.weekStart,
-    },
-  });
+  const primary = internalOnly
+    ? { status: 'skipped_internal_only', reason: 'DB-triggered flow only alerts Sebastián; no creator WhatsApp is sent' }
+    : await maybeSendNotification(supabase, {
+        organizationId: order.organization_id,
+        creator,
+        link,
+        type: notificationType,
+        params: primaryParams,
+        preview: primaryPreview,
+        dryRun,
+        authorized,
+        attributedOrderId: order.id,
+        metadata: {
+          shopify_order_id: order.shopify_order_id,
+          shopify_order_number: order.shopify_order_number,
+          order_total: numberValue(order.order_total),
+          commission_amount: numberValue(order.commission_amount),
+          upload_link: uploadLink,
+          creator_link: creatorLink,
+          monthly_rank: ranking.creatorRank,
+          monthly_commission: ranking.creatorMonthlyCommission,
+          monthly_period_start: ranking.periodStart,
+          weekly_orders: weeklyProgress.weeklyOrders,
+          weekly_commission: weeklyProgress.weeklyCommission,
+          weekly_period_start: weeklyProgress.weekStart,
+        },
+      });
 
-  const rankNotification = await maybeSendRankNotification(supabase, {
-    organizationId: order.organization_id,
-    creator,
-    link,
-    ranking,
-    dryRun,
-    authorized,
-    attributedOrderId: order.id,
-  });
+  const rankNotification = internalOnly
+    ? { status: 'skipped_internal_only', reason: 'DB-triggered flow only alerts Sebastián; no creator WhatsApp is sent' }
+    : await maybeSendRankNotification(supabase, {
+        organizationId: order.organization_id,
+        creator,
+        link,
+        ranking,
+        dryRun,
+        authorized,
+        attributedOrderId: order.id,
+      });
 
   const internalSaleAlert = await sendInternalSaleAlert(supabase, {
     order,
@@ -211,6 +216,7 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean, authorized
     dryRun,
     orderId: order.id,
     notificationType,
+    internalOnly,
     primary,
     rankNotification,
     internalSaleAlert,
