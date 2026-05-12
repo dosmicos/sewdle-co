@@ -36,11 +36,20 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
   const [cityFilter, setCityFilter] = useState<string>('all');
   const [publicationFilter, setPublicationFilter] = useState<string>('all');
   const [tierFilter, setTierFilter] = useState<string>('all');
+  const [contentFilter, setContentFilter] = useState<string>('all');
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
 
   const { tags: allTags } = useUgcCreatorTags();
 
   const hasUploadedAsset = (video: UgcVideo) => !!video.video_url && video.video_url.trim().length > 0;
+
+  const creatorContentStatus = (creatorId: string) => {
+    const creatorVideos = videos.filter((v) => v.creator_id === creatorId && v.status !== 'rechazado');
+    const uploaded = creatorVideos.filter(hasUploadedAsset);
+    const approved = creatorVideos.filter((v) => v.status === 'aprobado' || v.status === 'publicado');
+    const inReview = creatorVideos.filter((v) => v.status === 'en_revision');
+    return { hasUploaded: uploaded.length > 0, hasApproved: approved.length > 0, hasInReview: inReview.length > 0, noneUploaded: uploaded.length === 0 };
+  };
 
   const getCreatorCampaigns = (creatorId: string) =>
     campaigns
@@ -86,65 +95,82 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
 
   const cities = [...new Set(creators.map((c) => c.city).filter(Boolean))] as string[];
 
-  // Tag counts — total creators per tag (ignoring other filters, for context)
+  // ─── Two-stage filtering for adaptive counts ──────────────────────────────
+  // Stage 1: all filters except tag → used for adaptive tag chip counts
+  // Stage 2: + tag filter → final displayed rows
+
+  const preTagFiltered = useMemo(() => {
+    return creators.filter((creator) => {
+      const matchesSearch =
+        !search ||
+        creator.name.toLowerCase().includes(search.toLowerCase()) ||
+        creator.instagram_handle?.toLowerCase().includes(search.toLowerCase());
+
+      const activeCampaign = getPrimaryCampaign(creator.id);
+      const matchesStatus =
+        statusFilter === 'all' || activeCampaign?.status === statusFilter;
+
+      const matchesCity = cityFilter === 'all' || creator.city === cityFilter;
+
+      const matchesTier = tierFilter === 'all' || (creator.tier ?? 'none') === tierFilter;
+
+      const { publicationGoal, organicPublished, adsPublished } = getCampaignPublicationMetrics(
+        activeCampaign?.id,
+        creator.id
+      );
+      const missingOrganic = publicationGoal > 0 && organicPublished < publicationGoal;
+      const missingAds = publicationGoal > 0 && adsPublished < publicationGoal;
+      const hasOrganicPublished = organicPublished > 0;
+      const hasAdsPublished = adsPublished > 0;
+      const matchesPublication =
+        publicationFilter === 'all' ||
+        (publicationFilter === 'missing_organic' && missingOrganic) ||
+        (publicationFilter === 'missing_ads' && missingAds) ||
+        (publicationFilter === 'published_organic' && hasOrganicPublished) ||
+        (publicationFilter === 'published_ads' && hasAdsPublished);
+
+      const cs = creatorContentStatus(creator.id);
+      const matchesContent =
+        contentFilter === 'all' ||
+        (contentFilter === 'with_content' && cs.hasUploaded) ||
+        (contentFilter === 'no_content' && cs.noneUploaded) ||
+        (contentFilter === 'approved' && cs.hasApproved) ||
+        (contentFilter === 'in_review' && cs.hasInReview);
+
+      return matchesSearch && matchesStatus && matchesCity && matchesPublication && matchesTier && matchesContent;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [creators, search, statusFilter, cityFilter, publicationFilter, tierFilter, contentFilter, campaigns, videos]);
+
+  const filtered = useMemo(
+    () =>
+      preTagFiltered.filter((creator) => {
+        const creatorTags = getTagsForCreator?.(creator.id) ?? [];
+        return !selectedTagId
+          ? true
+          : selectedTagId === '__none__'
+            ? creatorTags.length === 0
+            : creatorTags.some((t) => t.id === selectedTagId);
+      }),
+    [preTagFiltered, selectedTagId, getTagsForCreator]
+  );
+
+  // Adaptive tag counts — reflect current non-tag filters
   const tagCounts = useMemo(
     () =>
       allTags.map((tag) => ({
         ...tag,
-        count: creators.filter((c) =>
+        count: preTagFiltered.filter((c) =>
           (getTagsForCreator?.(c.id) ?? []).some((t) => t.id === tag.id)
         ).length,
       })),
-    [allTags, creators, getTagsForCreator]
+    [allTags, preTagFiltered, getTagsForCreator]
   );
 
-  // Count creators with no tags at all
   const noTagCount = useMemo(
-    () => creators.filter((c) => (getTagsForCreator?.(c.id) ?? []).length === 0).length,
-    [creators, getTagsForCreator]
+    () => preTagFiltered.filter((c) => (getTagsForCreator?.(c.id) ?? []).length === 0).length,
+    [preTagFiltered, getTagsForCreator]
   );
-
-  const filtered = creators.filter((creator) => {
-    const matchesSearch =
-      !search ||
-      creator.name.toLowerCase().includes(search.toLowerCase()) ||
-      creator.instagram_handle?.toLowerCase().includes(search.toLowerCase());
-
-    const activeCampaign = getPrimaryCampaign(creator.id);
-    const matchesStatus =
-      statusFilter === 'all' || activeCampaign?.status === statusFilter;
-
-    const matchesCity = cityFilter === 'all' || creator.city === cityFilter;
-
-    const matchesTier = tierFilter === 'all' || (creator.tier ?? 'none') === tierFilter;
-
-    const creatorTags = getTagsForCreator?.(creator.id) ?? [];
-    const matchesTag =
-      !selectedTagId
-        ? true
-        : selectedTagId === '__none__'
-          ? creatorTags.length === 0
-          : creatorTags.some((t) => t.id === selectedTagId);
-
-    const { publicationGoal, organicPublished, adsPublished } = getCampaignPublicationMetrics(
-      activeCampaign?.id,
-      creator.id
-    );
-
-    const missingOrganic = publicationGoal > 0 && organicPublished < publicationGoal;
-    const missingAds = publicationGoal > 0 && adsPublished < publicationGoal;
-    const hasOrganicPublished = organicPublished > 0;
-    const hasAdsPublished = adsPublished > 0;
-
-    const matchesPublication =
-      publicationFilter === 'all' ||
-      (publicationFilter === 'missing_organic' && missingOrganic) ||
-      (publicationFilter === 'missing_ads' && missingAds) ||
-      (publicationFilter === 'published_organic' && hasOrganicPublished) ||
-      (publicationFilter === 'published_ads' && hasAdsPublished);
-
-    return matchesSearch && matchesStatus && matchesCity && matchesPublication && matchesTier && matchesTag;
-  });
 
   return (
     <div className="space-y-4">
@@ -208,6 +234,18 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
             <SelectItem value="none">Sin tier</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={contentFilter} onValueChange={setContentFilter}>
+          <SelectTrigger className="w-[170px] h-9">
+            <SelectValue placeholder="Contenido" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todo el contenido</SelectItem>
+            <SelectItem value="with_content">📹 Con contenido</SelectItem>
+            <SelectItem value="no_content">⭕ Sin contenido</SelectItem>
+            <SelectItem value="approved">✅ Aprobado/Publicado</SelectItem>
+            <SelectItem value="in_review">🔍 En revisión</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Tag filter chips */}
@@ -227,7 +265,7 @@ export const UgcTableView: React.FC<UgcTableViewProps> = ({
           >
             Todas
             <span className={`ml-0.5 px-1 rounded text-[10px] ${selectedTagId === null ? 'bg-background/20' : 'bg-muted'}`}>
-              {creators.length}
+              {preTagFiltered.length}
             </span>
           </button>
           <button

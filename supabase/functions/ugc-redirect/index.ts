@@ -40,7 +40,7 @@ serve(async (req) => {
 
     const { data: link } = await supabaseAdmin
       .from('ugc_discount_links')
-      .select('id, organization_id, creator_id, shopify_discount_code, is_active')
+      .select('id, organization_id, creator_id, shopify_discount_code, is_active, landing_enabled, landing_path, landing_variant')
       .eq('redirect_token', token)
       .maybeSingle();
 
@@ -48,8 +48,14 @@ serve(async (req) => {
       return Response.redirect(fallbackUrl, 302);
     }
 
-    const landingPath = url.searchParams.get('return_to') || '/collections/all';
-    const safeLandingPath = landingPath.startsWith('/') ? landingPath : '/collections/all';
+    // Priority: explicit ?return_to param > link's configured landing_path > /collections/all
+    const explicitReturn = url.searchParams.get('return_to');
+    const safeLandingPath =
+      (explicitReturn && explicitReturn.startsWith('/'))
+        ? explicitReturn
+      : (link.landing_enabled && link.landing_path && link.landing_path.startsWith('/'))
+        ? link.landing_path
+      : '/collections/all';
 
     // Best-effort click tracking. Never block the shopper if analytics insert fails.
     try {
@@ -68,6 +74,7 @@ serve(async (req) => {
         utm_term: url.searchParams.get('utm_term'),
         metadata: {
           token_source: pathParts[pathParts.length - 1] ? 'path' : 'query',
+          landing_variant: link.landing_variant || null,
         },
       });
     } catch (clickError) {

@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import {
   Loader2, Link2, Copy, Check, ShoppingBag, DollarSign, TrendingUp,
-  Trash2, PowerOff, Power, AlertCircle, Wallet, CreditCard, Smartphone, History, KeyRound,
+  Trash2, PowerOff, Power, AlertCircle, Wallet, CreditCard, Smartphone, History, KeyRound, Globe,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -58,6 +59,12 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
   const [deleting, setDeleting] = useState(false);
   const [toggling, setToggling] = useState(false);
 
+  // Landing page state
+  const [landingEnabled, setLandingEnabled] = useState(false);
+  const [landingPath, setLandingPath] = useState('');
+  const [landingVariant, setLandingVariant] = useState('');
+  const [savingLanding, setSavingLanding] = useState(false);
+
   // Payout state
   const [payoutOpen, setPayoutOpen] = useState(false);
   const [payoutAmount, setPayoutAmount] = useState('');
@@ -65,8 +72,16 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
   const [payoutNotes, setPayoutNotes] = useState('');
 
   const { isAdmin } = useAuth();
-  const { discountLink, attributedOrders, payouts, loading, creating, registeringPayout, createDiscountLink, toggleActive, registerPayout, refetch } =
+  const { discountLink, attributedOrders, payouts, loading, creating, registeringPayout, createDiscountLink, updateLanding, toggleActive, registerPayout, refetch } =
     useUgcDiscountLinks(creatorId);
+
+  useEffect(() => {
+    if (discountLink) {
+      setLandingEnabled(discountLink.landing_enabled);
+      setLandingPath(discountLink.landing_path || '');
+      setLandingVariant(discountLink.landing_variant || '');
+    }
+  }, [discountLink]);
 
   const redirectUrl = discountLink
     ? `https://club.dosmicos.com/ugc/${discountLink.redirect_token}`
@@ -85,6 +100,21 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
     setCopied(true);
     toast.success('Link copiado');
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleSaveLanding = async () => {
+    if (!discountLink) return;
+    if (landingEnabled && (!landingPath || !landingPath.startsWith('/'))) {
+      toast.error('La ruta debe comenzar con /');
+      return;
+    }
+    setSavingLanding(true);
+    await updateLanding(discountLink.id, {
+      landing_enabled: landingEnabled,
+      landing_path: landingEnabled ? (landingPath || null) : null,
+      landing_variant: landingVariant || null,
+    });
+    setSavingLanding(false);
   };
 
   const handleToggle = async () => {
@@ -287,6 +317,49 @@ export const DiscountLinkButton: React.FC<DiscountLinkButtonProps> = ({ creatorI
                   </div>
                 </div>
               )}
+
+              {/* Landing Page */}
+              <div className="rounded-lg border p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-medium flex items-center gap-1.5">
+                    <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                    Landing page personalizada
+                  </Label>
+                  <Switch checked={landingEnabled} onCheckedChange={setLandingEnabled} />
+                </div>
+                {landingEnabled && (
+                  <div className="space-y-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Ruta (empieza con /)</Label>
+                      <Input
+                        value={landingPath}
+                        onChange={(e) => setLandingPath(e.target.value)}
+                        placeholder="/pages/ugc-landing"
+                        className="text-xs font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Variante (opcional)</Label>
+                      <Input
+                        value={landingVariant}
+                        onChange={(e) => setLandingVariant(e.target.value)}
+                        placeholder="ej: verano2026"
+                        className="text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSaveLanding}
+                  disabled={savingLanding}
+                  className="w-full"
+                >
+                  {savingLanding && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+                  Guardar landing
+                </Button>
+              </div>
 
               {/* Actions */}
               <div className="flex items-center gap-2 pt-1">
