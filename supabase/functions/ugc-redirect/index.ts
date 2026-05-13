@@ -61,6 +61,9 @@ serve(async (req) => {
       return Response.redirect(fallbackUrl, 302);
     }
 
+    // Priority: explicit ?return_to param > link's configured landing_path > /collections/all.
+    // Configured UGC landing paths get a temporary marker so the Shopify hidden-page guard
+    // can distinguish creator-link traffic from direct/public traffic.
     const explicitLandingPath = url.searchParams.get('return_to');
     const configuredLandingPath = link.landing_enabled ? link.landing_path : null;
     let safeLandingPath = '/collections/all';
@@ -87,7 +90,7 @@ serve(async (req) => {
         utm_term: url.searchParams.get('utm_term'),
         metadata: {
           token_source: pathParts[pathParts.length - 1] ? 'path' : 'query',
-          landing_variant: link.landing_variant,
+          landing_variant: link.landing_variant || null,
         },
       });
     } catch (clickError) {

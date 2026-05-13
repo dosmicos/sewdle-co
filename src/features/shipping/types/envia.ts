@@ -221,11 +221,13 @@ export interface CancelLabelResponse {
 }
 
 // Carriers available in Colombia
-export type CarrierCode = 'coordinadora' | 'interrapidisimo' | 'deprisa' | 'servientrega' | 'tcc' | 'envia' | 'otro';
+// Note: 'interrapidisimo_domicilio' is a local alias for interrapidisimo with domicilio delivery preference
+export type CarrierCode = 'coordinadora' | 'interrapidisimo' | 'interrapidisimo_domicilio' | 'deprisa' | 'servientrega' | 'tcc' | 'envia' | 'otro';
 
 export const CARRIER_NAMES: Record<CarrierCode, string> = {
   coordinadora: 'Coordinadora',
   interrapidisimo: 'Interrapidísimo',
+  interrapidisimo_domicilio: 'Interrapidísimo Dom.',
   deprisa: 'Deprisa',
   servientrega: 'Servientrega',
   tcc: 'TCC',
@@ -236,6 +238,7 @@ export const CARRIER_NAMES: Record<CarrierCode, string> = {
 export const CARRIER_ENVIA_CODES: Record<CarrierCode, string> = {
   coordinadora: 'coordinadora',
   interrapidisimo: 'interrapidisimo',
+  interrapidisimo_domicilio: 'interrapidisimo', // maps to same Envia API code
   deprisa: 'deprisa',
   servientrega: 'servientrega',
   tcc: 'tcc',

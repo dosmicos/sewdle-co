@@ -475,16 +475,18 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     determineCarrier();
   }, [shippingAddress?.city, destinationDepartment, isCOD]);
 
-  // Auto-select best carrier when quotes load
+  // Auto-select best carrier when quotes load (manual "Cotizar" flow)
   useEffect(() => {
     if (quotes.length > 0 && !selectedCarrier) {
-      const bestQuote = quotes.find(q => 
-        q.carrier.toLowerCase() === recommendedCarrier.toLowerCase() &&
+      // 'interrapidisimo_domicilio' is a local alias — strip suffix for API matching
+      const baseCarrier = recommendedCarrier.replace('_domicilio', '');
+      const bestQuote = quotes.find(q =>
+        q.carrier.toLowerCase() === baseCarrier.toLowerCase() &&
         q.deliveryType === 'domicilio'
-      ) || quotes.find(q => 
-        q.carrier.toLowerCase() === recommendedCarrier.toLowerCase()
+      ) || quotes.find(q =>
+        q.carrier.toLowerCase() === baseCarrier.toLowerCase()
       ) || quotes[0];
-      
+
       if (bestQuote) {
         const autoKey = `${bestQuote.carrier}:${bestQuote.service}:${bestQuote.deliveryType}`;
         setSelectedCarrier(autoKey);
@@ -562,19 +564,22 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   }, [shippingAddress, destinationDepartment, totalPrice, getQuotesWithRetry, showMissingDestinationToast]);
 
-  // Select the best carrier from a list of quotes based on business rules
+  // Select the best carrier from a list of quotes based on business rules.
+  // 'interrapidisimo_domicilio' is a local alias — strip the suffix to get the real carrier code.
   const selectBestCarrier = useCallback((carrierQuotes: typeof quotes): string => {
-    const bestQuote = carrierQuotes.find(q => 
-      q.carrier.toLowerCase() === recommendedCarrier.toLowerCase() &&
+    const baseCarrier = recommendedCarrier.replace('_domicilio', '');
+
+    const bestQuote = carrierQuotes.find(q =>
+      q.carrier.toLowerCase() === baseCarrier.toLowerCase() &&
       q.deliveryType === 'domicilio'
-    ) || carrierQuotes.find(q => 
-      q.carrier.toLowerCase() === recommendedCarrier.toLowerCase()
+    ) || carrierQuotes.find(q =>
+      q.carrier.toLowerCase() === baseCarrier.toLowerCase()
     ) || carrierQuotes[0];
-    
+
     if (bestQuote) {
       return `${bestQuote.carrier}:${bestQuote.service}:${bestQuote.deliveryType}`;
     }
-    return recommendedCarrier;
+    return baseCarrier;
   }, [recommendedCarrier]);
 
   // Unified flow: quote + auto-select carrier + create label in one click
@@ -630,6 +635,16 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       // Auto-select best carrier
       const bestCarrierKey = selectBestCarrier(result.quotes);
       setSelectedCarrier(bestCarrierKey);
+
+      // Notify user when the actual carrier differs from what was recommended.
+      // This can happen when the recommended carrier has no coverage for a destination.
+      const bestCarrierCode = bestCarrierKey.split(':')[0];
+      const baseRecommended = recommendedCarrier.replace('_domicilio', '');
+      if (bestCarrierCode && bestCarrierCode !== baseRecommended) {
+        const recommendedName = CARRIER_NAMES[recommendedCarrier as CarrierCode] || CARRIER_NAMES[baseRecommended as CarrierCode] || baseRecommended;
+        const actualName = CARRIER_NAMES[bestCarrierCode as CarrierCode] || bestCarrierCode;
+        toast.info(`${recommendedName} sin cobertura para este destino. Usando ${actualName}.`, { duration: 5000 });
+      }
 
       // Check city validation from matchInfo
       if (result.matchInfo?.matchType === 'fuzzy' && !correctedCity) {
@@ -781,7 +796,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     }
   };
 
-  // Helper to get the selected carrier display name
+  // Helper to get the selected carrier display name.
+  // Returns null when no quotes have been loaded yet — the actual carrier is unknown
+  // until quotes come back from the API, so we avoid showing a misleading name.
   const getSelectedCarrierDisplayName = (): string | null => {
     if (selectedCarrier && selectedCarrier !== 'auto') {
       // If quotes are available and selectedCarrier is in format "carrier:service:type"
@@ -792,8 +809,11 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
       // Direct carrier code
       return CARRIER_NAMES[selectedCarrier as CarrierCode] || selectedCarrier;
     }
-    // Auto or no selection - use recommended carrier
-    return CARRIER_NAMES[recommendedCarrier as CarrierCode] || 'Coordinadora';
+    // No quotes loaded yet — don't show a specific carrier name.
+    // The recommended carrier is a prediction; the real one is only known after quoting.
+    if (quotes.length === 0) return null;
+    // Quotes loaded but no explicit selection → show recommended carrier
+    return CARRIER_NAMES[recommendedCarrier as CarrierCode] || null;
   };
 
   // Expose methods via apiRef for external control

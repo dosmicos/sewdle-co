@@ -14,6 +14,9 @@ export interface UgcDiscountLink {
   total_commission: number;
   total_paid_out: number;
   is_active: boolean;
+  landing_enabled: boolean;
+  landing_path: string | null;
+  landing_variant: string | null;
   created_at: string;
   updated_at: string;
   // shopify_discount_code is intentionally NOT fetched — never exposed in UI
@@ -52,7 +55,7 @@ export const useUgcDiscountLinks = (creatorId: string | undefined) => {
 
       // Fetch discount link (exclude shopify_discount_code from select)
       const { data: linkData, error: linkError } = await (supabase.from('ugc_discount_links' as any) as any)
-        .select('id, organization_id, creator_id, redirect_token, discount_value, commission_rate, total_orders, total_revenue, total_commission, total_paid_out, is_active, created_at, updated_at')
+        .select('id, organization_id, creator_id, redirect_token, discount_value, commission_rate, total_orders, total_revenue, total_commission, total_paid_out, is_active, landing_enabled, landing_path, landing_variant, created_at, updated_at')
         .eq('creator_id', creatorId)
         .eq('is_active', true)
         .maybeSingle();
@@ -125,6 +128,24 @@ export const useUgcDiscountLinks = (creatorId: string | undefined) => {
     }
   };
 
+  const updateLanding = async (linkId: string, params: {
+    landing_enabled: boolean;
+    landing_path: string | null;
+    landing_variant: string | null;
+  }): Promise<boolean> => {
+    const { error } = await (supabase.from('ugc_discount_links' as any) as any)
+      .update({ ...params, updated_at: new Date().toISOString() })
+      .eq('id', linkId);
+
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    toast({ title: 'Landing page guardada' });
+    await fetchData();
+    return true;
+  };
+
   const toggleActive = async (linkId: string, isActive: boolean) => {
     const { error } = await (supabase.from('ugc_discount_links' as any) as any)
       .update({ is_active: isActive, updated_at: new Date().toISOString() })
@@ -181,6 +202,7 @@ export const useUgcDiscountLinks = (creatorId: string | undefined) => {
     creating,
     registeringPayout,
     createDiscountLink,
+    updateLanding,
     toggleActive,
     registerPayout,
     refetch: fetchData,
