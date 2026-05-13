@@ -48,6 +48,8 @@ const DEFAULT_LANGUAGE = 'es_CO';
 const PUBLIC_LINK_BASE = 'https://club.dosmicos.com/ugc';
 const UPLOAD_LINK_BASE = 'https://upload.dosmicos.com/upload';
 const RANK_PROXIMITY_MAX_GAP_COP = 50_000;
+const DEFAULT_INTERNAL_SALE_ALERT_PHONE = '3193661150';
+const DEFAULT_INTERNAL_SALE_ALERT_CONTACT_NAME = 'Sebastián';
 
 const TEMPLATE_DEFAULTS: Record<NotificationType, Setting> = {
   sale: {
@@ -141,6 +143,7 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean, authorized
 
   const totalOrders = await countCreatorOrders(supabase, creator.id);
   const notificationType: NotificationType = totalOrders <= 1 ? 'first_sale' : 'sale';
+  const internalOnly = body.internalOnly === true;
 
   const [ranking, weeklyProgress] = await Promise.all([
     computeMonthlyRanking(supabase, order.organization_id, creator.id),
@@ -156,40 +159,56 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean, authorized
     : [creator.name, commission, pendingBalance, String(ranking.creatorRank || '-'), uploadLink];
 
   const primaryPreview = fillSample(TEMPLATE_DEFAULTS[notificationType].sample_message || '', primaryParams);
-  const primary = await maybeSendNotification(supabase, {
-    organizationId: order.organization_id,
-    creator,
-    link,
-    type: notificationType,
-    params: primaryParams,
-    preview: primaryPreview,
-    dryRun,
-    authorized,
-    attributedOrderId: order.id,
-    metadata: {
-      shopify_order_id: order.shopify_order_id,
-      shopify_order_number: order.shopify_order_number,
-      order_total: numberValue(order.order_total),
-      commission_amount: numberValue(order.commission_amount),
-      upload_link: uploadLink,
-      creator_link: creatorLink,
-      monthly_rank: ranking.creatorRank,
-      monthly_commission: ranking.creatorMonthlyCommission,
-      monthly_period_start: ranking.periodStart,
-      weekly_orders: weeklyProgress.weeklyOrders,
-      weekly_commission: weeklyProgress.weeklyCommission,
-      weekly_period_start: weeklyProgress.weekStart,
-    },
-  });
+  const primary = internalOnly
+    ? { status: 'skipped_internal_only', reason: 'DB-triggered flow only alerts Sebastián; no creator WhatsApp is sent' }
+    : await maybeSendNotification(supabase, {
+        organizationId: order.organization_id,
+        creator,
+        link,
+        type: notificationType,
+        params: primaryParams,
+        preview: primaryPreview,
+        dryRun,
+        authorized,
+        attributedOrderId: order.id,
+        metadata: {
+          shopify_order_id: order.shopify_order_id,
+          shopify_order_number: order.shopify_order_number,
+          order_total: numberValue(order.order_total),
+          commission_amount: numberValue(order.commission_amount),
+          upload_link: uploadLink,
+          creator_link: creatorLink,
+          monthly_rank: ranking.creatorRank,
+          monthly_commission: ranking.creatorMonthlyCommission,
+          monthly_period_start: ranking.periodStart,
+          weekly_orders: weeklyProgress.weeklyOrders,
+          weekly_commission: weeklyProgress.weeklyCommission,
+          weekly_period_start: weeklyProgress.weekStart,
+        },
+      });
 
-  const rankNotification = await maybeSendRankNotification(supabase, {
-    organizationId: order.organization_id,
+  const rankNotification = internalOnly
+    ? { status: 'skipped_internal_only', reason: 'DB-triggered flow only alerts Sebastián; no creator WhatsApp is sent' }
+    : await maybeSendRankNotification(supabase, {
+        organizationId: order.organization_id,
+        creator,
+        link,
+        ranking,
+        dryRun,
+        authorized,
+        attributedOrderId: order.id,
+      });
+
+  const internalSaleAlert = await sendInternalSaleAlert(supabase, {
+    order,
     creator,
     link,
     ranking,
+    weeklyProgress,
+    commission,
+    pendingBalance,
     dryRun,
     authorized,
-    attributedOrderId: order.id,
   });
 
   return {
@@ -197,8 +216,10 @@ async function notifyOrder(supabase: any, body: any, dryRun: boolean, authorized
     dryRun,
     orderId: order.id,
     notificationType,
+    internalOnly,
     primary,
     rankNotification,
+    internalSaleAlert,
     ranking,
     weeklyProgress,
   };
@@ -309,6 +330,387 @@ async function sendTestTemplate(supabase: any, body: any, dryRun: boolean, autho
   );
 
   return { ok: result.ok, messageId: result.messageId, error: result.error, preview };
+}
+
+async function sendInternalSaleAlert(supabase: any, args: {
+  order: AttributedOrder;
+  creator: Creator;
+  link: DiscountLink;
+  ranking: { creatorRank: number | null; creatorMonthlyCommission: number; top5Gap: number | null; periodStart: string };
+  weeklyProgress: { weekStart: string; weeklyOrders: number; weeklyCommission: number };
+  commission: string;
+  pendingBalance: string;
+  dryRun: boolean;
+  authorized: boolean;
+}) {
+  const configuredPhone = Deno.env.get('UGC_INTERNAL_SALE_ALERT_PHONE') || DEFAULT_INTERNAL_SALE_ALERT_PHONE;
+  const normalizedPhone = normalizeColombianPhone(configuredPhone);
+  const contactName = Deno.env.get('UGC_INTERNAL_SALE_ALERT_CONTACT_NAME') || DEFAULT_INTERNAL_SALE_ALERT_CONTACT_NAME;
+  const groupPost = buildGroupPostSuggestion(args.creator);
+  const message = buildInternalSaleAlertMessage({ ...args, groupPost });
+
+  if (!normalizedPhone) {
+    return { status: 'skipped_invalid_internal_phone', configuredPhone };
+  }
+
+  if (args.dryRun) {
+    return { status: 'dry_run', phone: normalizedPhone, preview: message, groupPost };
+  }
+
+  if (!args.authorized) {
+    return {
+      status: 'skipped_authorization_required',
+      reason: 'Explicit authorization is required before sending WhatsApp messages',
+      preview: message,
+    };
+  }
+
+  const channel = await fetchWhatsAppChannel(supabase, args.order.organization_id);
+  if (!channel?.phoneNumberId || !channel?.channelId) {
+    return await recordInternalSaleAlertFailure(supabase, args, normalizedPhone, message, {
+      message: 'No active WhatsApp channel or META_PHONE_NUMBER_ID configured',
+      code: 'whatsapp_channel_not_configured',
+    });
+  }
+
+  const token = Deno.env.get('META_WHATSAPP_TOKEN');
+  if (!token) {
+    return await recordInternalSaleAlertFailure(supabase, args, normalizedPhone, message, {
+      message: 'META_WHATSAPP_TOKEN missing',
+      code: 'META_WHATSAPP_TOKEN_missing',
+    });
+  }
+
+  const pending = await insertInternalSaleAlert(supabase, {
+    order: args.order,
+    creator: args.creator,
+    phone: normalizedPhone,
+    message,
+    groupPost,
+  });
+
+  if (pending.status === 'skipped_duplicate') {
+    return pending;
+  }
+
+  if (pending.status === 'failed') {
+    return pending;
+  }
+
+  const conversation = await getOrCreateInternalAlertConversation(supabase, {
+    organizationId: args.order.organization_id,
+    channelId: channel.channelId,
+    phone: normalizedPhone,
+    contactName,
+    message,
+  });
+
+  const templateName = Deno.env.get('UGC_INTERNAL_SALE_ALERT_TEMPLATE_NAME');
+  const templateLanguage = Deno.env.get('UGC_INTERNAL_SALE_ALERT_TEMPLATE_LANGUAGE') || DEFAULT_LANGUAGE;
+  const sendResult = templateName
+    ? await sendWhatsAppTemplate(
+        channel.phoneNumberId,
+        token,
+        normalizedPhone,
+        templateName,
+        templateLanguage,
+        [
+          { type: 'text' as const, text: args.creator.name },
+          { type: 'text' as const, text: args.commission },
+          { type: 'text' as const, text: args.pendingBalance },
+          { type: 'text' as const, text: String(args.ranking.creatorRank || '-') },
+          { type: 'text' as const, text: groupPost },
+        ]
+      )
+    : await sendWhatsAppText(channel.phoneNumberId, token, normalizedPhone, message);
+
+  if (!sendResult.ok) {
+    await updateInternalSaleAlert(supabase, pending.id, {
+      status: 'failed',
+      conversation_id: conversation?.id || null,
+      error: sendResult.error || { message: 'internal_sale_alert_send_failed' },
+    });
+    return { status: 'failed', alertId: pending.id, conversationId: conversation?.id || null, error: sendResult.error };
+  }
+
+  let savedMessageId: string | null = null;
+  if (conversation?.id) {
+    savedMessageId = await saveInternalSaleAlertMessage(supabase, {
+      conversationId: conversation.id,
+      externalMessageId: sendResult.messageId || null,
+      content: message,
+      attributedOrderId: args.order.id,
+      shopifyOrderId: args.order.shopify_order_id,
+      shopifyOrderNumber: args.order.shopify_order_number,
+      creatorId: args.creator.id,
+      creatorName: args.creator.name,
+      groupPost,
+      messageType: templateName ? 'template' : 'text',
+      templateName: templateName || null,
+    });
+  }
+
+  await updateInternalSaleAlert(supabase, pending.id, {
+    status: 'sent',
+    conversation_id: conversation?.id || null,
+    messaging_message_id: savedMessageId,
+    external_message_id: sendResult.messageId || null,
+    sent_at: new Date().toISOString(),
+  });
+
+  return {
+    status: 'sent',
+    alertId: pending.id,
+    conversationId: conversation?.id || null,
+    messageId: sendResult.messageId,
+    messagingMessageId: savedMessageId,
+  };
+}
+
+async function insertInternalSaleAlert(supabase: any, args: {
+  order: AttributedOrder;
+  creator: Creator;
+  phone: string;
+  message: string;
+  groupPost: string;
+}): Promise<{ status: 'pending'; id: string } | { status: 'skipped_duplicate'; alertId?: string | null } | { status: 'failed'; error: any }> {
+  const { data, error } = await supabase
+    .from('ugc_internal_sale_alerts')
+    .insert({
+      organization_id: args.order.organization_id,
+      attributed_order_id: args.order.id,
+      creator_id: args.creator.id,
+      shopify_order_id: args.order.shopify_order_id,
+      shopify_order_number: args.order.shopify_order_number,
+      whatsapp_number: args.phone,
+      message_preview: args.message,
+      group_post_suggestion: args.groupPost,
+      status: 'pending',
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    if (String(error.message || '').toLowerCase().includes('duplicate') || error.code === '23505') {
+      log('Internal sale alert duplicate skipped', { attributedOrderId: args.order.id, creatorId: args.creator.id });
+      return { status: 'skipped_duplicate' };
+    }
+    console.error('Internal sale alert insert error:', error);
+    return { status: 'failed', error };
+  }
+
+  return { status: 'pending', id: data.id };
+}
+
+async function recordInternalSaleAlertFailure(supabase: any, args: {
+  order: AttributedOrder;
+  creator: Creator;
+  link: DiscountLink;
+}, phone: string, message: string, error: Record<string, unknown>) {
+  const inserted = await insertInternalSaleAlert(supabase, {
+    order: args.order,
+    creator: args.creator,
+    phone,
+    message,
+    groupPost: buildGroupPostSuggestion(args.creator),
+  });
+
+  if (inserted.status === 'pending') {
+    await updateInternalSaleAlert(supabase, inserted.id, { status: 'failed', error });
+    return { status: 'failed', alertId: inserted.id, error };
+  }
+
+  return inserted;
+}
+
+async function updateInternalSaleAlert(supabase: any, alertId: string, patch: Record<string, unknown>) {
+  const { error } = await supabase
+    .from('ugc_internal_sale_alerts')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', alertId);
+
+  if (error) console.error('Internal sale alert update error:', error);
+}
+
+async function getOrCreateInternalAlertConversation(supabase: any, args: {
+  organizationId: string;
+  channelId: string;
+  phone: string;
+  contactName: string;
+  message: string;
+}): Promise<{ id: string } | null> {
+  const { data: existing, error: existingError } = await supabase
+    .from('messaging_conversations')
+    .select('id')
+    .eq('organization_id', args.organizationId)
+    .eq('channel_id', args.channelId)
+    .eq('external_user_id', args.phone)
+    .maybeSingle();
+
+  if (existingError) console.error('Internal alert conversation lookup error:', existingError);
+  if (existing?.id) return existing;
+
+  const { data: created, error: createError } = await supabase
+    .from('messaging_conversations')
+    .insert({
+      organization_id: args.organizationId,
+      channel_id: args.channelId,
+      channel_type: 'whatsapp',
+      external_user_id: args.phone,
+      user_name: args.contactName,
+      user_identifier: args.phone,
+      status: 'active',
+      ai_managed: false,
+      last_message_preview: args.message.substring(0, 100),
+      last_message_at: new Date().toISOString(),
+      metadata: {
+        system: 'ugc_internal_sale_alerts',
+        contact_role: 'internal_ops',
+      },
+    })
+    .select('id')
+    .maybeSingle();
+
+  if (!createError && created?.id) return created;
+
+  if (createError) {
+    console.error('Internal alert conversation insert error:', createError);
+    const { data: raced } = await supabase
+      .from('messaging_conversations')
+      .select('id')
+      .eq('channel_id', args.channelId)
+      .eq('external_user_id', args.phone)
+      .maybeSingle();
+    return raced || null;
+  }
+
+  return null;
+}
+
+async function saveInternalSaleAlertMessage(supabase: any, args: {
+  conversationId: string;
+  externalMessageId: string | null;
+  content: string;
+  attributedOrderId: string;
+  shopifyOrderId: string;
+  shopifyOrderNumber: string | null;
+  creatorId: string;
+  creatorName: string;
+  groupPost: string;
+  messageType: 'text' | 'template';
+  templateName: string | null;
+}): Promise<string | null> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('messaging_messages')
+    .insert({
+      conversation_id: args.conversationId,
+      external_message_id: args.externalMessageId,
+      channel_type: 'whatsapp',
+      direction: 'outbound',
+      sender_type: 'agent',
+      content: args.content,
+      message_type: args.messageType,
+      metadata: {
+        system: 'ugc_internal_sale_alerts',
+        attributed_order_id: args.attributedOrderId,
+        shopify_order_id: args.shopifyOrderId,
+        shopify_order_number: args.shopifyOrderNumber,
+        creator_id: args.creatorId,
+        creator_name: args.creatorName,
+        group_post_suggestion: args.groupPost,
+        template_name: args.templateName,
+      },
+      sent_at: now,
+    })
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    console.error('Internal alert message insert error:', error);
+    return null;
+  }
+
+  await supabase
+    .from('messaging_conversations')
+    .update({
+      last_message_preview: args.content.substring(0, 100),
+      last_message_at: now,
+    })
+    .eq('id', args.conversationId);
+
+  return data?.id || null;
+}
+
+async function sendWhatsAppText(
+  phoneNumberId: string,
+  token: string,
+  to: string,
+  message: string
+): Promise<{ ok: boolean; messageId?: string; error?: any }> {
+  try {
+    const resp = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'text',
+        text: {
+          preview_url: false,
+          body: message,
+        },
+      }),
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) return { ok: false, error: data };
+    return { ok: true, messageId: data?.messages?.[0]?.id };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
+
+function buildInternalSaleAlertMessage(args: {
+  order: AttributedOrder;
+  creator: Creator;
+  ranking: { creatorRank: number | null; creatorMonthlyCommission: number; top5Gap: number | null; periodStart: string };
+  weeklyProgress: { weekStart: string; weeklyOrders: number; weeklyCommission: number };
+  commission: string;
+  pendingBalance: string;
+  groupPost: string;
+}) {
+  const handle = args.creator.instagram_handle ? ` (@${String(args.creator.instagram_handle).replace(/^@/, '')})` : '';
+  const orderNumber = args.order.shopify_order_number ? `#${args.order.shopify_order_number}` : args.order.shopify_order_id;
+  const rank = args.ranking.creatorRank ? `#${args.ranking.creatorRank}` : 'sin ranking aún';
+
+  return [
+    '🎉 Nueva venta CLUB DOSMICOS',
+    '',
+    `Mamá: ${args.creator.name}${handle}`,
+    `Orden: ${orderNumber}`,
+    `Comisión generada: ${args.commission}`,
+    `Saldo acumulado: ${args.pendingBalance}`,
+    `Ranking mensual: ${rank}`,
+    `Ventas esta semana: ${args.weeklyProgress.weeklyOrders}`,
+    '',
+    'Mensaje listo para copiar al grupo:',
+    args.groupPost,
+  ].join('\n');
+}
+
+function buildGroupPostSuggestion(creator: Creator): string {
+  return [
+    '🎉 Nueva comisión generada',
+    '',
+    `💛 ${creator.name} generó 1 comisión nueva en CLUB DOSMICOS.`,
+    '',
+    '¡Vamos con toda, mamás! 🧸✨',
+  ].join('\n');
 }
 
 async function maybeSendRankNotification(supabase: any, args: {
