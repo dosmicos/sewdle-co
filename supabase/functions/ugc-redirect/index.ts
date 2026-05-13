@@ -18,6 +18,19 @@ const getClientIp = (req: Request) => {
   return forwardedFor || req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip");
 };
 
+const isSafeShopifyPath = (path: string | null) => {
+  return Boolean(path && path.startsWith('/') && !path.startsWith('//'));
+};
+
+const appendLandingMarker = (path: string, landingVariant: string | null) => {
+  const landingUrl = new URL(path, 'https://dosmicos.local');
+  landingUrl.searchParams.set('ugc_landing', '1');
+  landingUrl.searchParams.set('utm_source', landingUrl.searchParams.get('utm_source') || 'ugc');
+  landingUrl.searchParams.set('utm_medium', landingUrl.searchParams.get('utm_medium') || 'creator');
+  if (landingVariant) landingUrl.searchParams.set('utm_content', landingVariant);
+  return `${landingUrl.pathname}${landingUrl.search}${landingUrl.hash}`;
+};
+
 serve(async (req) => {
   const url = new URL(req.url);
 
@@ -40,7 +53,7 @@ serve(async (req) => {
 
     const { data: link } = await supabaseAdmin
       .from('ugc_discount_links')
-      .select('id, organization_id, creator_id, shopify_discount_code, is_active')
+      .select('id, organization_id, creator_id, shopify_discount_code, is_active, landing_enabled, landing_path, landing_variant')
       .eq('redirect_token', token)
       .maybeSingle();
 
@@ -48,8 +61,14 @@ serve(async (req) => {
       return Response.redirect(fallbackUrl, 302);
     }
 
-    const landingPath = url.searchParams.get('return_to') || '/collections/all';
-    const safeLandingPath = landingPath.startsWith('/') ? landingPath : '/collections/all';
+    const explicitLandingPath = url.searchParams.get('return_to');
+    const configuredLandingPath = link.landing_enabled ? link.landing_path : null;
+    let safeLandingPath = '/collections/all';
+    if (isSafeShopifyPath(explicitLandingPath)) {
+      safeLandingPath = explicitLandingPath!;
+    } else if (isSafeShopifyPath(configuredLandingPath)) {
+      safeLandingPath = appendLandingMarker(configuredLandingPath!, link.landing_variant);
+    }
 
     // Best-effort click tracking. Never block the shopper if analytics insert fails.
     try {
@@ -68,6 +87,7 @@ serve(async (req) => {
         utm_term: url.searchParams.get('utm_term'),
         metadata: {
           token_source: pathParts[pathParts.length - 1] ? 'path' : 'query',
+          landing_variant: link.landing_variant,
         },
       });
     } catch (clickError) {
