@@ -1206,29 +1206,33 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       return;
     }
     
-    if (allItemsVerified && 
+    if (allItemsVerified &&
         !effectiveOrder?.shopify_order?.cancelled_at &&
         !updatingStatus &&
         !isProcessingExpressFulfillment &&
         !packInFlightRef.current) {
-      
+
       // Mark as triggered BEFORE the timeout to prevent race conditions
       autoPackTriggeredRef.current = orderId;
-      
-      // Small delay to show the green verification before auto-packing
+
+      // Small delay to show the green verification before auto-packing.
+      // IMPORTANT: use handleMarkAsPackedAndPrintRef.current() — NOT handleMarkAsPackedAndPrint
+      // directly — so this effect does NOT depend on the callback reference.
+      // If handleMarkAsPackedAndPrint were in the deps array, any localOrder change within
+      // the 800ms window (e.g. sync_from_shopify completing) would recreate the callback,
+      // trigger the cleanup (clearTimeout), and the guard above would silently block
+      // re-scheduling → empacado never set, print never triggered.
       const timer = setTimeout(() => {
-        if (isExpressShipping) {
-          // Express: mark as packed + print immediately (code entry is a separate step via "Ingresar Codigo" button)
-          handleMarkAsPackedAndPrint();
-        } else {
-          // Standard: mark as ready_to_ship
-          handleMarkAsPackedAndPrint();
-        }
+        handleMarkAsPackedAndPrintRef.current();
       }, 800);
-      
+
       return () => clearTimeout(timer);
     }
-  }, [orderId, allItemsVerified, effectiveOrder?.operational_status, effectiveOrder?.shopify_order?.cancelled_at, updatingStatus, isExpressShipping, isProcessingExpressFulfillment, handleMarkAsPackedExpress, handleMarkAsPackedAndPrint]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId, allItemsVerified, effectiveOrder?.operational_status, effectiveOrder?.shopify_order?.cancelled_at, updatingStatus, isProcessingExpressFulfillment]);
+  // Intentionally excluded from deps: handleMarkAsPackedAndPrint, handleMarkAsPackedExpress, isExpressShipping
+  // — the ref pattern (handleMarkAsPackedAndPrintRef) ensures the latest version is always called
+  //   without causing the effect to re-run (and cancel the timer) on every localOrder change.
 
   // Handler for "Listo para Retiro" - creates fulfillment in Shopify and sets awaiting_pickup
   const handleReadyForPickup = useCallback(async () => {
