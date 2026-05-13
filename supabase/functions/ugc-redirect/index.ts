@@ -98,8 +98,10 @@ serve(async (req) => {
     }
 
     const shopifyDomain = Deno.env.get("SHOPIFY_STORE_DOMAIN") ?? "dosmicos.com";
-    // Apply discount and redirect to destination (code never visible in final URL)
-    const destination = `https://${shopifyDomain}/discount/${link.shopify_discount_code}?return_to=${encodeURIComponent(safeLandingPath)}`;
+    // Apply discount and redirect to destination (code never visible in final URL).
+    // Shopify storefront discount links use `redirect`; `return_to` is preserved as
+    // a query param on `/` and does not route the shopper to the intended page.
+    const destination = `https://${shopifyDomain}/discount/${link.shopify_discount_code}?redirect=${encodeURIComponent(safeLandingPath)}`;
     return Response.redirect(destination, 302);
 
   } catch (_e) {
