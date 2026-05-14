@@ -151,6 +151,10 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     return order;
   }, [cachedOrder, localOrder, order, orderId]);
 
+  // True only when localOrder is fully synced for the current orderId.
+  // Used as an auto-pack effect dep so a retry can fire once localOrder loads.
+  const localOrderReady = localOrder?.id === orderId;
+
   // Use React Query for line items - completely independent of shipping
   const rawLineItems = useMemo(() => 
     effectiveOrder?.shopify_order?.raw_data?.line_items || [],
@@ -426,6 +430,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     setExpressDeliveryCode('');
     setPackError(null);
     setIsRetryingPack(false);
+    setIsProcessingExpressFulfillment(false); // prevent stuck state when navigating mid-express
 
     // Reset guards for new order (allow pack/print for the new order)
     autoPackTriggeredRef.current = null;
@@ -686,6 +691,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     statusUpdateWatchdogRef.current = window.setTimeout(() => {
       setUpdatingStatus(false);
       packInFlightRef.current = false;
+      autoPackTriggeredRef.current = null; // allow auto-pack to retry after timeout
       toast.error('La actualización tardó demasiado. Intenta nuevamente.');
     }, 30000);
 
@@ -1020,16 +1026,17 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       return;
     }
     
-    // Validación robusta con mensajes específicos
+    // Transient state: localOrder not yet synced from React Query cache.
+    // Reset the autoPackTriggeredRef so the effect can retry once localOrderReady becomes true.
     if (!localOrder) {
-      console.warn('⚠️ handleMarkAsPackedAndPrint: No hay orden cargada');
-      toast.error('Error: Orden no cargada. Intenta de nuevo.');
+      console.warn('⚠️ handleMarkAsPackedAndPrint: localOrder not ready yet — resetting guard for retry');
+      autoPackTriggeredRef.current = null;
       return;
     }
-    
+
     if (localOrder.id !== orderId) {
-      console.warn(`⚠️ handleMarkAsPackedAndPrint: Orden desincronizada (localOrder.id=${localOrder.id}, orderId=${orderId})`);
-      toast.error('Error: Orden desincronizada. Actualiza la página.');
+      console.warn(`⚠️ handleMarkAsPackedAndPrint: localOrder.id mismatch (${localOrder.id} vs ${orderId}) — resetting guard for retry`);
+      autoPackTriggeredRef.current = null;
       return;
     }
     
@@ -1229,8 +1236,10 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       return () => clearTimeout(timer);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, allItemsVerified, effectiveOrder?.operational_status, effectiveOrder?.shopify_order?.cancelled_at, updatingStatus, isProcessingExpressFulfillment]);
-  // Intentionally excluded from deps: handleMarkAsPackedAndPrint, handleMarkAsPackedExpress, isExpressShipping
+  }, [orderId, allItemsVerified, effectiveOrder?.operational_status, effectiveOrder?.shopify_order?.cancelled_at, updatingStatus, isProcessingExpressFulfillment, localOrderReady]);
+  // localOrderReady enables a retry: if localOrder wasn't synced when the timer fired (early
+  // return reset the guard), the effect re-runs once localOrder.id === orderId is true.
+  // Intentionally excluded: handleMarkAsPackedAndPrint, handleMarkAsPackedExpress, isExpressShipping
   // — the ref pattern (handleMarkAsPackedAndPrintRef) ensures the latest version is always called
   //   without causing the effect to re-run (and cancel the timer) on every localOrder change.
 
