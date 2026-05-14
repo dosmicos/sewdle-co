@@ -128,7 +128,8 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
     const normalizedUrl = previewOriginalUrl.split('?')[0];
     const extensionMatch = normalizedUrl.match(/\.(mp4|mov|webm|m4v|ogg|jpg|jpeg|png|gif|webp|heic|avif)$/i);
     const extension = extensionMatch?.[1]?.toLowerCase() || (previewIsPhoto ? 'jpg' : 'mp4');
-    const prefix = previewIsPhoto ? 'ugc-foto' : 'ugc-video';
+    const handle = creator?.instagram_handle || creator?.tiktok_handle || 'sin-handle';
+    const filename = `UGC-@${handle}.${extension}`;
 
     try {
       const response = await fetch(previewOriginalUrl);
@@ -140,7 +141,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
       const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = objectUrl;
-      link.download = `${prefix}-${Date.now()}.${extension}`;
+      link.download = filename;
       link.rel = 'noopener noreferrer';
       document.body.appendChild(link);
       link.click();
