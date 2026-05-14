@@ -684,32 +684,20 @@ function buildInternalSaleAlertMessage(args: {
   pendingBalance: string;
   groupPost: string;
 }) {
-  const handle = args.creator.instagram_handle ? ` (@${String(args.creator.instagram_handle).replace(/^@/, '')})` : '';
-  const orderNumber = args.order.shopify_order_number ? `#${args.order.shopify_order_number}` : args.order.shopify_order_id;
-  const rank = args.ranking.creatorRank ? `#${args.ranking.creatorRank}` : 'sin ranking aún';
-
-  return [
-    '🎉 Nueva venta CLUB DOSMICOS',
-    '',
-    `Mamá: ${args.creator.name}${handle}`,
-    `Orden: ${orderNumber}`,
-    `Comisión generada: ${args.commission}`,
-    `Saldo acumulado: ${args.pendingBalance}`,
-    `Ranking mensual: ${rank}`,
-    `Ventas esta semana: ${args.weeklyProgress.weeklyOrders}`,
-    '',
-    'Mensaje listo para copiar al grupo:',
-    args.groupPost,
-  ].join('\n');
+  // Sebastián receives the same short, group-ready copy he can paste to the UGC group.
+  // Keep order/commission/ranking details out of WhatsApp group copy.
+  return args.groupPost;
 }
 
 function buildGroupPostSuggestion(creator: Creator): string {
+  const creatorName = String(creator.name || '').trim() || 'Una creadora';
+
   return [
     '🎉 Nueva comisión generada',
     '',
-    `💛 ${creator.name} generó 1 comisión nueva en CLUB DOSMICOS.`,
+    `💛 ${creatorName} generó una venta con su link de CLUB DOSMICOS.`,
     '',
-    '¡Vamos con toda, mamás! 🧸✨',
+    '¡Vamos con toda, creadoras! 🧸✨',
   ].join('\n');
 }
 
