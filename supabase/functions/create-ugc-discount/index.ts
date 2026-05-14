@@ -12,6 +12,9 @@ const log = (step: string, details?: any) => {
   console.log(`[CREATE-UGC-DISCOUNT] ${step}${str}`);
 };
 
+const DEFAULT_UGC_LANDING_PATH = '/pages/favoritos-ugc';
+const DEFAULT_UGC_LANDING_VARIANT = 'favoritos_ugc_v1_default';
+
 function generateRandomCode(length = 8): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
   let result = '';
@@ -163,8 +166,11 @@ serve(async (req) => {
         shopify_discount_code: discountCode,
         discount_value,
         commission_rate,
+        landing_enabled: true,
+        landing_path: DEFAULT_UGC_LANDING_PATH,
+        landing_variant: DEFAULT_UGC_LANDING_VARIANT,
       })
-      .select('id, redirect_token')
+      .select('id, redirect_token, landing_path, landing_variant')
       .single();
 
     if (insertError) throw new Error(`DB insert error: ${insertError.message}`);
@@ -177,6 +183,8 @@ serve(async (req) => {
       redirect_url: redirectUrl,
       discount_value,
       commission_rate,
+      landing_path: link.landing_path,
+      landing_variant: link.landing_variant,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
