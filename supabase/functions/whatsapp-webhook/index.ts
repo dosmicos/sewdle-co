@@ -1014,13 +1014,22 @@ async function generateAIResponse(
   }
 }
 
-// Send WhatsApp message via Meta API
-async function sendWhatsAppMessage(phoneNumber: string, message: string, phoneNumberId: string): Promise<boolean> {
+type WhatsAppTextSendResult = {
+  success: boolean;
+  messageId: string | null;
+};
+
+// Send WhatsApp message via Meta API and preserve Meta WAMID for delivery/read tracking.
+async function sendWhatsAppMessageWithResult(
+  phoneNumber: string,
+  message: string,
+  phoneNumberId: string,
+): Promise<WhatsAppTextSendResult> {
   const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
   
   if (!accessToken) {
     console.error('META_WHATSAPP_TOKEN not configured');
-    return false;
+    return { success: false, messageId: null };
   }
 
   try {
@@ -1047,15 +1056,22 @@ async function sendWhatsAppMessage(phoneNumber: string, message: string, phoneNu
     
     if (!response.ok) {
       console.error('WhatsApp send error:', response.status, JSON.stringify(responseData));
-      return false;
+      return { success: false, messageId: null };
     }
 
-    console.log('WhatsApp message sent successfully:', responseData.messages?.[0]?.id);
-    return true;
+    const messageId = responseData.messages?.[0]?.id ?? null;
+    console.log('WhatsApp message sent successfully:', messageId);
+    return { success: true, messageId };
   } catch (error) {
     console.error('Error sending WhatsApp message:', error);
-    return false;
+    return { success: false, messageId: null };
   }
+}
+
+// Backwards-compatible boolean wrapper for existing call sites.
+async function sendWhatsAppMessage(phoneNumber: string, message: string, phoneNumberId: string): Promise<boolean> {
+  const result = await sendWhatsAppMessageWithResult(phoneNumber, message, phoneNumberId);
+  return result.success;
 }
 
 // Send Instagram DM via Meta Graph API
@@ -2696,19 +2712,20 @@ serve(async (req) => {
                   } else if (!deliveryPlan.shouldSendToCustomer) {
                     console.log('AI delivery plan suppressed outbound send');
                   } else {
-                    // Send the text response via WhatsApp
-                    const sent = await sendWhatsAppMessage(
+                    // Send the text response via WhatsApp and keep Meta's WAMID so delivery/read callbacks can update this row.
+                    const sendResult = await sendWhatsAppMessageWithResult(
                       senderPhone,
                       aiText,
                       channel.meta_phone_number_id || phoneNumberId
                     );
 
-                    if (sent) {
+                    if (sendResult.success) {
                       // Save AI response to database
                       await supabase
                         .from('messaging_messages')
                         .insert({
                           conversation_id: conversation.id,
+                          external_message_id: sendResult.messageId,
                           channel_type: 'whatsapp',
                           direction: 'outbound',
                           sender_type: 'ai',
