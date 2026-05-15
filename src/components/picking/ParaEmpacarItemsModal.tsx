@@ -289,18 +289,31 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
               width: 100mm;
               margin: 0 !important;
               padding: 0 !important;
+              -webkit-print-color-adjust: economy;
+              print-color-adjust: economy;
             }
             .label {
               border: none;
               width: 48mm;
+              background: white !important;
             }
             .label-embroidery {
-              background: #fffbeb !important;
-              border-left: 1.5mm solid #f59e0b !important;
+              background: white !important;
+              border-left: 1.5mm solid #000 !important;
+            }
+            .product-name {
+              color: #000 !important;
+            }
+            .size-info {
+              color: #000 !important;
+            }
+            .order-num {
+              color: #000 !important;
             }
             .embroidery {
-              background: #fef3c7 !important;
-              color: #92400e !important;
+              background: transparent !important;
+              color: #000 !important;
+              border: 0.3mm solid #000;
             }
           }
         </style>
