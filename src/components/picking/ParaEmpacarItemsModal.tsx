@@ -270,7 +270,7 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
             margin-top: 0.4mm;
           }
           .embroidery {
-            font-size: 9pt;
+            font-size: 10pt;
             font-weight: 700;
             color: #92400e;
             background: #fef3c7;
@@ -316,7 +316,7 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
               background: transparent !important;
               color: #000 !important;
               border: 0.3mm solid #000;
-              font-size: 9pt !important;
+              font-size: 10pt !important;
               white-space: normal !important;
               word-break: break-word !important;
             }
