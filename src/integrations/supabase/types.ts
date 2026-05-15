@@ -5538,6 +5538,16 @@ export type Database = {
           workshop_payment_method: string
         }[]
       }
+      calculate_delivery_estimated_gross: {
+        Args: {
+          delivery_id_param: string
+        }
+        Returns: {
+          total_units: number
+          estimated_gross: number
+          items_without_workshop_price: number
+        }[]
+      }
       calculate_okr_score: { Args: { kr_id_param: string }; Returns: number }
       check_delivery_sync_lock: {
         Args: { delivery_uuid: string }
