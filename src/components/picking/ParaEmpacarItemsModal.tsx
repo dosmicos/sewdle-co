@@ -197,7 +197,7 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
         ${label.size ? `<div class="size-info">${label.size}</div>` : ''}
         <div class="order-num">#${label.orderNumber}</div>
         ${label.hasEmbroidery && label.embroideryName
-          ? `<div class="embroidery">&#129523; ${label.embroideryName}</div>`
+          ? `<div class="embroidery">${label.embroideryName}</div>`
           : ''}
       </div>
     `).join('');
@@ -241,6 +241,9 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
           .label-embroidery {
             background: #fffbeb;
             border-left: 1.5mm solid #f59e0b;
+            height: auto;
+            min-height: 20mm;
+            overflow: visible;
           }
           .product-name {
             font-size: 7.5pt;
@@ -268,16 +271,16 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
             margin-top: 0.4mm;
           }
           .embroidery {
-            font-size: 6.5pt;
+            font-size: 11pt;
             font-weight: 700;
             color: #92400e;
             background: #fef3c7;
-            padding: 0.3mm 1mm;
+            padding: 0.5mm 1mm;
             border-radius: 0.5mm;
-            margin-top: 0.5mm;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            margin-top: 1mm;
+            white-space: normal;
+            line-height: 1.2;
+            word-break: break-word;
           }
           @media print {
             @page {
@@ -314,6 +317,9 @@ export const ParaEmpacarItemsModal: React.FC<ParaEmpacarItemsModalProps> = ({
               background: transparent !important;
               color: #000 !important;
               border: 0.3mm solid #000;
+              font-size: 11pt !important;
+              white-space: normal !important;
+              word-break: break-word !important;
             }
           }
         </style>
