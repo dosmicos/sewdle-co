@@ -278,27 +278,28 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
           </div>
         </div>
 
-        {/* Scan input */}
-        {manifest.status === 'open' && (
-          <div className="relative">
-            <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-            <Input
-              ref={inputRef}
-              value={scanInput}
-              onChange={(e) => setScanInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Escanear o escribir número de guía..."
-              className="pl-10 h-14 text-lg font-mono"
-              autoFocus
-              disabled={scanning}
-            />
-            {/* Always in DOM so animate-spin never resets mid-rotation; opacity toggles visibility */}
-            <Loader2 className={cn(
-              "absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin transition-opacity duration-150",
-              scanning ? "opacity-100" : "opacity-0"
-            )} />
-          </div>
-        )}
+        {/* Scan input — always available regardless of manifest status.
+            Guides may need to be verified even after a manifest is closed or
+            marked as picked_up (e.g. carrier scans out of order). The backend
+            scanTrackingNumber function has no status restriction. */}
+        <div className="relative">
+          <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          <Input
+            ref={inputRef}
+            value={scanInput}
+            onChange={(e) => setScanInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Escanear o escribir número de guía..."
+            className="pl-10 h-14 text-lg font-mono"
+            autoFocus
+            disabled={scanning}
+          />
+          {/* Always in DOM so animate-spin never resets mid-rotation; opacity toggles visibility */}
+          <Loader2 className={cn(
+            "absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin transition-opacity duration-150",
+            scanning ? "opacity-100" : "opacity-0"
+          )} />
+        </div>
 
         {/* Last scan feedback */}
         {scanHistory.length > 0 && (
