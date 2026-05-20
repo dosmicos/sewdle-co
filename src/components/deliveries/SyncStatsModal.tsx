@@ -1,0 +1,235 @@
+import React from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent } from '@/components/ui/card';
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
+import { Zap, Package, Clock, TrendingUp, Loader2 } from 'lucide-react';
+import { useSyncStats } from '@/hooks/useSyncStats';
+import { format, subMonths } from 'date-fns';
+import { es } from 'date-fns/locale';
+
+interface SyncStatsModalProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+const COLORS = {
+  items: '#22c55e',
+  errors: '#ef4444',
+  thisMonth: '#6366f1',
+  prevMonth: '#94a3b8',
+};
+
+// Custom tooltip style for all charts
+const ChartTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-background border rounded-md shadow-md p-2 text-xs space-y-1">
+      <p className="font-medium text-foreground">{label}</p>
+      {payload.map((p: any) => (
+        <p key={p.name} style={{ color: p.color }}>
+          {p.name}: <span className="font-semibold">{p.value}</span>
+        </p>
+      ))}
+    </div>
+  );
+};
+
+export const SyncStatsModal: React.FC<SyncStatsModalProps> = ({ open, onClose }) => {
+  const { todayStats, hourlyData, dailyData, monthComparison, avgItemsPerDay, loading } = useSyncStats();
+
+  const now = new Date();
+  const thisMonthLabel = format(now, 'MMMM', { locale: es });
+  const prevMonthLabel = format(subMonths(now, 1), 'MMMM', { locale: es });
+
+  // Only render hours 5-22 for the hourly chart (less empty space)
+  const hourlyFiltered = hourlyData.filter(h => h.hour >= 5 && h.hour <= 22);
+
+  // Filter monthly data to days that have some data in either series
+  const monthData = monthComparison.filter(d => d.day <= 31);
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-green-500" />
+            Estadísticas de Sincronización Shopify
+          </DialogTitle>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Summary cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Card>
+                <CardContent className="p-3 flex items-center gap-2">
+                  <Zap className="h-7 w-7 text-green-500 shrink-0" />
+                  <div>
+                    <p className="text-2xl font-bold">{todayStats.itemsToday}</p>
+                    <p className="text-xs text-muted-foreground leading-tight">artículos hoy</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3 flex items-center gap-2">
+                  <Package className="h-7 w-7 text-indigo-500 shrink-0" />
+                  <div>
+                    <p className="text-2xl font-bold">{todayStats.ordersToday}</p>
+                    <p className="text-xs text-muted-foreground leading-tight">
+                      {todayStats.ordersToday === 1 ? 'orden hoy' : 'órdenes hoy'}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3 flex items-center gap-2">
+                  <Clock className="h-7 w-7 text-amber-500 shrink-0" />
+                  <div>
+                    <p className="text-2xl font-bold">
+                      {todayStats.avgMinsBetweenSyncs != null ? `~${todayStats.avgMinsBetweenSyncs}` : '—'}
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-tight">min entre syncs</p>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3 flex items-center gap-2">
+                  <TrendingUp className="h-7 w-7 text-blue-500 shrink-0" />
+                  <div>
+                    <p className="text-2xl font-bold">{avgItemsPerDay}</p>
+                    <p className="text-xs text-muted-foreground leading-tight">art. promedio/día</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tabs with charts */}
+            <Tabs defaultValue="today">
+              <TabsList className="w-full">
+                <TabsTrigger value="today" className="flex-1">Hoy</TabsTrigger>
+                <TabsTrigger value="30days" className="flex-1">Últimos 30 días</TabsTrigger>
+                <TabsTrigger value="compare" className="flex-1">Comparar meses</TabsTrigger>
+              </TabsList>
+
+              {/* ── Tab Hoy ──────────────────────────────────────────────── */}
+              <TabsContent value="today" className="mt-4 space-y-3">
+                {todayStats.itemsToday === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <Zap className="h-10 w-10 mb-3 opacity-30" />
+                    <p className="text-sm">No hay sincronizaciones registradas hoy</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Artículos sincronizados por hora — hoy
+                    </p>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={hourlyFiltered} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                        <Tooltip content={<ChartTooltip />} />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        <Bar dataKey="items" name="Artículos" fill={COLORS.items} radius={[3, 3, 0, 0]} />
+                        <Bar dataKey="errors" name="Errores" fill={COLORS.errors} radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <p className="text-xs text-center text-muted-foreground">
+                      {todayStats.syncsToday} operaciones de sync · {todayStats.errorsToday} errores
+                    </p>
+                  </>
+                )}
+              </TabsContent>
+
+              {/* ── Tab 30 días ──────────────────────────────────────────── */}
+              <TabsContent value="30days" className="mt-4 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Artículos sincronizados por día — últimos 30 días
+                </p>
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={dailyData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 10 }}
+                      interval={4}
+                    />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="items" name="Artículos" fill={COLORS.items} radius={[3, 3, 0, 0]} stackId="a" />
+                    <Bar dataKey="errors" name="Errores" fill={COLORS.errors} radius={[3, 3, 0, 0]} stackId="a" />
+                  </BarChart>
+                </ResponsiveContainer>
+                {/* Tiny per-day table for recent days with orders info */}
+                {dailyData.some(d => d.orders > 0) && (
+                  <div className="text-xs text-muted-foreground text-center">
+                    Promedio días con actividad: <span className="font-semibold text-foreground">{avgItemsPerDay} artículos/día</span>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* ── Tab Comparar meses ────────────────────────────────── */}
+              <TabsContent value="compare" className="mt-4 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Artículos sincronizados por día del mes —{' '}
+                  <span className="capitalize">{thisMonthLabel}</span> vs{' '}
+                  <span className="capitalize">{prevMonthLabel}</span>
+                </p>
+                <ResponsiveContainer width="100%" height={240}>
+                  <LineChart data={monthData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Line
+                      type="monotone"
+                      dataKey="thisMonth"
+                      name={thisMonthLabel.charAt(0).toUpperCase() + thisMonthLabel.slice(1)}
+                      stroke={COLORS.thisMonth}
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="prevMonth"
+                      name={prevMonthLabel.charAt(0).toUpperCase() + prevMonthLabel.slice(1)}
+                      stroke={COLORS.prevMonth}
+                      strokeWidth={2}
+                      strokeDasharray="4 4"
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </TabsContent>
+            </Tabs>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};

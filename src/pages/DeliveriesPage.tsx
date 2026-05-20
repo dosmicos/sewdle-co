@@ -29,6 +29,8 @@ import {
 import { Plus, Truck, Calendar, MapPin, Eye, Search, Filter, Package, CheckCircle, AlertTriangle, Clock, XCircle, Zap, Trash2, X, MoreVertical, DollarSign } from 'lucide-react';
 import DeliverySyncStatus from '@/components/DeliverySyncStatus';
 import SyncMonitoringDashboard from '@/components/SyncMonitoringDashboard';
+import { SyncStatsModal } from '@/components/deliveries/SyncStatsModal';
+import { useSyncStats } from '@/hooks/useSyncStats';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -49,6 +51,9 @@ const DeliveriesPage = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deliveryToDelete, setDeliveryToDelete] = useState<any>(null);
   const [showFiltersSheet, setShowFiltersSheet] = useState(false);
+  const [showSyncStats, setShowSyncStats] = useState(false);
+
+  const { todayStats: syncToday, loading: syncLoading } = useSyncStats();
   
   // Query params for filters
   const [searchParams, setSearchParams] = useSearchParams();
@@ -402,7 +407,7 @@ const DeliveriesPage = () => {
       )}
 
       {/* Statistics Cards - Mobile First Design */}
-      <div className={`${isMobile ? 'space-y-2' : 'grid grid-cols-5 gap-4'}`}>
+      <div className={`${isMobile ? 'space-y-2' : 'grid grid-cols-6 gap-4'}`}>
         {isMobile ? (
           <>
             {/* Primera fila: Total */}
@@ -471,6 +476,27 @@ const DeliveriesPage = () => {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Tarjeta de Sync — clickeable (mobile) */}
+            <Card
+              className="cursor-pointer hover:bg-muted/50 transition-colors border-2 border-transparent hover:border-green-200"
+              onClick={() => setShowSyncStats(true)}
+            >
+              <CardContent className="p-3">
+                <div className="flex items-center space-x-3">
+                  <Zap className={`w-5 h-5 text-green-500 ${syncLoading ? 'animate-pulse' : ''}`} />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">Sync hoy</p>
+                      <p className="text-2xl font-bold">{syncToday?.itemsToday ?? 0}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {syncToday?.ordersToday === 1 ? '1 orden sincronizada' : `${syncToday?.ordersToday ?? 0} órdenes sincronizadas`}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </>
         ) : (
           <>
@@ -525,6 +551,24 @@ const DeliveriesPage = () => {
                   <div>
                     <p className="text-sm font-medium">Rechazadas</p>
                     <p className="text-2xl font-bold">{stats.rejected}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            {/* Tarjeta de Sync — clickeable */}
+            <Card
+              className="cursor-pointer hover:bg-muted/50 transition-colors border-2 border-transparent hover:border-green-200"
+              onClick={() => setShowSyncStats(true)}
+            >
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-2">
+                  <Zap className={`w-5 h-5 text-green-500 ${syncLoading ? 'animate-pulse' : ''}`} />
+                  <div>
+                    <p className="text-sm font-medium">Sync hoy</p>
+                    <p className="text-2xl font-bold">{syncToday?.itemsToday ?? 0}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {syncToday?.ordersToday === 1 ? '1 orden' : `${syncToday?.ordersToday ?? 0} órdenes`}
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -790,6 +834,9 @@ const DeliveriesPage = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de estadísticas de sincronización */}
+      <SyncStatsModal open={showSyncStats} onClose={() => setShowSyncStats(false)} />
     </div>
   );
 };
