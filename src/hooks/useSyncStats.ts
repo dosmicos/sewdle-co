@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { startOfDay, startOfMonth, subDays, subMonths, format, getHours, getDate } from 'date-fns';
+import {
+  startOfDay, startOfMonth, subDays, subMonths,
+  format, getHours, getDate, getDay, parseISO,
+} from 'date-fns';
 
 export interface HourlyBucket {
   hour: number;
@@ -15,6 +18,7 @@ export interface DailyBucket {
   items: number;
   errors: number;
   orders: number;
+  isSunday: boolean;
 }
 
 export interface MonthDayBucket {
@@ -31,12 +35,25 @@ export interface TodayStats {
   avgMinsBetweenSyncs: number | null;
 }
 
+export interface SyncedOrder {
+  syncedAt: string;         // ISO timestamp of the sync operation
+  dateLabel: string;        // formatted 'dd/MM HH:mm'
+  deliveryId: string;
+  trackingNumber: string | null;
+  orderNumber: string | null;
+  itemsSynced: number;
+  errors: number;
+}
+
 export interface SyncStatsData {
   todayStats: TodayStats;
   hourlyData: HourlyBucket[];
   dailyData: DailyBucket[];
   monthComparison: MonthDayBucket[];
+  /** Average items/day Mon–Sat only (Sundays excluded) */
   avgItemsPerDay: number;
+  /** Flat list of all sync operations in last 30 days, newest first */
+  syncedOrders: SyncedOrder[];
 }
 
 const EMPTY_STATS: SyncStatsData = {
@@ -45,6 +62,7 @@ const EMPTY_STATS: SyncStatsData = {
   dailyData: [],
   monthComparison: [],
   avgItemsPerDay: 0,
+  syncedOrders: [],
 };
 
 export const useSyncStats = () => {
@@ -56,16 +74,17 @@ export const useSyncStats = () => {
     try {
       const now = new Date();
       const sixtyDaysAgo = subDays(startOfDay(now), 59).toISOString();
+      const thirtyDaysAgo = subDays(startOfDay(now), 29).toISOString();
 
-      // Query all sync logs for last 60 days
-      const { data: logs, error } = await supabase
+      // 1) All sync logs for last 60 days
+      const { data: logs, error: logsError } = await supabase
         .from('inventory_sync_logs' as any)
         .select('synced_at, success_count, error_count, delivery_id')
         .not('synced_at', 'is', null)
         .gte('synced_at', sixtyDaysAgo)
         .order('synced_at', { ascending: true });
 
-      if (error) throw error;
+      if (logsError) throw logsError;
 
       const entries = (logs || []) as Array<{
         synced_at: string;
@@ -74,35 +93,56 @@ export const useSyncStats = () => {
         delivery_id: string | null;
       }>;
 
+      // 2) Fetch delivery details for unique IDs in last 30 days (for orders list)
+      const recentDeliveryIds = [
+        ...new Set(
+          entries
+            .filter(e => e.delivery_id && e.synced_at >= thirtyDaysAgo)
+            .map(e => e.delivery_id as string)
+        ),
+      ];
+
+      const deliveryMap = new Map<string, { tracking_number: string | null; order_number: string | null }>();
+
+      if (recentDeliveryIds.length > 0) {
+        const { data: deliveries } = await supabase
+          .from('deliveries' as any)
+          .select('id, tracking_number, order_number')
+          .in('id', recentDeliveryIds);
+
+        for (const d of (deliveries || []) as Array<{ id: string; tracking_number: string | null; order_number: string | null }>) {
+          deliveryMap.set(d.id, { tracking_number: d.tracking_number, order_number: d.order_number });
+        }
+      }
+
+      // ── Aggregation maps ──────────────────────────────────────────────────
       const todayIso = format(now, 'yyyy-MM-dd');
       const thisMonthStart = startOfMonth(now);
       const prevMonthStart = startOfMonth(subMonths(now, 1));
       const prevMonthEnd = subDays(thisMonthStart, 1);
 
-      // ── Hourly (today) ────────────────────────────────────────────────────
       const hourlyMap = new Map<number, { items: number; errors: number }>();
       for (let h = 0; h < 24; h++) hourlyMap.set(h, { items: 0, errors: 0 });
 
-      // ── Daily (last 30 days) ──────────────────────────────────────────────
       const dailyMap = new Map<string, { items: number; errors: number; orders: Set<string> }>();
-
-      // ── Month comparison ──────────────────────────────────────────────────
-      const thisMonthMap = new Map<number, number>();   // day → items
+      const thisMonthMap = new Map<number, number>();
       const prevMonthMap = new Map<number, number>();
 
-      // ── Today stats ───────────────────────────────────────────────────────
       let itemsToday = 0;
       let errorsToday = 0;
       const ordersToday = new Set<string>();
       let syncsToday = 0;
       const syncTimesToday: Date[] = [];
 
+      // Synced orders list (last 30 days), newest first
+      const syncedOrders: SyncedOrder[] = [];
+
       for (const entry of entries) {
         const dt = new Date(entry.synced_at);
         const items = entry.success_count ?? 0;
         const errors = entry.error_count ?? 0;
         const iso = format(dt, 'yyyy-MM-dd');
-        const orderId = entry.delivery_id ?? '';
+        const deliveryId = entry.delivery_id ?? '';
 
         // Today
         if (iso === todayIso) {
@@ -112,7 +152,7 @@ export const useSyncStats = () => {
           bucket.errors += errors;
           itemsToday += items;
           errorsToday += errors;
-          if (orderId) ordersToday.add(orderId);
+          if (deliveryId) ordersToday.add(deliveryId);
           syncsToday++;
           syncTimesToday.push(dt);
         }
@@ -124,7 +164,21 @@ export const useSyncStats = () => {
           const d = dailyMap.get(iso)!;
           d.items += items;
           d.errors += errors;
-          if (orderId) d.orders.add(orderId);
+          if (deliveryId) d.orders.add(deliveryId);
+
+          // Build orders list entry (only when delivery is known)
+          if (deliveryId) {
+            const info = deliveryMap.get(deliveryId);
+            syncedOrders.push({
+              syncedAt: entry.synced_at,
+              dateLabel: format(dt, 'dd/MM HH:mm'),
+              deliveryId,
+              trackingNumber: info?.tracking_number ?? null,
+              orderNumber: info?.order_number ?? null,
+              itemsSynced: items,
+              errors,
+            });
+          }
         }
 
         // This month
@@ -140,6 +194,9 @@ export const useSyncStats = () => {
         }
       }
 
+      // Sort orders newest first
+      syncedOrders.sort((a, b) => b.syncedAt.localeCompare(a.syncedAt));
+
       // Avg minutes between syncs today
       let avgMinsBetweenSyncs: number | null = null;
       if (syncTimesToday.length >= 2) {
@@ -151,36 +208,37 @@ export const useSyncStats = () => {
         avgMinsBetweenSyncs = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
       }
 
-      // Build hourlyData array
+      // Build hourlyData
       const hourlyData: HourlyBucket[] = Array.from({ length: 24 }, (_, h) => {
         const b = hourlyMap.get(h)!;
         return { hour: h, label: `${String(h).padStart(2, '0')}h`, items: b.items, errors: b.errors };
       });
 
-      // Build dailyData (last 30 days, sorted ascending)
+      // Build dailyData (last 30 days, ascending)
       const dailyData: DailyBucket[] = [];
       for (let d = 29; d >= 0; d--) {
         const date = subDays(startOfDay(now), d);
         const iso = format(date, 'yyyy-MM-dd');
         const entry = dailyMap.get(iso);
+        const dayOfWeek = getDay(date); // 0 = Sunday
         dailyData.push({
           date: format(date, 'dd/MM'),
           isoDate: iso,
           items: entry?.items ?? 0,
           errors: entry?.errors ?? 0,
           orders: entry?.orders.size ?? 0,
+          isSunday: dayOfWeek === 0,
         });
       }
 
-      // Avg items per day (days that had at least 1 item)
-      const activeDays = dailyData.filter(d => d.items > 0);
-      const avgItemsPerDay = activeDays.length > 0
-        ? Math.round(activeDays.reduce((sum, d) => sum + d.items, 0) / activeDays.length)
+      // Avg items per day — Mon–Sat ONLY (Sundays excluded from numerator and denominator)
+      const workingDaysWithActivity = dailyData.filter(d => !d.isSunday && d.items > 0);
+      const avgItemsPerDay = workingDaysWithActivity.length > 0
+        ? Math.round(workingDaysWithActivity.reduce((sum, d) => sum + d.items, 0) / workingDaysWithActivity.length)
         : 0;
 
       // Build month comparison (days 1-31)
-      const maxDay = 31;
-      const monthComparison: MonthDayBucket[] = Array.from({ length: maxDay }, (_, i) => ({
+      const monthComparison: MonthDayBucket[] = Array.from({ length: 31 }, (_, i) => ({
         day: i + 1,
         thisMonth: thisMonthMap.get(i + 1) ?? 0,
         prevMonth: prevMonthMap.get(i + 1) ?? 0,
@@ -198,6 +256,7 @@ export const useSyncStats = () => {
         dailyData,
         monthComparison,
         avgItemsPerDay,
+        syncedOrders,
       });
     } catch (err) {
       console.error('[useSyncStats] error:', err);

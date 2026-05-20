@@ -19,7 +19,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { Zap, Package, Clock, TrendingUp, Loader2 } from 'lucide-react';
+import { Zap, Package, Clock, TrendingUp, Loader2, AlertCircle } from 'lucide-react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSyncStats } from '@/hooks/useSyncStats';
 import { format, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -52,7 +53,7 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 };
 
 export const SyncStatsModal: React.FC<SyncStatsModalProps> = ({ open, onClose }) => {
-  const { todayStats, hourlyData, dailyData, monthComparison, avgItemsPerDay, loading } = useSyncStats();
+  const { todayStats, hourlyData, dailyData, monthComparison, avgItemsPerDay, syncedOrders, loading } = useSyncStats();
 
   const now = new Date();
   const thisMonthLabel = format(now, 'MMMM', { locale: es });
@@ -118,7 +119,7 @@ export const SyncStatsModal: React.FC<SyncStatsModalProps> = ({ open, onClose })
                   <TrendingUp className="h-7 w-7 text-blue-500 shrink-0" />
                   <div>
                     <p className="text-2xl font-bold">{avgItemsPerDay}</p>
-                    <p className="text-xs text-muted-foreground leading-tight">art. promedio/día</p>
+                    <p className="text-xs text-muted-foreground leading-tight">art. prom/día (L–S)</p>
                   </div>
                 </CardContent>
               </Card>
@@ -130,6 +131,7 @@ export const SyncStatsModal: React.FC<SyncStatsModalProps> = ({ open, onClose })
                 <TabsTrigger value="today" className="flex-1">Hoy</TabsTrigger>
                 <TabsTrigger value="30days" className="flex-1">Últimos 30 días</TabsTrigger>
                 <TabsTrigger value="compare" className="flex-1">Comparar meses</TabsTrigger>
+                <TabsTrigger value="orders" className="flex-1">Órdenes</TabsTrigger>
               </TabsList>
 
               {/* ── Tab Hoy ──────────────────────────────────────────────── */}
@@ -225,6 +227,57 @@ export const SyncStatsModal: React.FC<SyncStatsModalProps> = ({ open, onClose })
                     />
                   </LineChart>
                 </ResponsiveContainer>
+              </TabsContent>
+
+              {/* ── Tab Órdenes ──────────────────────────────────────── */}
+              <TabsContent value="orders" className="mt-4">
+                {syncedOrders.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <Package className="h-10 w-10 mb-3 opacity-30" />
+                    <p className="text-sm">No hay órdenes sincronizadas en los últimos 30 días</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      {syncedOrders.length} operaciones de sync — últimos 30 días (más recientes primero)
+                    </p>
+                    <ScrollArea className="h-[320px] rounded-md border">
+                      <div className="divide-y">
+                        {syncedOrders.map((order, idx) => (
+                          <div key={`${order.deliveryId}-${order.syncedAt}-${idx}`} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 transition-colors">
+                            {/* Date */}
+                            <span className="text-xs text-muted-foreground font-mono w-28 shrink-0">
+                              {order.dateLabel}
+                            </span>
+                            {/* Order / tracking info */}
+                            <div className="flex-1 min-w-0">
+                              {order.orderNumber ? (
+                                <p className="text-xs font-semibold truncate">#{order.orderNumber}</p>
+                              ) : (
+                                <p className="text-xs text-muted-foreground truncate">{order.deliveryId}</p>
+                              )}
+                              {order.trackingNumber && (
+                                <p className="text-xs text-muted-foreground font-mono truncate">{order.trackingNumber}</p>
+                              )}
+                            </div>
+                            {/* Items synced */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-xs font-semibold text-green-600">
+                                +{order.itemsSynced}
+                              </span>
+                              {order.errors > 0 && (
+                                <span className="flex items-center gap-0.5 text-xs text-red-500">
+                                  <AlertCircle className="h-3 w-3" />
+                                  {order.errors}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </>
+                )}
               </TabsContent>
             </Tabs>
           </div>
