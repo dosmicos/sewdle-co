@@ -70,10 +70,31 @@ export const SyncStatsModal: React.FC<SyncStatsModalProps> = ({ open, onClose })
   // Filter monthly data to days that have some data in either series
   const monthData = monthComparison.filter(d => d.day <= 31);
 
-  // Orders filtered by today or all
-  const ordersToShow = ordersFilter === 'today'
+  // Orders filtered by today or all, then grouped by delivery
+  // (same delivery synced multiple times → merged into one row)
+  const baseOrders = ordersFilter === 'today'
     ? syncedOrders.filter(o => o.syncedAt.startsWith(todayIso))
     : syncedOrders;
+
+  // Group key: per day + delivery so the same order on different days shows separately
+  const ordersToShow = Object.values(
+    baseOrders.reduce<Record<string, typeof syncedOrders[0]>>((acc, order) => {
+      const dayKey = order.syncedAt.slice(0, 10); // yyyy-MM-dd
+      const key = `${dayKey}_${order.deliveryId}`;
+      if (!acc[key]) {
+        acc[key] = { ...order };
+      } else {
+        acc[key].itemsSynced += order.itemsSynced;
+        acc[key].errors += order.errors;
+        // Keep the latest sync time for this delivery on this day
+        if (order.syncedAt > acc[key].syncedAt) {
+          acc[key].syncedAt = order.syncedAt;
+          acc[key].dateLabel = order.dateLabel;
+        }
+      }
+      return acc;
+    }, {})
+  ).sort((a, b) => b.syncedAt.localeCompare(a.syncedAt));
 
   const goToOrders = (filter: 'today' | 'all') => {
     setOrdersFilter(filter);
@@ -257,8 +278,8 @@ export const SyncStatsModal: React.FC<SyncStatsModalProps> = ({ open, onClose })
                 {/* Filter toggle */}
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
-                    {ordersToShow.length} {ordersToShow.length === 1 ? 'operación' : 'operaciones'} de sync
-                    {ordersFilter === 'today' ? ' — hoy' : ' — últimos 30 días'}
+                    {ordersToShow.length} {ordersToShow.length === 1 ? 'orden' : 'órdenes'}
+                    {ordersFilter === 'today' ? ' sincronizadas hoy' : ' — últimos 30 días'}
                   </p>
                   <div className="flex gap-1 p-0.5 bg-muted rounded-md">
                     <Button

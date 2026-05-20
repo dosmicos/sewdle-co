@@ -107,11 +107,14 @@ export const useSyncStats = () => {
       if (recentDeliveryIds.length > 0) {
         const { data: deliveries } = await supabase
           .from('deliveries' as any)
-          .select('id, tracking_number, order_number')
+          .select('id, tracking_number, orders(order_number)')
           .in('id', recentDeliveryIds);
 
-        for (const d of (deliveries || []) as Array<{ id: string; tracking_number: string | null; order_number: string | null }>) {
-          deliveryMap.set(d.id, { tracking_number: d.tracking_number, order_number: d.order_number });
+        for (const d of (deliveries || []) as Array<{ id: string; tracking_number: string | null; orders: { order_number: string } | null }>) {
+          deliveryMap.set(d.id, {
+            tracking_number: d.tracking_number ?? null,
+            order_number: d.orders?.order_number ?? null,
+          });
         }
       }
 
