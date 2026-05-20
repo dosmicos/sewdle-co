@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -19,8 +19,9 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { Zap, Package, Clock, TrendingUp, Loader2, AlertCircle } from 'lucide-react';
+import { Zap, Package, Clock, TrendingUp, Loader2, AlertCircle, ChevronRight } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Button } from '@/components/ui/button';
 import { useSyncStats } from '@/hooks/useSyncStats';
 import { format, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -55,7 +56,11 @@ const ChartTooltip = ({ active, payload, label }: any) => {
 export const SyncStatsModal: React.FC<SyncStatsModalProps> = ({ open, onClose }) => {
   const { todayStats, hourlyData, dailyData, monthComparison, avgItemsPerDay, syncedOrders, loading } = useSyncStats();
 
+  const [activeTab, setActiveTab] = useState('today');
+  const [ordersFilter, setOrdersFilter] = useState<'today' | 'all'>('all');
+
   const now = new Date();
+  const todayIso = format(now, 'yyyy-MM-dd');
   const thisMonthLabel = format(now, 'MMMM', { locale: es });
   const prevMonthLabel = format(subMonths(now, 1), 'MMMM', { locale: es });
 
@@ -64,6 +69,16 @@ export const SyncStatsModal: React.FC<SyncStatsModalProps> = ({ open, onClose })
 
   // Filter monthly data to days that have some data in either series
   const monthData = monthComparison.filter(d => d.day <= 31);
+
+  // Orders filtered by today or all
+  const ordersToShow = ordersFilter === 'today'
+    ? syncedOrders.filter(o => o.syncedAt.startsWith(todayIso))
+    : syncedOrders;
+
+  const goToOrders = (filter: 'today' | 'all') => {
+    setOrdersFilter(filter);
+    setActiveTab('orders');
+  };
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -83,24 +98,32 @@ export const SyncStatsModal: React.FC<SyncStatsModalProps> = ({ open, onClose })
           <div className="space-y-4">
             {/* Summary cards */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <Card>
+              <Card
+                className="cursor-pointer hover:bg-muted/50 transition-colors group"
+                onClick={() => goToOrders('today')}
+              >
                 <CardContent className="p-3 flex items-center gap-2">
                   <Zap className="h-7 w-7 text-green-500 shrink-0" />
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="text-2xl font-bold">{todayStats.itemsToday}</p>
                     <p className="text-xs text-muted-foreground leading-tight">artículos hoy</p>
                   </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                 </CardContent>
               </Card>
-              <Card>
+              <Card
+                className="cursor-pointer hover:bg-muted/50 transition-colors group"
+                onClick={() => goToOrders('today')}
+              >
                 <CardContent className="p-3 flex items-center gap-2">
                   <Package className="h-7 w-7 text-indigo-500 shrink-0" />
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <p className="text-2xl font-bold">{todayStats.ordersToday}</p>
                     <p className="text-xs text-muted-foreground leading-tight">
                       {todayStats.ordersToday === 1 ? 'orden hoy' : 'órdenes hoy'}
                     </p>
                   </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                 </CardContent>
               </Card>
               <Card>
@@ -126,7 +149,7 @@ export const SyncStatsModal: React.FC<SyncStatsModalProps> = ({ open, onClose })
             </div>
 
             {/* Tabs with charts */}
-            <Tabs defaultValue="today">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="w-full">
                 <TabsTrigger value="today" className="flex-1">Hoy</TabsTrigger>
                 <TabsTrigger value="30days" className="flex-1">Últimos 30 días</TabsTrigger>
@@ -230,53 +253,78 @@ export const SyncStatsModal: React.FC<SyncStatsModalProps> = ({ open, onClose })
               </TabsContent>
 
               {/* ── Tab Órdenes ──────────────────────────────────────── */}
-              <TabsContent value="orders" className="mt-4">
-                {syncedOrders.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <TabsContent value="orders" className="mt-4 space-y-3">
+                {/* Filter toggle */}
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {ordersToShow.length} {ordersToShow.length === 1 ? 'operación' : 'operaciones'} de sync
+                    {ordersFilter === 'today' ? ' — hoy' : ' — últimos 30 días'}
+                  </p>
+                  <div className="flex gap-1 p-0.5 bg-muted rounded-md">
+                    <Button
+                      size="sm"
+                      variant={ordersFilter === 'today' ? 'default' : 'ghost'}
+                      className="h-6 px-2 text-xs"
+                      onClick={() => setOrdersFilter('today')}
+                    >
+                      Hoy
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={ordersFilter === 'all' ? 'default' : 'ghost'}
+                      className="h-6 px-2 text-xs"
+                      onClick={() => setOrdersFilter('all')}
+                    >
+                      30 días
+                    </Button>
+                  </div>
+                </div>
+
+                {ordersToShow.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground border rounded-md">
                     <Package className="h-10 w-10 mb-3 opacity-30" />
-                    <p className="text-sm">No hay órdenes sincronizadas en los últimos 30 días</p>
+                    <p className="text-sm">
+                      {ordersFilter === 'today'
+                        ? 'No hay sincronizaciones registradas hoy'
+                        : 'No hay órdenes sincronizadas en los últimos 30 días'}
+                    </p>
                   </div>
                 ) : (
-                  <>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      {syncedOrders.length} operaciones de sync — últimos 30 días (más recientes primero)
-                    </p>
-                    <ScrollArea className="h-[320px] rounded-md border">
-                      <div className="divide-y">
-                        {syncedOrders.map((order, idx) => (
-                          <div key={`${order.deliveryId}-${order.syncedAt}-${idx}`} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 transition-colors">
-                            {/* Date */}
-                            <span className="text-xs text-muted-foreground font-mono w-28 shrink-0">
-                              {order.dateLabel}
-                            </span>
-                            {/* Order / tracking info */}
-                            <div className="flex-1 min-w-0">
-                              {order.orderNumber ? (
-                                <p className="text-xs font-semibold truncate">#{order.orderNumber}</p>
-                              ) : (
-                                <p className="text-xs text-muted-foreground truncate">{order.deliveryId}</p>
-                              )}
-                              {order.trackingNumber && (
-                                <p className="text-xs text-muted-foreground font-mono truncate">{order.trackingNumber}</p>
-                              )}
-                            </div>
-                            {/* Items synced */}
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-xs font-semibold text-green-600">
-                                +{order.itemsSynced}
-                              </span>
-                              {order.errors > 0 && (
-                                <span className="flex items-center gap-0.5 text-xs text-red-500">
-                                  <AlertCircle className="h-3 w-3" />
-                                  {order.errors}
-                                </span>
-                              )}
-                            </div>
+                  <ScrollArea className="h-[300px] rounded-md border">
+                    <div className="divide-y">
+                      {ordersToShow.map((order, idx) => (
+                        <div key={`${order.deliveryId}-${order.syncedAt}-${idx}`} className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/40 transition-colors">
+                          {/* Date */}
+                          <span className="text-xs text-muted-foreground font-mono w-28 shrink-0">
+                            {order.dateLabel}
+                          </span>
+                          {/* Order / tracking info */}
+                          <div className="flex-1 min-w-0">
+                            {order.orderNumber ? (
+                              <p className="text-xs font-semibold truncate">#{order.orderNumber}</p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground truncate">{order.deliveryId}</p>
+                            )}
+                            {order.trackingNumber && (
+                              <p className="text-xs text-muted-foreground font-mono truncate">{order.trackingNumber}</p>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </>
+                          {/* Items synced */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs font-semibold text-green-600">
+                              +{order.itemsSynced}
+                            </span>
+                            {order.errors > 0 && (
+                              <span className="flex items-center gap-0.5 text-xs text-red-500">
+                                <AlertCircle className="h-3 w-3" />
+                                {order.errors}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 )}
               </TabsContent>
             </Tabs>
