@@ -2,17 +2,24 @@
 import { useState, useEffect } from 'react';
 import { useOrders } from '@/hooks/useOrders';
 import { useUserContext } from '@/hooks/useUserContext';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 export const useFilteredOrders = () => {
   const { createOrder, fetchOrders, loading } = useOrders();
   const { workshopFilter, isWorkshopUser } = useUserContext();
+  const { activeStoreId } = useStoreContext();
   const [orders, setOrders] = useState<any[]>([]);
   const [error, setError] = useState<any>(null);
 
   const loadOrders = async () => {
     try {
-      const data = await fetchOrders();
-      
+      let data = await fetchOrders();
+
+      // Filter by active store (null = all stores)
+      if (activeStoreId) {
+        data = data.filter((order: any) => order.store_id === activeStoreId);
+      }
+
       if (isWorkshopUser) {
         // Usuario de taller SIEMPRE debe quedar acotado a su taller.
         // Si no tiene workshop_id configurado evitamos exponer datos de toda la organización.
@@ -22,7 +29,7 @@ export const useFilteredOrders = () => {
           return;
         }
 
-        const workshopOrders = data.filter(order =>
+        const workshopOrders = data.filter((order: any) =>
           order.workshop_assignments?.some((assignment: any) => assignment.workshop_id === workshopFilter)
         );
         setOrders(workshopOrders);
@@ -39,7 +46,7 @@ export const useFilteredOrders = () => {
 
   useEffect(() => {
     loadOrders();
-  }, [isWorkshopUser, workshopFilter]);
+  }, [isWorkshopUser, workshopFilter, activeStoreId]);
 
   return {
     orders,
