@@ -2,10 +2,12 @@
 import { useState, useEffect } from 'react';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 export const useFilteredDeliveries = () => {
   const { fetchDeliveries, loading } = useDeliveries();
   const { workshopFilter, isWorkshopUser } = useUserContext();
+  const { activeStoreId } = useStoreContext();
   const [deliveries, setDeliveries] = useState<any[]>([]);
   const [error, setError] = useState<any>(null);
   const [debugInfo, setDebugInfo] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export const useFilteredDeliveries = () => {
 
   useEffect(() => {
     loadDeliveries();
-  }, [isWorkshopUser, workshopFilter]);
+  }, [isWorkshopUser, workshopFilter, activeStoreId]);
 
   return {
     deliveries,

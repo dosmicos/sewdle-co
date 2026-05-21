@@ -135,9 +135,24 @@ async function applyAutoTagsToShopify(
   }
   
   // ✅ DESPUÉS: Enviar a Shopify (opcional, si falla los tags ya están en DB local)
-  const shopifyAccessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN');
+  // Look up the store-specific access token from the stores table
+  let shopifyAccessToken = '';
+  const { data: storeForTag } = await supabase
+    .from('stores')
+    .select('shopify_credentials')
+    .eq('shopify_store_url', `https://${shopDomain}`)
+    .maybeSingle();
+
+  if (storeForTag?.shopify_credentials?.access_token) {
+    shopifyAccessToken = storeForTag.shopify_credentials.access_token;
+    console.log('🔑 Using store-specific access token for tag sync');
+  } else {
+    // Fallback to ENV var (Colombia legacy)
+    shopifyAccessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN') || '';
+  }
+
   if (!shopifyAccessToken) {
-    console.warn('⚠️ SHOPIFY_ACCESS_TOKEN no configurado - tags guardados solo en DB local');
+    console.warn('⚠️ No access token available - tags guardados solo en DB local');
     return;
   }
   

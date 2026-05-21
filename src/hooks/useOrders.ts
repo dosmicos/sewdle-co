@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 interface OrderItem {
   productId: string;
@@ -33,6 +34,7 @@ export const useOrders = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { consumeOrderMaterials } = useMaterialConsumption();
+  const { activeStoreId } = useStoreContext();
 
   const uploadOrderFile = async (file: File, orderId: string): Promise<string> => {
     try {
@@ -105,7 +107,8 @@ export const useOrders = () => {
             due_date: orderData.dueDate,
             total_amount: totalAmount > 0 ? totalAmount : null,
             notes: orderData.notes || null,
-            status: 'pending'
+            status: 'pending',
+            ...(activeStoreId ? { store_id: activeStoreId } : {}),
           }
         ])
         .select()
