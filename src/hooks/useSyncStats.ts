@@ -76,13 +76,16 @@ export const useSyncStats = () => {
       const sixtyDaysAgo = subDays(startOfDay(now), 59).toISOString();
       const thirtyDaysAgo = subDays(startOfDay(now), 29).toISOString();
 
-      // 1) All sync logs for last 60 days
+      // 1) All sync logs for last 60 days.
+      // Descending + explicit range so today's rows are never dropped by
+      // PostgREST's default 1000-row cap when volume exceeds it.
       const { data: logs, error: logsError } = await supabase
         .from('inventory_sync_logs' as any)
         .select('synced_at, success_count, error_count, delivery_id')
         .not('synced_at', 'is', null)
         .gte('synced_at', sixtyDaysAgo)
-        .order('synced_at', { ascending: true });
+        .order('synced_at', { ascending: false })
+        .range(0, 9999);
 
       if (logsError) throw logsError;
 
