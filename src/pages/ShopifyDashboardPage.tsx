@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Users, Package, Barcode } from 'lucide-react';
+import { ShoppingCart, Users, Package, Barcode, Store } from 'lucide-react';
 import { useShopifyOrders } from '@/hooks/useShopifyOrders';
 import { ShopifyOrdersTable } from '@/components/ShopifyOrdersTable';
 import { CustomerAnalyticsTable } from '@/components/CustomerAnalyticsTable';
@@ -11,6 +11,7 @@ import { ShopifyRealTimeStats } from '@/components/ShopifyRealTimeStats';
 import { ShopifyIntegrationStatus } from '@/components/ShopifyIntegrationStatus';
 import APIStatusCard from '@/components/APIStatusCard';
 import ProductBarcodeModal from '@/components/shopify/ProductBarcodeModal';
+import { StoresSettingsPanel } from '@/components/stores/StoresSettingsPanel';
 
 export const ShopifyDashboardPage: React.FC = () => {
   const {
@@ -83,7 +84,7 @@ export const ShopifyDashboardPage: React.FC = () => {
 
       {/* Main Content */}
       <Tabs defaultValue="orders" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="orders" className="flex items-center gap-2">
             <ShoppingCart className="h-4 w-4" />
             Órdenes
@@ -95,6 +96,10 @@ export const ShopifyDashboardPage: React.FC = () => {
           <TabsTrigger value="products" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
             Productos
+          </TabsTrigger>
+          <TabsTrigger value="stores" className="flex items-center gap-2">
+            <Store className="h-4 w-4" />
+            Tiendas
           </TabsTrigger>
         </TabsList>
 
@@ -156,6 +161,10 @@ export const ShopifyDashboardPage: React.FC = () => {
               <ProductAnalyticsTable products={productAnalytics} loading={loading} />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="stores" className="space-y-6">
+          <StoresSettingsPanel />
         </TabsContent>
 
       </Tabs>
