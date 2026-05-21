@@ -21,13 +21,13 @@ ALTER TABLE public.stores ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "org_members_can_read_stores" ON public.stores
   FOR SELECT
   USING (organization_id IN (
-    SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+    SELECT organization_id FROM public.organization_users WHERE user_id = auth.uid()
   ));
 
 CREATE POLICY "org_admins_can_manage_stores" ON public.stores
   FOR ALL
   USING (organization_id IN (
-    SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()
+    SELECT organization_id FROM public.organization_users WHERE user_id = auth.uid()
   ));
 
 -- ─── 2. Migrar credenciales Colombia existentes ───────────────────────────────
