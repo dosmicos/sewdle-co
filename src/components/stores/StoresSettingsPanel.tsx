@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,7 @@ import {
   Store,
   AlertCircle,
   Power,
+  Link,
 } from 'lucide-react';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useStores, StoreUpsert } from '@/hooks/useStores';
@@ -46,14 +47,19 @@ import type { Store as StoreType } from '@/hooks/useStores';
 
 /* ─── Constants ─────────────────────────────────────────────── */
 
+const SUPABASE_OAUTH_URL = 'https://ysdcsqsfnckeuafjyrbc.supabase.co/functions/v1/shopify-oauth';
+
 const COUNTRY_OPTIONS = [
-  { code: 'CO', label: '🇨🇴 Colombia', currency: 'COP' },
+  { code: 'CO', label: '🇨🇴 Colombia',       currency: 'COP' },
   { code: 'US', label: '🇺🇸 Estados Unidos', currency: 'USD' },
-  { code: 'MX', label: '🇲🇽 México', currency: 'MXN' },
-  { code: 'AR', label: '🇦🇷 Argentina', currency: 'ARS' },
-  { code: 'BR', label: '🇧🇷 Brasil', currency: 'BRL' },
-  { code: 'PE', label: '🇵🇪 Perú', currency: 'PEN' },
-  { code: 'CL', label: '🇨🇱 Chile', currency: 'CLP' },
+  { code: 'MX', label: '🇲🇽 México',         currency: 'MXN' },
+  { code: 'AR', label: '🇦🇷 Argentina',      currency: 'ARS' },
+  { code: 'BR', label: '🇧🇷 Brasil',         currency: 'BRL' },
+  { code: 'PE', label: '🇵🇪 Perú',           currency: 'PEN' },
+  { code: 'CL', label: '🇨🇱 Chile',          currency: 'CLP' },
+  { code: 'EC', label: '🇪🇨 Ecuador',        currency: 'USD' },
+  { code: 'PA', label: '🇵🇦 Panamá',         currency: 'USD' },
+  { code: 'CR', label: '🇨🇷 Costa Rica',     currency: 'CRC' },
 ];
 
 const COUNTRY_FLAGS: Record<string, string> = Object.fromEntries(
@@ -70,6 +76,22 @@ function normalizeStoreUrl(url: string): string {
     if (!clean.includes('.')) clean = `${clean}.myshopify.com`;
   }
   return `https://${clean}`;
+}
+
+/** Extract the bare hostname for OAuth (e.g. "store.myshopify.com") */
+function extractShopDomain(storeUrl: string): string {
+  return storeUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
+
+/** Open OAuth popup for the given store */
+function openShopifyOAuth(store: StoreType) {
+  const domain = extractShopDomain(store.shopify_store_url ?? '');
+  if (!domain) {
+    toast.error('La tienda no tiene una URL de Shopify configurada.');
+    return;
+  }
+  const oauthUrl = `${SUPABASE_OAUTH_URL}?shop=${encodeURIComponent(domain)}&state=${store.id}`;
+  window.open(oauthUrl, 'shopify-oauth', 'width=640,height=720,left=200,top=100');
 }
 
 /* ─── Store Form Dialog ──────────────────────────────────────── */
@@ -93,18 +115,18 @@ const StoreFormDialog: React.FC<StoreFormDialogProps> = ({
 }) => {
   const isEdit = !!editStore;
 
-  const [name, setName] = useState('');
+  const [name,        setName]        = useState('');
   const [countryCode, setCountryCode] = useState('US');
-  const [currency, setCurrency] = useState('USD');
-  const [storeUrl, setStoreUrl] = useState('');
+  const [currency,    setCurrency]    = useState('USD');
+  const [storeUrl,    setStoreUrl]    = useState('');
   const [accessToken, setAccessToken] = useState('');
-  const [showToken, setShowToken] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [guideOpen, setGuideOpen] = useState(!isEdit);
+  const [showToken,   setShowToken]   = useState(false);
+  const [saving,      setSaving]      = useState(false);
+  const [testing,     setTesting]     = useState(false);
+  const [testResult,  setTestResult]  = useState<{ success: boolean; message: string } | null>(null);
+  const [guideOpen,   setGuideOpen]   = useState(false);
 
-  // Seed form when editing
+  // Seed form when opening
   useEffect(() => {
     if (open) {
       if (editStore) {
@@ -120,14 +142,13 @@ const StoreFormDialog: React.FC<StoreFormDialogProps> = ({
         setCurrency('USD');
         setStoreUrl('');
         setAccessToken('');
-        setGuideOpen(true);
+        setGuideOpen(false);
       }
       setTestResult(null);
       setShowToken(false);
     }
   }, [open, editStore]);
 
-  // Auto-set currency when country changes
   const handleCountryChange = (code: string) => {
     setCountryCode(code);
     const found = COUNTRY_OPTIONS.find(c => c.code === code);
@@ -135,16 +156,16 @@ const StoreFormDialog: React.FC<StoreFormDialogProps> = ({
   };
 
   const validate = (): string | null => {
-    if (!name.trim()) return 'El nombre de la tienda es requerido';
+    if (!name.trim())    return 'El nombre de la tienda es requerido';
     if (!storeUrl.trim()) return 'La URL de la tienda es requerida';
-    if (!accessToken.trim()) return 'El token de acceso es requerido';
     const normalized = normalizeStoreUrl(storeUrl);
     if (!normalized.includes('.myshopify.com'))
-      return 'La URL debe ser una tienda válida de Shopify (ej: tienda.myshopify.com)';
-    return null;
+      return 'La URL debe ser un dominio válido de Shopify (ej: tienda.myshopify.com)';
+    return null; // token is optional — can be connected via OAuth after saving
   };
 
   const handleTestConnection = async () => {
+    if (!accessToken.trim()) { toast.error('Ingresa un token para probar la conexión'); return; }
     const err = validate();
     if (err) { toast.error(err); return; }
 
@@ -152,10 +173,7 @@ const StoreFormDialog: React.FC<StoreFormDialogProps> = ({
     setTestResult(null);
     try {
       const { data, error } = await supabase.functions.invoke('test-shopify-connection', {
-        body: {
-          storeUrl: normalizeStoreUrl(storeUrl),
-          accessToken: accessToken.trim(),
-        },
+        body: { storeUrl: normalizeStoreUrl(storeUrl), accessToken: accessToken.trim() },
       });
       if (error) throw error;
       setTestResult({ success: data.success, message: data.message });
@@ -177,15 +195,15 @@ const StoreFormDialog: React.FC<StoreFormDialogProps> = ({
     const payload: StoreUpsert = {
       ...(isEdit ? { id: editStore!.id } : {}),
       organization_id: organizationId,
-      name: name.trim(),
-      country_code: countryCode,
+      name:             name.trim(),
+      country_code:     countryCode,
       currency,
       shopify_store_url: normalizeStoreUrl(storeUrl),
-      shopify_credentials: {
-        access_token: accessToken.trim(),
-        configured_at: new Date().toISOString(),
-      },
       is_active: editStore?.is_active ?? true,
+      ...(accessToken.trim()
+        ? { shopify_credentials: { access_token: accessToken.trim(), configured_at: new Date().toISOString() } }
+        : (isEdit ? {} : { shopify_credentials: {} })
+      ),
     };
 
     const result = await upsertStore(payload);
@@ -206,57 +224,21 @@ const StoreFormDialog: React.FC<StoreFormDialogProps> = ({
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? 'Actualiza las credenciales y la configuración de esta tienda.'
+              ? 'Actualiza la configuración de esta tienda.'
               : 'Conecta una nueva tienda de Shopify a Sewdle.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 pt-1">
-          {/* ── How to get Access Token guide ── */}
-          <Collapsible open={guideOpen} onOpenChange={setGuideOpen}>
-            <CollapsibleTrigger asChild>
-              <Button variant="outline" size="sm" className="w-full justify-between">
-                <span className="text-xs font-medium">
-                  ¿Cómo obtener el Access Token de Shopify?
-                </span>
-                <ChevronDown
-                  className={`h-4 w-4 text-muted-foreground transition-transform ${guideOpen ? 'rotate-180' : ''}`}
-                />
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="rounded-md border bg-muted/40 p-4 mt-2 space-y-3 text-sm">
-                <p className="font-medium text-sm">Pasos para crear una Custom App en Shopify:</p>
-                <ol className="space-y-2 list-none">
-                  {[
-                    <>Ve a tu Admin de Shopify → <strong>Settings → Apps and sales channels</strong></>,
-                    <>Haz clic en <strong>"Develop apps"</strong> (arriba a la derecha)</>,
-                    <>Clic en <strong>"Create an app"</strong> y dale un nombre (ej: "Sewdle")</>,
-                    <>En la app, ve a <strong>"Configuration"</strong> → <strong>"Admin API integration"</strong></>,
-                    <>Activa los permisos: <code className="bg-background rounded px-1">read_orders</code>, <code className="bg-background rounded px-1">read_products</code>, <code className="bg-background rounded px-1">read_inventory</code>, <code className="bg-background rounded px-1">write_inventory</code>, <code className="bg-background rounded px-1">read_customers</code></>,
-                    <>Guarda y luego ve a <strong>"API credentials"</strong> → haz clic en <strong>"Install app"</strong></>,
-                    <>Copia el <strong>"Admin API access token"</strong> — solo se muestra una vez</>,
-                  ].map((step, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <Badge variant="outline" className="mt-0.5 h-5 min-w-5 flex items-center justify-center text-xs shrink-0">
-                        {i + 1}
-                      </Badge>
-                      <span className="text-muted-foreground">{step}</span>
-                    </li>
-                  ))}
-                </ol>
-                <a
-                  href="https://help.shopify.com/en/manual/apps/app-types/custom-apps"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  Documentación oficial de Shopify
-                </a>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+
+          {/* ── Pasos rápidos ── */}
+          <Alert className="bg-blue-50 border-blue-200">
+            <AlertCircle className="h-4 w-4 text-blue-500" />
+            <AlertDescription className="text-blue-700 text-sm">
+              <strong>Flujo recomendado:</strong> Llena los campos de abajo → guarda la tienda →
+              haz clic en <strong>"Conectar con Shopify"</strong> en la tarjeta para obtener el token automáticamente.
+            </AlertDescription>
+          </Alert>
 
           {/* ── Form fields ── */}
           <div className="grid gap-4">
@@ -265,7 +247,7 @@ const StoreFormDialog: React.FC<StoreFormDialogProps> = ({
                 <Label htmlFor="store-name">Nombre de la tienda</Label>
                 <Input
                   id="store-name"
-                  placeholder="Ej: Estados Unidos"
+                  placeholder="Ej: México"
                   value={name}
                   onChange={e => setName(e.target.value)}
                 />
@@ -273,14 +255,10 @@ const StoreFormDialog: React.FC<StoreFormDialogProps> = ({
               <div className="space-y-1.5">
                 <Label>País</Label>
                 <Select value={countryCode} onValueChange={handleCountryChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {COUNTRY_OPTIONS.map(c => (
-                      <SelectItem key={c.code} value={c.code}>
-                        {c.label}
-                      </SelectItem>
+                      <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -296,7 +274,7 @@ const StoreFormDialog: React.FC<StoreFormDialogProps> = ({
                   value={storeUrl}
                   onChange={e => setStoreUrl(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">Solo el dominio, sin https://</p>
+                <p className="text-xs text-muted-foreground">Solo el dominio .myshopify.com</p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="store-currency">Moneda</Label>
@@ -310,13 +288,19 @@ const StoreFormDialog: React.FC<StoreFormDialogProps> = ({
               </div>
             </div>
 
+            {/* ── Token (optional) ── */}
             <div className="space-y-1.5">
-              <Label htmlFor="access-token">Admin API Access Token</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="access-token">
+                  Admin API Access Token
+                  <span className="ml-1.5 text-xs text-muted-foreground font-normal">(opcional — puedes conectar después)</span>
+                </Label>
+              </div>
               <div className="relative">
                 <Input
                   id="access-token"
                   type={showToken ? 'text' : 'password'}
-                  placeholder="shpat_xxxxxxxxxxxxxxxxxxxx"
+                  placeholder="shpat_xxxxxxxxxxxx  (dejar vacío para conectar vía OAuth)"
                   value={accessToken}
                   onChange={e => setAccessToken(e.target.value)}
                   className="pr-10 font-mono text-sm"
@@ -332,33 +316,53 @@ const StoreFormDialog: React.FC<StoreFormDialogProps> = ({
                 </Button>
               </div>
             </div>
+
+            {/* ── Cómo obtener el token (collapsible guide) ── */}
+            <Collapsible open={guideOpen} onOpenChange={setGuideOpen}>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-full justify-between text-muted-foreground">
+                  <span className="text-xs">¿Cómo obtener el token manualmente?</span>
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${guideOpen ? 'rotate-180' : ''}`} />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="rounded-md border bg-muted/40 p-4 mt-1 space-y-2 text-sm">
+                  <ol className="space-y-1.5 list-none">
+                    {[
+                      <>Shopify Admin → <strong>Settings → Apps → Develop apps</strong></>,
+                      <>Clic en <strong>"Create an app"</strong> → dale un nombre</>,
+                      <>En la app: <strong>Configuration → Admin API integration</strong> → activa permisos</>,
+                      <>Guarda → <strong>API credentials → Install app</strong></>,
+                      <>Copia el token <code className="bg-background rounded px-1">shpat_...</code> (solo se muestra una vez)</>,
+                    ].map((step, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <Badge variant="outline" className="mt-0.5 h-5 min-w-5 flex items-center justify-center text-xs shrink-0">{i + 1}</Badge>
+                        <span className="text-muted-foreground">{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
 
           {/* ── Test result ── */}
           {testResult && (
             <Alert variant={testResult.success ? 'default' : 'destructive'}>
-              {testResult.success
-                ? <CheckCircle className="h-4 w-4" />
-                : <XCircle className="h-4 w-4" />}
+              {testResult.success ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
               <AlertDescription>{testResult.message}</AlertDescription>
             </Alert>
           )}
 
           {/* ── Actions ── */}
           <div className="flex items-center justify-between pt-1">
-            <Button
-              variant="outline"
-              onClick={handleTestConnection}
-              disabled={testing || saving}
-            >
+            <Button variant="outline" onClick={handleTestConnection} disabled={testing || saving || !accessToken.trim()}>
               {testing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {!testing && <CheckCircle className="h-4 w-4 mr-2" />}
               Probar conexión
             </Button>
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>
-                Cancelar
-              </Button>
+              <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
               <Button onClick={handleSave} disabled={saving || testing}>
                 {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 {isEdit ? 'Guardar cambios' : 'Agregar tienda'}
@@ -375,17 +379,34 @@ const StoreFormDialog: React.FC<StoreFormDialogProps> = ({
 
 interface StoreCardProps {
   store: StoreType;
-  onEdit: (s: StoreType) => void;
-  onToggle: (id: string, active: boolean) => void;
+  onEdit:     (s: StoreType) => void;
+  onToggle:   (id: string, active: boolean) => void;
+  onConnected: () => void;
 }
 
-const StoreCard: React.FC<StoreCardProps> = ({ store, onEdit, onToggle }) => {
+const StoreCard: React.FC<StoreCardProps> = ({ store, onEdit, onToggle, onConnected }) => {
   const [toggling, setToggling] = useState(false);
+  const hasToken = !!store.shopify_credentials?.access_token;
 
   const handleToggle = async () => {
     setToggling(true);
     await onToggle(store.id, !store.is_active);
     setToggling(false);
+  };
+
+  const handleConnect = () => {
+    openShopifyOAuth(store);
+    // Listen for OAuth success message from popup
+    const handler = (e: MessageEvent) => {
+      if (e.data === 'shopify-oauth-success') {
+        window.removeEventListener('message', handler);
+        onConnected();
+        toast.success(`✅ Shopify conectado — ${store.name}`);
+      }
+    };
+    window.addEventListener('message', handler);
+    // Cleanup listener after 5 minutes (in case user closes popup without completing)
+    setTimeout(() => window.removeEventListener('message', handler), 5 * 60 * 1000);
   };
 
   return (
@@ -396,13 +417,12 @@ const StoreCard: React.FC<StoreCardProps> = ({ store, onEdit, onToggle }) => {
             <span className="text-xl leading-none">{getFlag(store.country_code)}</span>
             {store.name}
           </span>
-          <div className="flex items-center gap-1.5">
-            <Badge variant={store.is_active ? 'default' : 'secondary'} className="text-xs">
-              {store.is_active ? 'Activa' : 'Inactiva'}
-            </Badge>
-          </div>
+          <Badge variant={store.is_active ? 'default' : 'secondary'} className="text-xs">
+            {store.is_active ? 'Activa' : 'Inactiva'}
+          </Badge>
         </CardTitle>
       </CardHeader>
+
       <CardContent className="space-y-3">
         <div className="text-sm text-muted-foreground space-y-1">
           {store.shopify_store_url ? (
@@ -423,11 +443,12 @@ const StoreCard: React.FC<StoreCardProps> = ({ store, onEdit, onToggle }) => {
               Sin URL de Shopify configurada
             </div>
           )}
-          {store.shopify_credentials?.access_token ? (
-            <div className="flex items-center gap-1.5 text-xs">
-              <CheckCircle className="h-3.5 w-3.5 text-green-500 shrink-0" />
+
+          {hasToken ? (
+            <div className="flex items-center gap-1.5 text-xs text-green-600">
+              <CheckCircle className="h-3.5 w-3.5 shrink-0" />
               Token configurado
-              {store.shopify_credentials.configured_at && (
+              {store.shopify_credentials?.configured_at && (
                 <span className="text-muted-foreground/70 ml-1">
                   · {new Date(store.shopify_credentials.configured_at).toLocaleDateString()}
                 </span>
@@ -436,15 +457,29 @@ const StoreCard: React.FC<StoreCardProps> = ({ store, onEdit, onToggle }) => {
           ) : (
             <div className="flex items-center gap-1.5 text-xs text-orange-500">
               <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-              Token no configurado
+              Sin token — conecta con Shopify
             </div>
           )}
+
           <div className="text-xs text-muted-foreground">
             Moneda: <span className="font-medium">{store.currency}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {/* Connect via OAuth — shown when no token or to re-connect */}
+          {store.shopify_store_url && (
+            <Button
+              variant={hasToken ? 'ghost' : 'default'}
+              size="sm"
+              className={`gap-1.5 text-xs h-8 ${hasToken ? 'text-muted-foreground' : ''}`}
+              onClick={handleConnect}
+            >
+              <Link className="h-3 w-3" />
+              {hasToken ? 'Reconectar' : 'Conectar con Shopify'}
+            </Button>
+          )}
+
           <Button
             variant="outline"
             size="sm"
@@ -454,6 +489,7 @@ const StoreCard: React.FC<StoreCardProps> = ({ store, onEdit, onToggle }) => {
             <Pencil className="h-3 w-3" />
             Editar
           </Button>
+
           <Button
             variant="ghost"
             size="sm"
@@ -461,11 +497,7 @@ const StoreCard: React.FC<StoreCardProps> = ({ store, onEdit, onToggle }) => {
             onClick={handleToggle}
             disabled={toggling}
           >
-            {toggling ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Power className="h-3 w-3" />
-            )}
+            {toggling ? <Loader2 className="h-3 w-3 animate-spin" /> : <Power className="h-3 w-3" />}
             {store.is_active ? 'Desactivar' : 'Activar'}
           </Button>
         </div>
@@ -484,20 +516,18 @@ export const StoresSettingsPanel: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editStore, setEditStore] = useState<StoreType | null>(null);
 
-  const handleEdit = (store: StoreType) => {
-    setEditStore(store);
-    setShowForm(true);
-  };
+  // Listen for OAuth success from popup window
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data === 'shopify-oauth-success') fetchStores();
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [fetchStores]);
 
-  const handleAdd = () => {
-    setEditStore(null);
-    setShowForm(true);
-  };
-
-  const handleFormClose = (open: boolean) => {
-    setShowForm(open);
-    if (!open) setEditStore(null);
-  };
+  const handleEdit  = (store: StoreType) => { setEditStore(store); setShowForm(true); };
+  const handleAdd   = () => { setEditStore(null); setShowForm(true); };
+  const handleClose = (open: boolean) => { setShowForm(open); if (!open) setEditStore(null); };
 
   if (!orgId) return null;
 
@@ -515,6 +545,23 @@ export const StoresSettingsPanel: React.FC = () => {
           Agregar tienda
         </Button>
       </div>
+
+      {/* ── How to add a store ── */}
+      <Card className="border-dashed bg-muted/20">
+        <CardContent className="pt-4 pb-3">
+          <p className="text-xs font-medium text-muted-foreground mb-2">¿Cómo agregar una nueva tienda?</p>
+          <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+            {[
+              '1. Clic en "Agregar tienda"',
+              '2. Llena nombre, país y URL (.myshopify.com)',
+              '3. Guarda la tienda',
+              '4. Clic en "Conectar con Shopify" → autoriza en 1 clic',
+            ].map((step, i) => (
+              <span key={i} className="bg-background border rounded px-2 py-1">{step}</span>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
@@ -544,6 +591,7 @@ export const StoresSettingsPanel: React.FC = () => {
               store={store}
               onEdit={handleEdit}
               onToggle={toggleStoreActive}
+              onConnected={fetchStores}
             />
           ))}
         </div>
@@ -551,7 +599,7 @@ export const StoresSettingsPanel: React.FC = () => {
 
       <StoreFormDialog
         open={showForm}
-        onOpenChange={handleFormClose}
+        onOpenChange={handleClose}
         editStore={editStore}
         organizationId={orgId}
         onSaved={fetchStores}
