@@ -81,7 +81,7 @@ export const useSyncStats = () => {
       // PostgREST's default 1000-row cap when volume exceeds it.
       const { data: logs, error: logsError } = await supabase
         .from('inventory_sync_logs' as any)
-        .select('synced_at, success_count, error_count, delivery_id')
+        .select('synced_at, success_count, error_count, delivery_id, sync_results')
         .not('synced_at', 'is', null)
         .gte('synced_at', sixtyDaysAgo)
         .order('synced_at', { ascending: false })
@@ -94,7 +94,34 @@ export const useSyncStats = () => {
         success_count: number | null;
         error_count: number | null;
         delivery_id: string | null;
+        sync_results: unknown;
       }>;
+
+      // Extract actual UNITS pushed to Shopify from sync_results JSON.
+      // success_count counts SKUs (1 per variant synced), not units.
+      // The real unit count lives in sync_results.results[].addedQuantity
+      // (new format) or sync_results[].addedQuantity (old array format).
+      // Failed/no-op rows contribute 0.
+      const unitsFromResults = (raw: unknown): number => {
+        if (!raw) return 0;
+        let arr: unknown = null;
+        if (Array.isArray(raw)) {
+          arr = raw; // legacy format
+        } else if (typeof raw === 'object' && raw !== null) {
+          arr = (raw as { results?: unknown }).results;
+        }
+        if (!Array.isArray(arr)) return 0;
+        let total = 0;
+        for (const item of arr) {
+          if (item && typeof item === 'object') {
+            const r = item as { status?: string; addedQuantity?: number };
+            if (r.status === 'success' && typeof r.addedQuantity === 'number') {
+              total += r.addedQuantity;
+            }
+          }
+        }
+        return total;
+      };
 
       // 2) Fetch delivery details for unique IDs in last 30 days (for orders list)
       const recentDeliveryIds = [
@@ -145,7 +172,11 @@ export const useSyncStats = () => {
 
       for (const entry of entries) {
         const dt = new Date(entry.synced_at);
-        const items = entry.success_count ?? 0;
+        // Real units pushed to Shopify (sum of addedQuantity in sync_results).
+        // success_count is per-SKU not per-unit — using it under-reports the
+        // dashboard 2-10x. Idempotency-skipped SKUs have addedQuantity=0 so
+        // they correctly contribute 0 (they didn't flow new inventory).
+        const items = unitsFromResults(entry.sync_results);
         const errors = entry.error_count ?? 0;
         const iso = format(dt, 'yyyy-MM-dd');
         const deliveryId = entry.delivery_id ?? '';
