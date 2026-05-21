@@ -1,5 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 
 // Función de ordenamiento de variantes (copiada desde utils)
@@ -90,35 +91,64 @@ serve(async (req) => {
 
   try {
     console.log('🔥 SHOPIFY-PRODUCTS FUNCTION STARTED AT:', new Date().toISOString());
-    
-    // Obtener credenciales desde los secretos de Supabase
-    const rawStoreDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
-    const accessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
-    
-    // Normalize Shopify domain
-    const storeDomain = rawStoreDomain?.includes('.myshopify.com') 
-      ? rawStoreDomain.replace('.myshopify.com', '')
-      : rawStoreDomain
-    
+
+    const body = await req.json().catch(() => ({}))
+    const { searchTerm = '', storeId } = body
+
+    let storeDomain: string | undefined
+    let accessToken: string | undefined
+
+    // If a storeId is provided, look up credentials from the stores table
+    if (storeId) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      const adminClient = createClient(supabaseUrl, supabaseServiceKey)
+
+      const { data: store, error: storeError } = await adminClient
+        .from('stores')
+        .select('shopify_store_url, shopify_credentials')
+        .eq('id', storeId)
+        .eq('is_active', true)
+        .single()
+
+      if (!storeError && store?.shopify_credentials?.access_token) {
+        const rawDomain = store.shopify_store_url?.replace('https://', '').replace('http://', '').replace(/\/$/, '')
+        storeDomain = rawDomain?.includes('.myshopify.com')
+          ? rawDomain.replace('.myshopify.com', '')
+          : rawDomain
+        accessToken = store.shopify_credentials.access_token
+        console.log(`🏪 Using store credentials from DB for storeId: ${storeId}`)
+      } else {
+        console.warn('Store not found or missing credentials in DB, falling back to ENV vars')
+      }
+    }
+
+    // Fallback to ENV vars (Colombia default)
+    if (!storeDomain || !accessToken) {
+      const rawStoreDomain = Deno.env.get('SHOPIFY_STORE_DOMAIN')
+      accessToken = Deno.env.get('SHOPIFY_ACCESS_TOKEN')
+      storeDomain = rawStoreDomain?.includes('.myshopify.com')
+        ? rawStoreDomain.replace('.myshopify.com', '')
+        : rawStoreDomain
+    }
+
     console.log('📊 Checking credentials...');
     console.log('Store Domain:', storeDomain ? 'CONFIGURED' : 'MISSING');
     console.log('Access Token:', accessToken ? 'CONFIGURED' : 'MISSING');
     console.log(`🔗 Using Shopify domain: ${storeDomain}.myshopify.com`);
 
     if (!storeDomain || !accessToken) {
-      console.error('Missing Shopify credentials in environment variables')
+      console.error('Missing Shopify credentials')
       return new Response(
-        JSON.stringify({ 
-          error: 'Credenciales de Shopify no configuradas. Por favor contacta al administrador.' 
+        JSON.stringify({
+          error: 'Credenciales de Shopify no configuradas. Por favor contacta al administrador.'
         }),
-        { 
-          status: 500, 
+        {
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
     }
-
-    const { searchTerm } = await req.json().catch(() => ({ searchTerm: '' }))
 
     // Limpiar el dominio para asegurar formato correcto
     const cleanDomain = storeDomain.replace(/^https?:\/\//, '').replace(/\/$/, '')

@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import ProductImportConfirmation from '@/components/ProductImportConfirmation';
 import { sortShopifyVariants } from '@/lib/variantSorting';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 interface ProductVariant {
   size: string;
@@ -41,17 +42,19 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
   const [confirmationProduct, setConfirmationProduct] = useState<ShopifyProduct | null>(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const { toast } = useToast();
+  const { activeStoreId } = useStoreContext();
 
   // Función para obtener todos los productos al inicio
   const fetchAllProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      console.log('Fetching all products from Shopify');
+      console.log('Fetching all products from Shopify', { storeId: activeStoreId });
 
       const { data, error } = await supabase.functions.invoke('shopify-products', {
-        body: { 
-          searchTerm: '' // Obtener todos los productos
+        body: {
+          searchTerm: '', // Obtener todos los productos
+          storeId: activeStoreId ?? undefined,
         }
       });
 
@@ -108,9 +111,9 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, activeStoreId]);
 
-  // Cargar productos al montar el componente
+  // Cargar productos al montar el componente y cuando cambia la tienda
   useEffect(() => {
     fetchAllProducts();
   }, [fetchAllProducts]);
@@ -214,7 +217,8 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
             base_price: product.price,
             image_url: product.image_url,
             category: 'Shopify Import',
-            status: 'active'
+            status: 'active',
+            ...(activeStoreId ? { store_id: activeStoreId } : {}),
           }
         ])
         .select()
