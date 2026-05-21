@@ -6,6 +6,7 @@ import { RefreshCw, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 interface RealTimeStats {
   total_orders: number;
@@ -26,6 +27,7 @@ export const ShopifyRealTimeStats: React.FC = () => {
   const [lastSync, setLastSync] = useState<string>('');
   const { toast } = useToast();
   const { currentOrganization } = useOrganization();
+  const { activeStoreId } = useStoreContext();
 
   const fetchRealTimeStats = async () => {
     setLoading(true);
@@ -35,36 +37,39 @@ export const ShopifyRealTimeStats: React.FC = () => {
         return;
       }
 
-      // Get overall statistics (matching the analytics filters) filtered by organization
-      const { data: overallStats, error: overallError } = await supabase
-        .from('shopify_orders')
-        .select('total_price, customer_email, created_at_shopify')
-        .eq('organization_id', currentOrganization.id)
-        .in('financial_status', ['paid', 'partially_paid', 'pending']);
+      // Base filter helper
+      const baseFilter = (q: any) => {
+        q = q.eq('organization_id', currentOrganization.id);
+        if (activeStoreId) q = q.eq('store_id', activeStoreId);
+        return q;
+      };
+
+      // Get overall statistics
+      const { data: overallStats, error: overallError } = await baseFilter(
+        supabase.from('shopify_orders').select('total_price, customer_email, created_at_shopify')
+      ).in('financial_status', ['paid', 'partially_paid', 'pending']);
 
       if (overallError) throw overallError;
 
-      // Get today's statistics filtered by organization
+      // Get today's statistics
       const today = new Date().toISOString().split('T')[0];
-      const { data: todayStats, error: todayError } = await supabase
-        .from('shopify_orders')
-        .select('total_price')
-        .eq('organization_id', currentOrganization.id)
+      const { data: todayStats, error: todayError } = await baseFilter(
+        supabase.from('shopify_orders').select('total_price')
+      )
         .in('financial_status', ['paid', 'partially_paid', 'pending'])
         .gte('created_at_shopify', today + 'T00:00:00Z')
         .lt('created_at_shopify', today + 'T23:59:59Z');
 
       if (todayError) throw todayError;
 
-      // Get yesterday's statistics for comparison filtered by organization
+      // Get yesterday's statistics for comparison
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayStr = yesterday.toISOString().split('T')[0];
-      
-      const { data: yesterdayStats, error: yesterdayError } = await supabase
-        .from('shopify_orders')
-        .select('total_price')
-        .eq('organization_id', currentOrganization.id)
+
+      const { data: yesterdayStats, error: yesterdayError } = await baseFilter(
+        supabase.from('shopify_orders').select('total_price')
+      )
         .in('financial_status', ['paid', 'partially_paid', 'pending'])
         .gte('created_at_shopify', yesterdayStr + 'T00:00:00Z')
         .lt('created_at_shopify', yesterdayStr + 'T23:59:59Z');
@@ -136,7 +141,7 @@ export const ShopifyRealTimeStats: React.FC = () => {
       
       return () => clearInterval(interval);
     }
-  }, [currentOrganization?.id]);
+  }, [currentOrganization?.id, activeStoreId]);
 
   const formatCurrency = (amount: number) => {
     return '$' + new Intl.NumberFormat('es-CO', {

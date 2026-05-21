@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 interface DashboardStats {
   activeOrders: number;
@@ -42,18 +43,21 @@ export const useDashboardData = () => {
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { activeStoreId } = useStoreContext();
 
   const fetchDashboardStats = async () => {
     try {
       // Fetch active orders count
-      const { count: activeOrdersCount, error: ordersError } = await supabase
+      let ordersQuery = supabase
         .from('orders')
         .select('*', { count: 'exact', head: true })
         .in('status', ['pending', 'assigned', 'in_progress']);
+      if (activeStoreId) ordersQuery = ordersQuery.eq('store_id', activeStoreId);
+      const { count: activeOrdersCount, error: ordersError } = await ordersQuery;
 
       if (ordersError) throw ordersError;
 
-      // Fetch workshops count
+      // Fetch workshops count (shared across stores)
       const { count: workshopsCount, error: workshopsError } = await supabase
         .from('workshops')
         .select('*', { count: 'exact', head: true })
@@ -62,14 +66,16 @@ export const useDashboardData = () => {
       if (workshopsError) throw workshopsError;
 
       // Fetch products count
-      const { count: productsCount, error: productsError } = await supabase
+      let productsQuery = supabase
         .from('products')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'active');
+      if (activeStoreId) productsQuery = productsQuery.eq('store_id', activeStoreId);
+      const { count: productsCount, error: productsError } = await productsQuery;
 
       if (productsError) throw productsError;
 
-      // Fetch pending deliveries count
+      // Fetch pending deliveries count (via orders join for store filter)
       const { count: pendingDeliveriesCount, error: deliveriesError } = await supabase
         .from('deliveries')
         .select('*', { count: 'exact', head: true })
@@ -96,11 +102,13 @@ export const useDashboardData = () => {
 
   const fetchMonthlyOrderData = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('orders')
         .select('created_at')
         .gte('created_at', new Date(new Date().getFullYear(), 0, 1).toISOString())
         .order('created_at', { ascending: true });
+      if (activeStoreId) query = query.eq('store_id', activeStoreId);
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -133,9 +141,9 @@ export const useDashboardData = () => {
 
   const fetchOrderStatusData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('status');
+      let statusQuery = supabase.from('orders').select('status');
+      if (activeStoreId) statusQuery = statusQuery.eq('store_id', activeStoreId);
+      const { data, error } = await statusQuery;
 
       if (error) throw error;
 
@@ -246,7 +254,7 @@ export const useDashboardData = () => {
 
   useEffect(() => {
     loadAllData();
-  }, []);
+  }, [activeStoreId]);
 
   return {
     stats,

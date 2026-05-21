@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 interface AdminDashboardStats {
   activeOrders: number;
@@ -36,26 +37,28 @@ export const useAdminDashboardData = () => {
   const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>('weekly');
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { activeStoreId } = useStoreContext();
 
   const fetchDashboardStats = async () => {
     try {
       // Active orders count
-      const { count: activeOrdersCount, error: ordersError } = await supabase
+      let ordersQuery = supabase
         .from('orders')
         .select('*', { count: 'exact', head: true })
         .in('status', ['pending', 'assigned', 'in_progress']);
+      if (activeStoreId) ordersQuery = ordersQuery.eq('store_id', activeStoreId);
+      const { count: activeOrdersCount, error: ordersError } = await ordersQuery;
 
       if (ordersError) throw ordersError;
 
       // Units in production (total ordered - total approved)
       // Get total units ordered in active orders
-      const { data: totalOrderedData, error: totalOrderedError } = await supabase
+      let totalOrderedQuery = supabase
         .from('order_items')
-        .select(`
-          quantity,
-          orders!inner(status)
-        `)
+        .select(`quantity, orders!inner(status, store_id)`)
         .in('orders.status', ['pending', 'assigned', 'in_progress']);
+      if (activeStoreId) totalOrderedQuery = totalOrderedQuery.eq('orders.store_id', activeStoreId);
+      const { data: totalOrderedData, error: totalOrderedError } = await totalOrderedQuery;
 
       if (totalOrderedError) throw totalOrderedError;
 
@@ -295,7 +298,7 @@ export const useAdminDashboardData = () => {
 
   useEffect(() => {
     loadAllData();
-  }, [viewMode]);
+  }, [viewMode, activeStoreId]);
 
   return {
     stats,

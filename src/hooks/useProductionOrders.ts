@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ReplenishmentSuggestion } from './useReplenishment';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 export interface ProductionOrderData {
   workshopId: string;
@@ -13,6 +14,7 @@ export interface ProductionOrderData {
 export const useProductionOrders = () => {
   const [creating, setCreating] = useState(false);
   const { toast } = useToast();
+  const { activeStoreId } = useStoreContext();
 
   const createProductionOrder = async (orderData: ProductionOrderData) => {
     try {
@@ -42,7 +44,7 @@ export const useProductionOrders = () => {
         return sum + (suggestion.suggested_quantity * 10); // Placeholder price
       }, 0);
 
-      // Create the order
+      // Create the order (tag with active store if one is selected)
       const { data: order, error: orderError } = await supabase
         .from('orders')
         .insert({
@@ -52,7 +54,8 @@ export const useProductionOrders = () => {
           due_date: orderData.expectedDeliveryDate,
           notes: `Orden de producción generada automáticamente desde sugerencias de reposición. ${orderData.notes || ''}`,
           organization_id: orgData.organization_id,
-          created_by: user.id
+          created_by: user.id,
+          ...(activeStoreId ? { store_id: activeStoreId } : {}),
         })
         .select()
         .single();

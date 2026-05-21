@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useUserContext } from '@/hooks/useUserContext';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 export const useDeliveryOrders = () => {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { isAdmin, currentUser } = useUserContext();
+  const { activeStoreId } = useStoreContext();
 
   const fetchAvailableOrders = async () => {
     setLoading(true);
@@ -31,6 +33,11 @@ export const useDeliveryOrders = () => {
         `)
         .in('status', ['assigned', 'in_progress', 'completed'])
         .order('due_date', { ascending: true, nullsFirst: false });
+
+      // Filter by active store
+      if (activeStoreId) {
+        query = query.eq('store_id', activeStoreId);
+      }
 
       // Si el usuario es taller (no admin), filtrar solo órdenes de su taller
       if (!isAdmin && currentUser?.workshopId) {
