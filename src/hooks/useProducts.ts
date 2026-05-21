@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { sortProductVariants } from '@/lib/variantSorting';
 import { useToast } from '@/hooks/use-toast';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 interface Product {
   id: string;
@@ -34,6 +35,7 @@ export const useProducts = (includeInactive: boolean = false) => {
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
   const { toast } = useToast();
+  const { activeStoreId } = useStoreContext();
   const channelRef = useRef<any>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -45,15 +47,20 @@ export const useProducts = (includeInactive: boolean = false) => {
         setLoading(true);
       }
       setError(null);
-      
+
       let query = supabase
         .from('products')
         .select('*');
-        
+
       if (!includeInactive) {
         query = query.eq('status', 'active');
       }
-      
+
+      // Filter by active store when one is selected
+      if (activeStoreId) {
+        query = query.eq('store_id', activeStoreId);
+      }
+
       const { data, error } = await query
         .order('created_at', { ascending: false });
 
@@ -190,7 +197,7 @@ export const useProducts = (includeInactive: boolean = false) => {
       cleanup();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [includeInactive]);
+  }, [includeInactive, activeStoreId]);
 
   useEffect(() => {
     setupAutoRefresh();

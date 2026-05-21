@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 interface ShopifyOrder {
   id: string;
@@ -50,6 +51,7 @@ export const useShopifyOrders = () => {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [customersLoading, setCustomersLoading] = useState(false);
   const [totalOrders, setTotalOrders] = useState(0);
+  const { activeStoreId } = useStoreContext();
   const [totalCustomers, setTotalCustomers] = useState(0);
   const { toast } = useToast();
   const { currentOrganization } = useOrganization();
@@ -65,14 +67,16 @@ export const useShopifyOrders = () => {
 
       // Try to get full data first (for admins/designers)
       try {
-        const { count } = await supabase
+        let countQuery = supabase
           .from('shopify_orders')
           .select('*', { count: 'exact', head: true })
           .eq('organization_id', currentOrganization.id);
-        
+        if (activeStoreId) countQuery = countQuery.eq('store_id', activeStoreId);
+        const { count } = await countQuery;
+
         setTotalOrders(count || 0);
 
-        const { data, error } = await supabase
+        let dataQuery = supabase
           .from('shopify_orders')
           .select(`
             id,
@@ -91,6 +95,8 @@ export const useShopifyOrders = () => {
           .eq('organization_id', currentOrganization.id)
           .order('created_at_shopify', { ascending: false })
           .range(offset, offset + limit - 1);
+        if (activeStoreId) dataQuery = dataQuery.eq('store_id', activeStoreId);
+        const { data, error } = await dataQuery;
 
         if (error) throw error;
         setOrders(data || []);
@@ -143,10 +149,12 @@ export const useShopifyOrders = () => {
     try {
       if (!currentOrganization?.id) return [] as ShopifyOrder[];
 
-      const { count, error: countError } = await supabase
+      let allCountQuery = supabase
         .from('shopify_orders')
         .select('*', { count: 'exact', head: true })
         .eq('organization_id', currentOrganization.id);
+      if (activeStoreId) allCountQuery = allCountQuery.eq('store_id', activeStoreId);
+      const { count, error: countError } = await allCountQuery;
 
       if (countError) throw countError;
       const total = count || 0;
@@ -158,7 +166,7 @@ export const useShopifyOrders = () => {
       const queries = Array.from({ length: pages }, (_, i) => {
         const start = i * pageSize;
         const end = start + pageSize - 1;
-        return supabase
+        let q = supabase
           .from('shopify_orders')
           .select(`
             id,
@@ -177,6 +185,8 @@ export const useShopifyOrders = () => {
           .eq('organization_id', currentOrganization.id)
           .order('created_at_shopify', { ascending: false })
           .range(start, end);
+        if (activeStoreId) q = q.eq('store_id', activeStoreId);
+        return q;
       });
 
       const results = await Promise.all(queries);
@@ -279,7 +289,7 @@ export const useShopifyOrders = () => {
       fetchCustomerAnalytics();
       fetchProductAnalytics();
     }
-  }, [currentOrganization?.id]);
+  }, [currentOrganization?.id, activeStoreId]);
 
   return {
     orders,
