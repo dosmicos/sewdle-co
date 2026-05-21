@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useStoreContext } from '@/contexts/StoreContext';
 import { type DateRange } from './useFinanceDateRange';
 import { format, eachDayOfInterval, startOfDay } from 'date-fns';
 
@@ -48,14 +49,14 @@ function calcChange(current: number, previous: number): number {
   return ((current - previous) / Math.abs(previous)) * 100;
 }
 
-async function fetchAllOrders(orgId: string, startStr: string, endStr: string) {
+async function fetchAllOrders(orgId: string, startStr: string, endStr: string, storeId?: string | null) {
   const pageSize = 1000;
   let allOrders: any[] = [];
   let from = 0;
   let hasMore = true;
 
   while (hasMore) {
-    const { data, error } = await supabase
+    let q = supabase
       .from('shopify_orders')
       .select('shopify_order_id, total_price, raw_data->current_total_price, total_tax, total_discounts, total_shipping, customer_email, customer_orders_count, created_at_shopify, financial_status, cancelled_at')
       .eq('organization_id', orgId)
@@ -65,6 +66,10 @@ async function fetchAllOrders(orgId: string, startStr: string, endStr: string) {
       .is('cancelled_at', null)
       .order('created_at_shopify', { ascending: true })
       .range(from, from + pageSize - 1);
+
+    if (storeId) q = q.eq('store_id', storeId);
+
+    const { data, error } = await q;
 
     if (error) throw error;
     if (!data || data.length === 0) break;
@@ -79,14 +84,15 @@ async function fetchAllOrders(orgId: string, startStr: string, endStr: string) {
 
 async function fetchMetrics(
   orgId: string,
-  range: DateRange
+  range: DateRange,
+  storeId?: string | null
 ): Promise<StoreMetrics> {
   // Use ISO strings to preserve timezone (fixes UTC-5 offset issue)
   const startStr = range.start.toISOString();
   const endStr = range.end.toISOString();
 
   // Fetch ALL orders with pagination (Supabase default limit is 1000)
-  const orders = await fetchAllOrders(orgId, startStr, endStr);
+  const orders = await fetchAllOrders(orgId, startStr, endStr, storeId);
 
   if (!orders || orders.length === 0) return emptyMetrics;
 
@@ -148,7 +154,7 @@ async function fetchMetrics(
     const batchSizeEmails = 200;
     for (let i = 0; i < emailArray.length; i += batchSizeEmails) {
       const batch = emailArray.slice(i, i + batchSizeEmails);
-      const { data: priorOrders } = await supabase
+      let priorQuery = supabase
         .from('shopify_orders')
         .select('customer_email')
         .eq('organization_id', orgId)
@@ -157,6 +163,8 @@ async function fetchMetrics(
         .is('cancelled_at', null)
         .not('financial_status', 'eq', 'voided')
         .limit(batch.length);
+      if (storeId) priorQuery = priorQuery.eq('store_id', storeId);
+      const { data: priorOrders } = await priorQuery;
 
       if (priorOrders) {
         for (const o of priorOrders) {
@@ -210,19 +218,20 @@ async function fetchMetrics(
 
 export function useStoreMetrics(current: DateRange, previous: DateRange): StoreMetricsResult {
   const { currentOrganization } = useOrganization();
+  const { activeStoreId } = useStoreContext();
   const orgId = currentOrganization?.id;
 
   const currentQuery = useQuery({
-    queryKey: ['store-metrics', 'current', orgId, format(current.start, 'yyyy-MM-dd'), format(current.end, 'yyyy-MM-dd')],
-    queryFn: () => fetchMetrics(orgId!, current),
+    queryKey: ['store-metrics', 'current', orgId, activeStoreId, format(current.start, 'yyyy-MM-dd'), format(current.end, 'yyyy-MM-dd')],
+    queryFn: () => fetchMetrics(orgId!, current, activeStoreId),
     enabled: !!orgId,
     staleTime: 1000 * 60 * 30, // 30 min — expensive batch query
     refetchOnWindowFocus: false,
   });
 
   const previousQuery = useQuery({
-    queryKey: ['store-metrics', 'previous', orgId, format(previous.start, 'yyyy-MM-dd'), format(previous.end, 'yyyy-MM-dd')],
-    queryFn: () => fetchMetrics(orgId!, previous),
+    queryKey: ['store-metrics', 'previous', orgId, activeStoreId, format(previous.start, 'yyyy-MM-dd'), format(previous.end, 'yyyy-MM-dd')],
+    queryFn: () => fetchMetrics(orgId!, previous, activeStoreId),
     enabled: !!orgId,
     staleTime: 1000 * 60 * 30,
     refetchOnWindowFocus: false,

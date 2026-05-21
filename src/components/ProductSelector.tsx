@@ -6,6 +6,7 @@ import { Plus, Trash2, Package } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { sortProductVariants } from '@/lib/variantSorting';
 import SearchableProductSelector from './SearchableProductSelector';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 interface ProductSelectorProps {
   selectedProducts: any[];
@@ -49,10 +50,11 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [internalProducts, setInternalProducts] = useState<InternalSelectedProduct[]>([]);
+  const { activeStoreId } = useStoreContext();
 
   useEffect(() => {
     fetchProducts();
-  }, []);
+  }, [activeStoreId]);
 
   // Sincronizar productos internos con los externos cuando cambian los productos seleccionados
   useEffect(() => {
@@ -112,7 +114,7 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
     try {
       setLoading(true);
       
-      const { data: products, error: productsError } = await supabase
+      let productsQuery = supabase
         .from('products')
         .select(`
           id,
@@ -129,6 +131,8 @@ const ProductSelector = ({ selectedProducts, onProductsChange }: ProductSelector
           )
         `)
         .eq('status', 'active');
+      if (activeStoreId) productsQuery = productsQuery.eq('store_id', activeStoreId);
+      const { data: products, error: productsError } = await productsQuery;
 
       if (productsError) {
         console.error('Error fetching products:', productsError);

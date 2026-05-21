@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 // ── Interfaces ──────────────────────────────────────────────
 
@@ -312,6 +313,7 @@ async function fetchLineItemsInBatches(
 
 export const useInventoryStats = () => {
   const { currentOrganization } = useOrganization();
+  const { activeStoreId } = useStoreContext();
   const [data, setData] = useState<InventoryStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -333,32 +335,40 @@ export const useInventoryStats = () => {
       // Parallel queries
       const [productsResult, recentOrdersResult, replenishmentResult, salesAnalyticsResult] = await Promise.all([
         // Query 1: Products con variants
-        supabase
-          .from('products')
-          .select(`
-            id,
-            name,
-            sku,
-            category,
-            base_price,
-            status,
-            product_variants (
+        (() => {
+          let q = supabase
+            .from('products')
+            .select(`
               id,
-              stock_quantity,
-              size,
-              color
-            )
-          `)
-          .eq('organization_id', orgId)
-          .eq('status', 'active'),
+              name,
+              sku,
+              category,
+              base_price,
+              status,
+              product_variants (
+                id,
+                stock_quantity,
+                size,
+                color
+              )
+            `)
+            .eq('organization_id', orgId)
+            .eq('status', 'active');
+          if (activeStoreId) q = q.eq('store_id', activeStoreId);
+          return q;
+        })(),
 
         // Query 2: Órdenes pagadas de últimos 30 días
-        supabase
-          .from('shopify_orders')
-          .select('shopify_order_id')
-          .eq('organization_id', orgId)
-          .gte('created_at_shopify', thirtyDaysAgo.toISOString())
-          .in('financial_status', ['paid', 'partially_paid']),
+        (() => {
+          let q = supabase
+            .from('shopify_orders')
+            .select('shopify_order_id')
+            .eq('organization_id', orgId)
+            .gte('created_at_shopify', thirtyDaysAgo.toISOString())
+            .in('financial_status', ['paid', 'partially_paid']);
+          if (activeStoreId) q = q.eq('store_id', activeStoreId);
+          return q;
+        })(),
 
         // Query 3: Stock crítico desde replenishment view
         supabase
@@ -481,7 +491,7 @@ export const useInventoryStats = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentOrganization?.id]);
+  }, [currentOrganization?.id, activeStoreId]);
 
   useEffect(() => {
     fetchAllStats();

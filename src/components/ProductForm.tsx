@@ -12,6 +12,7 @@ import ProductVariants from '@/components/ProductVariants';
 import TechnicalFileUpload from '@/components/TechnicalFileUpload';
 import ShopifyProductImport from '@/components/ShopifyProductImport';
 import ProductImageUpload from '@/components/ProductImageUpload';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 interface ProductFormProps {
   onSuccess: () => void;
@@ -50,6 +51,7 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
   const [technicalFiles, setTechnicalFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { activeStoreId } = useStoreContext();
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -129,7 +131,8 @@ const ProductForm = ({ onSuccess }: ProductFormProps) => {
             category: formData.brand,
             base_price: formData.basePrice,
             image_url: formData.imageUrl,
-            technical_file_url: technicalFileUrl
+            technical_file_url: technicalFileUrl,
+            ...(activeStoreId ? { store_id: activeStoreId } : {}),
           }
         ])
         .select()
