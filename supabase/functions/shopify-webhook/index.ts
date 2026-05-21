@@ -175,31 +175,22 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
   console.log(`📦 Procesando orden en tiempo real: ${order.id} - ${order.order_number}`);
   console.log(`🏪 Shop domain recibido: ${shopDomain}`);
 
-  // Get organization_id using exact matching with shop domain from header
-  let organizationId = null;
-  if (shopDomain) {
-    const { data: orgData, error: orgError } = await supabase
-      .from('organizations')
+  // Get organization_id + store_id using shop domain from header
+  if (!shopDomain) throw new Error('No se pudo determinar el dominio de la tienda Shopify');
+
+  const { organizationId, storeId } = await resolveStoreAndOrg(supabase, shopDomain);
+
+  if (!organizationId) {
+    // Log available stores for debugging
+    const { data: allStores } = await supabase
+      .from('stores')
       .select('id, name, shopify_store_url')
-      .eq('shopify_store_url', `https://${shopDomain}`)
-      .single();
-    
-    if (orgError) {
-      console.error(`❌ Error buscando organización para ${shopDomain}:`, orgError);
-      // Log available organizations for debugging
-      const { data: allOrgs } = await supabase
-        .from('organizations')
-        .select('id, name, shopify_store_url')
-        .not('shopify_store_url', 'is', null);
-      console.log('📋 Organizaciones disponibles:', allOrgs);
-      throw new Error(`No se pudo encontrar organización para la tienda: ${shopDomain}`);
-    }
-    
-    organizationId = orgData?.id;
-    console.log(`✅ Organización encontrada: ${orgData?.name} (${orgData?.id})`);
-  } else {
-    throw new Error('No se pudo determinar el dominio de la tienda Shopify');
+      .not('shopify_store_url', 'is', null);
+    console.log('📋 Tiendas disponibles:', allStores);
+    throw new Error(`No se pudo encontrar tienda/organización para la tienda: ${shopDomain}`);
   }
+
+  console.log(`✅ Tienda encontrada: store_id=${storeId} org_id=${organizationId}`);
 
   // Store complete order in shopify_orders table
   const orderToInsert = {
@@ -251,15 +242,16 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
     
     // Metadatos
     raw_data: order,
-    organization_id: organizationId
+    organization_id: organizationId,
+    store_id: storeId
   };
 
   // Insert order using upsert
   const { error: orderError } = await supabase
     .from('shopify_orders')
-    .upsert(orderToInsert, { 
+    .upsert(orderToInsert, {
       onConflict: 'shopify_order_id',
-      ignoreDuplicates: false 
+      ignoreDuplicates: false
     });
 
   if (orderError) {
@@ -289,10 +281,11 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
     .upsert({
       shopify_order_id: order.id,
       organization_id: organizationId,
-      operational_status: operationalStatus
-    }, { 
+      operational_status: operationalStatus,
+      store_id: storeId
+    }, {
       onConflict: 'organization_id,shopify_order_id',
-      ignoreDuplicates: true 
+      ignoreDuplicates: true
     });
 
   if (pickingError) {
@@ -512,25 +505,16 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
   console.log(`🏪 Shop domain recibido: ${shopDomain}`);
   console.log('📝 Nota recibida de Shopify (webhook):', JSON.stringify((order as any)?.note ?? null));
 
-  // Get organization_id using exact matching with shop domain from header
-  let organizationId = null;
-  if (shopDomain) {
-    const { data: orgData, error: orgError } = await supabase
-      .from('organizations')
-      .select('id, name, shopify_store_url')
-      .eq('shopify_store_url', `https://${shopDomain}`)
-      .single();
-    
-    if (orgError) {
-      console.error(`❌ Error buscando organización para ${shopDomain}:`, orgError);
-      throw new Error(`No se pudo encontrar organización para la tienda: ${shopDomain}`);
-    }
-    
-    organizationId = orgData?.id;
-    console.log(`✅ Organización encontrada: ${orgData?.name} (${orgData?.id})`);
-  } else {
-    throw new Error('No se pudo determinar el dominio de la tienda Shopify');
+  // Get organization_id + store_id using shop domain from header
+  if (!shopDomain) throw new Error('No se pudo determinar el dominio de la tienda Shopify');
+
+  const { organizationId, storeId } = await resolveStoreAndOrg(supabase, shopDomain);
+
+  if (!organizationId) {
+    throw new Error(`No se pudo encontrar tienda/organización para la tienda: ${shopDomain}`);
   }
+
+  console.log(`✅ Tienda encontrada: store_id=${storeId} org_id=${organizationId}`);
 
   // Update shopify_orders with latest data
   const orderToUpdate = {
@@ -1050,14 +1034,37 @@ async function upsertShopifyCart(checkout: any, supabase: any, shopDomain: strin
   return { ok: true, organizationId };
 }
 
-async function resolveOrganizationId(supabase: any, shopDomain: string): Promise<string | null> {
-  if (!shopDomain) return null;
-  const { data } = await supabase
+/** Look up the store + organization for a given Shopify shop domain.
+ *  First queries the `stores` table (multi-store support).
+ *  Falls back to the `organizations` table for backward compatibility. */
+async function resolveStoreAndOrg(supabase: any, shopDomain: string): Promise<{ organizationId: string | null; storeId: string | null }> {
+  if (!shopDomain) return { organizationId: null, storeId: null };
+
+  // Try stores table first (new multi-store model)
+  const { data: storeData } = await supabase
+    .from('stores')
+    .select('id, organization_id')
+    .eq('shopify_store_url', `https://${shopDomain}`)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (storeData) {
+    return { organizationId: storeData.organization_id, storeId: storeData.id };
+  }
+
+  // Fallback: legacy lookup via organizations table
+  const { data: orgData } = await supabase
     .from('organizations')
     .select('id')
     .eq('shopify_store_url', `https://${shopDomain}`)
     .maybeSingle();
-  return data?.id || null;
+
+  return { organizationId: orgData?.id || null, storeId: null };
+}
+
+async function resolveOrganizationId(supabase: any, shopDomain: string): Promise<string | null> {
+  const { organizationId } = await resolveStoreAndOrg(supabase, shopDomain);
+  return organizationId;
 }
 
 // Tras procesar orders/create, intentar matchear contra un cart abandonado

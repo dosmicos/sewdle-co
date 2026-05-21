@@ -301,10 +301,10 @@ async function fetchOrdersForChunk(
 }
 
 // Function to store complete Shopify orders in database
-async function storeCompleteOrders(orders: ShopifyOrder[], supabase: any, organizationId: string | null = null): Promise<void> {
+async function storeCompleteOrders(orders: ShopifyOrder[], supabase: any, organizationId: string | null = null, storeId: string | null = null): Promise<void> {
   if (orders.length === 0) return;
 
-  console.log(`💾 Almacenando ${orders.length} órdenes completas...`);
+  console.log(`💾 Almacenando ${orders.length} órdenes completas (store_id=${storeId})...`);
 
   // Prepare orders for database insertion
   const ordersToInsert = orders.map(order => ({
@@ -356,7 +356,8 @@ async function storeCompleteOrders(orders: ShopifyOrder[], supabase: any, organi
     
     // Metadatos
     raw_data: order,
-    organization_id: organizationId
+    organization_id: organizationId,
+    store_id: storeId
   }));
 
   // Insert orders using upsert to handle duplicates
@@ -447,10 +448,12 @@ Deno.serve(async (req) => {
   try {
     console.log('🔄 Iniciando sincronización Shopify CORREGIDA con validación de precisión...');
     
-    // Validate environment variables first
-    const env = validateEnvironment();
-    console.log(`✅ Variables de entorno validadas correctamente`);
-    console.log(`🏪 Shopify Store: ${env.shopifyDomain}`);
+    // Validate base environment variables (Supabase only — Shopify creds come from DB)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Variables de entorno faltantes: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY');
+    }
 
     // Parse request body to get sync parameters
     const body = await req.json().catch(() => ({}));
@@ -458,10 +461,53 @@ Deno.serve(async (req) => {
     const days = body.days || 90; // Default to 90 days for initial sync
     const scheduled = body.scheduled || false;
     const organizationId = body.organization_id || null;
+    const storeIdFilter = body.store_id || null; // optional: sync only one store
 
-    console.log(`🔄 Modo: ${mode}, Días: ${days}, Programado: ${scheduled}`);
+    console.log(`🔄 Modo: ${mode}, Días: ${days}, Programado: ${scheduled}, Org: ${organizationId}`);
 
-    const supabase = createClient(env.supabaseUrl, env.supabaseServiceKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // ── Resolve stores to sync ────────────────────────────────────────────────
+    // Try fetching credentials from `stores` table (multi-store)
+    let storesToSync: Array<{ id: string | null; shopifyDomain: string; shopifyToken: string; organizationId: string | null }> = [];
+
+    if (organizationId) {
+      let storeQuery = supabase
+        .from('stores')
+        .select('id, shopify_store_url, shopify_credentials, organization_id')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true);
+      if (storeIdFilter) storeQuery = storeQuery.eq('id', storeIdFilter);
+      const { data: dbStores } = await storeQuery;
+
+      if (dbStores && dbStores.length > 0) {
+        storesToSync = dbStores
+          .map((s: any) => ({
+            id: s.id,
+            shopifyDomain: (s.shopify_store_url || '').replace('https://', '').replace('.myshopify.com', '').split('.')[0],
+            shopifyToken: s.shopify_credentials?.access_token || '',
+            organizationId: s.organization_id,
+          }))
+          .filter((s: any) => s.shopifyDomain && s.shopifyToken);
+        console.log(`🏪 Sincronizando ${storesToSync.length} tienda(s) desde DB`);
+      }
+    }
+
+    // Fallback: use ENV vars (single-store legacy mode)
+    if (storesToSync.length === 0) {
+      console.log('⚠️ No se encontraron tiendas en DB — usando variables de entorno (modo legacy)');
+      const env = validateEnvironment();
+      storesToSync = [{
+        id: null,
+        shopifyDomain: env.shopifyDomain,
+        shopifyToken: env.shopifyToken,
+        organizationId,
+      }];
+    }
+
+    // We'll iterate stores below; create the supabase client first (already done)
+    const env = { supabaseUrl, supabaseServiceKey, shopifyDomain: storesToSync[0].shopifyDomain, shopifyToken: storesToSync[0].shopifyToken };
+    console.log(`🏪 Shopify Store (primera): ${storesToSync[0].shopifyDomain}`);
 
     // Check if there's already a sync in progress for this type
     const { data: syncInProgress } = await supabase.rpc('is_sync_in_progress', {
@@ -548,19 +594,22 @@ Deno.serve(async (req) => {
       try {
         console.log(`🔄 Procesando chunk ${chunk.chunk_number}/${chunk.total_chunks}: ${chunk.start_date} a ${chunk.end_date}`);
         
-        const chunkOrders = await fetchOrdersForChunk(
-          env.shopifyDomain,
-          env.shopifyToken,
-          chunk,
-          validStatuses,
-          logId,
-          supabase
-        );
-        
+        // Sync each store for this chunk
+        let chunkOrders: ShopifyOrder[] = [];
+        for (const store of storesToSync) {
+          const storeChunkOrders = await fetchOrdersForChunk(
+            store.shopifyDomain,
+            store.shopifyToken,
+            chunk,
+            validStatuses,
+            logId,
+            supabase
+          );
+          await storeCompleteOrders(storeChunkOrders, supabase, store.organizationId, store.id);
+          chunkOrders = chunkOrders.concat(storeChunkOrders);
+        }
+
         allOrders.push(...chunkOrders);
-        
-        // Store complete orders in database
-        await storeCompleteOrders(chunkOrders, supabase, organizationId);
         
         console.log(`✅ Chunk ${chunk.chunk_number} completado: ${chunkOrders.length} órdenes válidas obtenidas`);
         

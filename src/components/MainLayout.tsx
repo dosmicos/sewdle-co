@@ -6,6 +6,7 @@ import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import AppSidebar from '@/components/AppSidebar';
 import { Outlet } from 'react-router-dom';
 import SewdleCopilot from '@/components/copilot/SewdleCopilot';
+import { StoreSwitcher } from '@/components/stores/StoreSwitcher';
 
 interface MainLayoutProps {
   children?: React.ReactNode;
@@ -33,8 +34,9 @@ const MainLayout = ({ children }: MainLayoutProps) => {
       <div className="min-h-screen flex w-full" style={{ backgroundColor: '#ffffff' }}>
         <AppSidebar />
         <main className="flex-1 min-w-0 overflow-x-hidden" style={{ backgroundColor: '#ffffff' }}>
-          <div className="p-4 border-b" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
+          <div className="p-4 border-b flex items-center gap-3" style={{ backgroundColor: '#ffffff', borderColor: '#e5e7eb' }}>
             <SidebarTrigger />
+            <StoreSwitcher />
           </div>
           <div className="flex-1" style={{ backgroundColor: '#ffffff' }}>
             {children ?? <Outlet />}

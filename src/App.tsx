@@ -6,7 +6,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
-import { OrganizationProvider } from "@/contexts/OrganizationContext";
+import { OrganizationProvider, useOrganization } from "@/contexts/OrganizationContext";
+import { StoreProvider } from "@/contexts/StoreContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import AuthPage from "@/pages/AuthPage";
@@ -509,6 +510,16 @@ const AppContent = () => {
   );
 };
 
+// Inner wrapper that reads currentOrganization from context and provides StoreProvider
+const StoreProviderWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentOrganization } = useOrganization();
+  return (
+    <StoreProvider organizationId={currentOrganization?.id ?? null}>
+      {children}
+    </StoreProvider>
+  );
+};
+
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
@@ -516,7 +527,8 @@ const App = () => {
         <LanguageProvider>
           <AuthProvider>
             <OrganizationProvider>
-            <Toaster 
+            <StoreProviderWrapper>
+            <Toaster
               position="top-right"
               expand={true}
               richColors={true}
@@ -542,6 +554,7 @@ const App = () => {
                 <AppContent />
               </ErrorBoundary>
             </BrowserRouter>
+            </StoreProviderWrapper>
             </OrganizationProvider>
           </AuthProvider>
         </LanguageProvider>
