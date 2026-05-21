@@ -140,7 +140,7 @@ export const useInventorySync = () => {
         if (itemsToSync.length === 0) {
           // Verificar si hay algún SKU que falló recientemente
           const failedSkus = skuStatuses.filter(s => !s.isSynced && s.lastSyncAt);
-          
+
           if (failedSkus.length > 0) {
             toast({
               title: "Error: SKUs requieren atención",
@@ -152,6 +152,28 @@ export const useInventorySync = () => {
               title: "Todos los SKUs ya sincronizados",
               description: `Los ${alreadySyncedCount} SKUs de esta entrega ya fueron sincronizados exitosamente.`,
             });
+
+            // Leave a marker in inventory_sync_logs so today's review activity
+            // shows up in the sync stats panel (counts in "órdenes hoy" / "operaciones
+            // de sync"; contributes 0 to "artículos hoy" since nothing flowed to
+            // Shopify — already counted on the original sync date).
+            try {
+              await supabase.from('inventory_sync_logs').insert([{
+                delivery_id: syncData.deliveryId,
+                sync_results: {
+                  noop: true,
+                  reason: 'all_skus_already_synced',
+                  already_synced: skuStatuses
+                    .filter(s => s.isSynced)
+                    .map(s => ({ sku: s.skuVariant, lastSyncAt: s.lastSyncAt })),
+                },
+                success_count: 0,
+                error_count: 0,
+                verification_status: 'no_op_already_synced',
+              }]);
+            } catch (logError) {
+              console.warn('Could not write no-op marker to inventory_sync_logs:', logError);
+            }
           }
           setLoading(false);
           return { success: false, error: 'All SKUs already synced', summary: { already_synced: alreadySyncedCount } };
