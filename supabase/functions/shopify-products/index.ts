@@ -169,7 +169,18 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text()
       console.error(`Shopify API Error: ${response.status} - ${response.statusText}`, errorText)
-      throw new Error(`Error de Shopify: ${response.status} - ${response.statusText}`)
+
+      let userMessage: string
+      if (response.status === 401 || response.status === 403) {
+        userMessage = `Token de acceso inválido para esta tienda (${response.status}). Verifica que el Access Token configurado en Ajustes → Tiendas sea un token de Admin API (comienza con "shpat_").`
+      } else {
+        userMessage = `Error de Shopify: ${response.status} - ${response.statusText}`
+      }
+
+      return new Response(
+        JSON.stringify({ error: userMessage }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     const data = await response.json()
@@ -240,12 +251,11 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in shopify-products function:', error)
     return new Response(
-      JSON.stringify({ 
-        error: 'Error al conectar con Shopify',
-        details: error.message 
+      JSON.stringify({
+        error: `Error al conectar con Shopify: ${error.message}`
       }),
-      { 
-        status: 500, 
+      {
+        status: 200, // Return 200 so the client can read the error body
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
