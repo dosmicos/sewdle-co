@@ -35,6 +35,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useStoreContext } from '@/contexts/StoreContext';
 
 const DeliveriesPage = () => {
   // Force cache refresh - URLs implementation
@@ -54,6 +55,7 @@ const DeliveriesPage = () => {
   const [showSyncStats, setShowSyncStats] = useState(false);
 
   const { todayStats: syncToday, loading: syncLoading } = useSyncStats();
+  const { activeStoreId } = useStoreContext();
   
   // Query params for filters
   const [searchParams, setSearchParams] = useSearchParams();
@@ -153,10 +155,15 @@ const DeliveriesPage = () => {
     }
   };
 
-  // Filter deliveries based on search term and active filters
+  // Filter deliveries based on search term, active filters and active store
   const filteredDeliveries = useMemo(() => {
     let filtered = deliveries;
     const normalizedSearchTerm = searchTerm.trim().toLowerCase();
+
+    // Apply store filter (from global store switcher)
+    if (activeStoreId) {
+      filtered = filtered.filter(delivery => delivery.store_id === activeStoreId);
+    }
 
     // Apply search filter
     if (normalizedSearchTerm) {
@@ -200,7 +207,7 @@ const DeliveriesPage = () => {
     }
 
     return filtered;
-  }, [deliveries, searchTerm, statusFilter, workshopFilter, activeTab]);
+  }, [deliveries, searchTerm, statusFilter, workshopFilter, activeTab, activeStoreId]);
 
   // Calculate statistics
   const stats = useMemo(() => {
