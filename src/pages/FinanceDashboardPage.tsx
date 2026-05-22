@@ -10,6 +10,7 @@ import TikTokAdsConnectionModal from '@/components/finance-dashboard/TikTokAdsCo
 import TikTokAdBreakdownTable from '@/components/finance-dashboard/TikTokAdBreakdownTable';
 import FinanceSettingsModal from '@/components/finance-dashboard/FinanceSettingsModal';
 import ContributionMarginCard from '@/components/finance-dashboard/ContributionMarginCard';
+import NetProfitCard from '@/components/finance-dashboard/NetProfitCard';
 import ContributionMarginBreakdown from '@/components/finance-dashboard/ContributionMarginBreakdown';
 import FourQuarterChart from '@/components/finance-dashboard/FourQuarterChart';
 import BusinessMetricsRow from '@/components/finance-dashboard/BusinessMetricsRow';
@@ -422,6 +423,7 @@ const FinanceDashboardPage: React.FC = () => {
         {/* ========== SECTION 1: THE SCOREBOARD ========== */}
         <section className="space-y-4">
           <ContributionMarginCard data={cmData} formatCOP={formatCOP} />
+          <NetProfitCard data={cmData} formatCOP={formatCOP} />
           <ContributionMarginBreakdown
             data={cmData}
             targetPercents={{
