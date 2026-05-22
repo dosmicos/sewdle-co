@@ -37,6 +37,7 @@ export interface ContributionMarginData {
   shippingCost: number;
   paymentGatewayFees: number;
   handlingCost: number;
+  taxCost: number;
   variableExpenses: number;
   adSpend: number;
 
@@ -146,7 +147,11 @@ export function useContributionMargin(
         ? (s.handling_fee_per_item ?? 0) * storeMetrics.current.unitsSold
         : netSales * (s.handling_cost_percent / 100);
 
-    const variableExpenses = productCost + shippingCost + paymentGatewayFees + handlingCost;
+    // Taxes: pass-through to government (IVA, etc.). Comes from Shopify total_tax
+    // per order — same approach as Triple Whale's "Taxes" expense bucket.
+    const taxCost = storeMetrics.current.taxes;
+
+    const variableExpenses = productCost + shippingCost + paymentGatewayFees + handlingCost + taxCost;
 
     // Ad spend
     const adSpend = adMetrics.current.spend;
@@ -274,6 +279,7 @@ export function useContributionMargin(
       shippingCost,
       paymentGatewayFees,
       handlingCost,
+      taxCost,
       variableExpenses,
       adSpend,
       contributionMargin,
