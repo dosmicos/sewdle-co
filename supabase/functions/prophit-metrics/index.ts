@@ -155,6 +155,7 @@ interface ProphitMetrics {
   shippingCost: number;
   paymentGatewayFees: number;
   handlingCost: number;
+  taxCost: number;
   variableExpenses: number;
   adSpend: number;
   metaSpend: number;
@@ -759,9 +760,20 @@ async function fetchStoreMetrics(
   const grossRevenueBeforeRefunds = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
   const totalOrders = validOrders.length;
   const returns = refundedOrders.length;
-  const taxes = validOrders.reduce((sum, o) => sum + (o.total_tax || 0), 0);
-  const discounts = validOrders.reduce((sum, o) => sum + (o.total_discounts || 0), 0);
-  const shipping = validOrders.reduce((sum, o) => sum + (o.total_shipping || 0), 0);
+  // Supabase JS client returns `numeric` columns as strings on some queries,
+  // which would make `sum + "0.00"` concatenate strings and yield NaN later.
+  // Force numeric coercion to keep this robust regardless of column shape.
+  const toNum = (v: unknown): number => {
+    if (typeof v === "number") return isNaN(v) ? 0 : v;
+    if (typeof v === "string") {
+      const n = parseFloat(v);
+      return isNaN(n) ? 0 : n;
+    }
+    return 0;
+  };
+  const taxes = validOrders.reduce((sum, o) => sum + toNum(o.total_tax), 0);
+  const discounts = validOrders.reduce((sum, o) => sum + toNum(o.total_discounts), 0);
+  const shipping = validOrders.reduce((sum, o) => sum + toNum(o.total_shipping), 0);
   const aov = totalOrders > 0 ? totalSales / totalOrders : 0;
 
   // Line items → units sold + per-product COGS
@@ -874,7 +886,11 @@ function computeProphitMetrics(
       ? (settings.handling_fee_per_item ?? 0) * store.unitsSold
       : netSales * (settings.handling_cost_percent / 100);
 
-  const variableExpenses = productCost + shippingCost + paymentGatewayFees + handlingCost;
+  // Taxes: pass-through to government (IVA, etc.). Comes from Shopify total_tax
+  // per order — same approach as Triple Whale's "Taxes" expense bucket.
+  const taxCost = typeof store.taxes === "number" && !isNaN(store.taxes) ? store.taxes : 0;
+
+  const variableExpenses = productCost + shippingCost + paymentGatewayFees + handlingCost + taxCost;
   const adSpend = ad.spend;
 
   const contributionMargin = netSales - variableExpenses - adSpend;
@@ -981,6 +997,7 @@ function computeProphitMetrics(
     shippingCost,
     paymentGatewayFees,
     handlingCost,
+    taxCost,
     variableExpenses,
     adSpend,
     metaSpend: ad.metaSpend,

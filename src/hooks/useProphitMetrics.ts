@@ -68,6 +68,7 @@ export interface ProphitMetricsResult {
 const emptyCM: ContributionMarginData = {
   grossRevenue: 0, returnsAccrual: 0, netSales: 0,
   productCost: 0, shippingCost: 0, paymentGatewayFees: 0, handlingCost: 0,
+  taxCost: 0,
   variableExpenses: 0, adSpend: 0,
   contributionMargin: 0, cmPercent: 0,
   costOfDeliveryPct: 0, cacPct: 0, opexPct: 0, profitPct: 0,
