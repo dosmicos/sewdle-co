@@ -89,6 +89,8 @@ export const ContributionMarginCard: React.FC<ContributionMarginCardProps> = ({ 
           <span className="text-gray-300 text-xs">−</span>
           <MiniStat label="Variables" value={formatCOP(data.paymentGatewayFees + data.handlingCost)} negative />
           <span className="text-gray-300 text-xs">−</span>
+          <MiniStat label="Taxes" value={formatCOP(data.taxCost)} negative />
+          <span className="text-gray-300 text-xs">−</span>
           <MiniStat label="Ad Spend" value={formatCOP(data.adSpend)} negative />
           <span className="text-gray-300 text-xs">=</span>
           <MiniStat label="CM" value={formatCOP(data.contributionMargin)} />

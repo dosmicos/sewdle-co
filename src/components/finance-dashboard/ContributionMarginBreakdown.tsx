@@ -104,6 +104,12 @@ export const ContributionMarginBreakdown: React.FC<ContributionMarginBreakdownPr
       semaphore: getRowSemaphore(data.netSales > 0 ? (data.handlingCost / data.netSales) * 100 : 0, handlingTarget, true),
     },
     {
+      label: '− Taxes',
+      value: data.taxCost,
+      pctOfNetSales: data.netSales > 0 ? (data.taxCost / data.netSales) * 100 : 0,
+      isSubtract: true,
+    },
+    {
       label: '− Ad Spend',
       value: data.adSpend,
       pctOfNetSales: data.cacPct,

@@ -79,9 +79,9 @@ export const NetProfitCard: React.FC<NetProfitCardProps> = ({ data, formatCOP })
                   <TooltipTrigger asChild>
                     <Info className="h-3.5 w-3.5 text-gray-300 cursor-help" />
                   </TooltipTrigger>
-                  <TooltipContent side="bottom" className="max-w-[260px] text-xs">
+                  <TooltipContent side="bottom" className="max-w-[280px] text-xs">
                     <p className="font-medium mb-1">Bottom line del negocio</p>
-                    <p>Net Profit = Net Sales − COGS − Shipping − Variables − Ad Spend − OpEx</p>
+                    <p>Net Profit = Net Sales − COGS − Shipping − Handling − Payment Gateways − Taxes − Ad Spend − OpEx</p>
                     <p className="text-gray-400 mt-1">
                       Salud: {'>'}5% ok · {'>'}15% excelente
                     </p>
