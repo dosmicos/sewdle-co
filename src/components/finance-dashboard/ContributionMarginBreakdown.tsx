@@ -118,6 +118,19 @@ export const ContributionMarginBreakdown: React.FC<ContributionMarginBreakdownPr
       isTotal: true,
       semaphore: data.semaphore,
     },
+    {
+      label: '− OpEx',
+      value: data.opexCost,
+      pctOfNetSales: data.opexPct,
+      isSubtract: true,
+    },
+    {
+      label: 'Net Profit',
+      value: data.profit,
+      pctOfNetSales: data.profitPct,
+      isTotal: true,
+      semaphore: data.profit <= 0 ? 'red' : data.profitPct >= 15 ? 'green' : data.profitPct >= 5 ? 'yellow' : 'red',
+    },
   ];
 
   return (
