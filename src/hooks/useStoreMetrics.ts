@@ -135,9 +135,20 @@ async function fetchMetrics(
   const totalSales = validOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
   const totalOrders = validOrders.length;
   const returns = refundedOrders.length;
-  const taxes = validOrders.reduce((sum, o) => sum + (o.total_tax || 0), 0);
-  const discounts = validOrders.reduce((sum, o) => sum + (o.total_discounts || 0), 0);
-  const shipping = validOrders.reduce((sum, o) => sum + (o.total_shipping || 0), 0);
+  // Supabase JS client returns `numeric` columns as strings on some setups,
+  // which would make `sum + "0.00"` concatenate strings and yield NaN later.
+  // Force numeric coercion to keep this robust regardless of column shape.
+  const toNum = (v: unknown): number => {
+    if (typeof v === 'number') return isNaN(v) ? 0 : v;
+    if (typeof v === 'string') {
+      const n = parseFloat(v);
+      return isNaN(n) ? 0 : n;
+    }
+    return 0;
+  };
+  const taxes = validOrders.reduce((sum, o) => sum + toNum(o.total_tax), 0);
+  const discounts = validOrders.reduce((sum, o) => sum + toNum(o.total_discounts), 0);
+  const shipping = validOrders.reduce((sum, o) => sum + toNum(o.total_shipping), 0);
   const aov = totalOrders > 0 ? totalSales / totalOrders : 0;
 
   // New vs returning customer — determine by checking if the customer had orders BEFORE this period
