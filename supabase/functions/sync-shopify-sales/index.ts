@@ -402,12 +402,13 @@ async function storeCompleteOrders(orders: ShopifyOrder[], supabase: any, organi
         properties: item.properties || null,
         gift_card: item.gift_card || false,
         taxable: item.taxable !== false, // Default to true
-        
+
         // Información de fulfillment
         fulfillment_status: item.fulfillment_status || null,
         fulfillment_service: item.fulfillment_service || null,
         requires_shipping: item.requires_shipping !== false, // Default to true
-        organization_id: organizationId
+        organization_id: organizationId,
+        store_id: storeId
       });
     }
   }

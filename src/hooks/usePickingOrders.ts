@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useStoreContext } from '@/contexts/StoreContext';
 import { logger } from '@/lib/logger';
 import { invokeEdgeFunction } from '@/features/shipping/lib/invokeEdgeFunction';
 
@@ -93,6 +94,7 @@ export const usePickingOrders = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const { currentOrganization } = useOrganization();
+  const { activeStoreId } = useStoreContext();
   // Stale-response guard: each fetchOrders call claims a generation number.
   // Before committing results to state we verify no newer call has started.
   const fetchGenerationRef = useRef(0);
@@ -310,6 +312,11 @@ export const usePickingOrders = () => {
         .eq('organization_id', currentOrganization?.id)
         // Apply MIN_ORDER_NUMBER filter at DB level
         .gte('order_number', MIN_ORDER_NUMBER);
+
+      // Store filter — when a specific store is selected, only show its orders
+      if (activeStoreId) {
+        query = query.eq('store_id', activeStoreId);
+      }
 
       // Apply financial_status filter at DB level
       if (filters?.financialStatuses && filters.financialStatuses.length > 0) {

@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useStoreContext } from '@/contexts/StoreContext';
 import { FilterValueSelector } from '@/components/picking/FilterValueSelector';
 import { SavedFiltersManager } from '@/components/picking/SavedFiltersManager';
 import { PickingStatsBar } from '@/components/picking/PickingStatsBar';
@@ -80,6 +81,7 @@ const paymentStatusLabels = {
 
 const PickingPackingPage = () => {
   const { currentOrganization } = useOrganization();
+  const { activeStoreId } = useStoreContext();
   const { toast } = useToast();
   const { availableTags } = useShopifyTags();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -474,7 +476,7 @@ const [showItemsModal, setShowItemsModal] = useState(false);
       });
     }
   }, [searchTerm, operationalStatuses.join(','), financialStatuses.join(','),
-      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, shippingMethod, excludeShippingMethod, currentOrganization?.id]);
+      fulfillmentStatuses.join(','), tags.join(','), excludeTags.join(','), priceRange, dateRange, shippingMethod, excludeShippingMethod, currentOrganization?.id, activeStoreId]);
 
   
 

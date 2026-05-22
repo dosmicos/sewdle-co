@@ -374,7 +374,8 @@ async function processSingleOrder(order: any, supabase: any, shopDomain: string)
       fulfillment_status: item.fulfillment_status || null,
       fulfillment_service: item.fulfillment_service || null,
       requires_shipping: item.requires_shipping !== false,
-      organization_id: organizationId
+      organization_id: organizationId,
+      store_id: storeId || null
     });
   }
 
@@ -723,7 +724,8 @@ async function updateExistingOrder(order: any, supabase: any, shopDomain: string
       fulfillment_status: item.fulfillment_status || null,
       fulfillment_service: item.fulfillment_service || null,
       requires_shipping: item.requires_shipping !== false,
-      organization_id: organizationId
+      organization_id: organizationId,
+      store_id: storeId || null
     });
   }
 

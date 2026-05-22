@@ -343,7 +343,7 @@ export const useOrders = () => {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('orders')
         .select(`
           *,
@@ -368,6 +368,12 @@ export const useOrders = () => {
         `)
         .order('created_at', { ascending: false });
 
+      if (activeStoreId) {
+        query = query.eq('store_id', activeStoreId);
+      }
+
+      const { data, error } = await query;
+
       if (error) {
         throw error;
       }
@@ -390,7 +396,7 @@ export const useOrders = () => {
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [activeStoreId]); // re-fetch when active store changes
 
   return {
     orders,

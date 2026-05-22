@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useStoreContext } from '@/contexts/StoreContext';
 import { startOfDay, endOfDay, subDays, startOfWeek, startOfMonth, format, eachDayOfInterval, differenceInSeconds } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -36,6 +37,7 @@ interface ShopifyOrderStats {
 
 export const useShopifyOrderStats = (initialRange: DateRangeType = '7days') => {
   const { currentOrganization } = useOrganization();
+  const { activeStoreId } = useStoreContext();
   const [dateRange, setDateRange] = useState<DateRangeType>(initialRange);
   const [stats, setStats] = useState<ShopifyOrderStats>({
     ordersReceived: 0,
@@ -89,17 +91,19 @@ export const useShopifyOrderStats = (initialRange: DateRangeType = '7days') => {
       const endISO = end.toISOString();
 
       // Fetch orders received (from shopify_orders based on created_at_shopify)
-      const { data: receivedData, error: receivedError } = await supabase
+      let receivedQuery = supabase
         .from('shopify_orders')
         .select('id, created_at_shopify')
         .eq('organization_id', currentOrganization.id)
         .gte('created_at_shopify', startISO)
         .lte('created_at_shopify', endISO);
+      if (activeStoreId) receivedQuery = receivedQuery.eq('store_id', activeStoreId);
+      const { data: receivedData, error: receivedError } = await receivedQuery;
 
       if (receivedError) throw receivedError;
 
       // Fetch orders packed with packed_at timestamp for productivity calculations
-      const { data: packedData, error: packedError } = await supabase
+      let packedQuery = supabase
         .from('picking_packing_orders')
         .select('id, packed_at')
         .eq('organization_id', currentOrganization.id)
@@ -107,6 +111,8 @@ export const useShopifyOrderStats = (initialRange: DateRangeType = '7days') => {
         .gte('packed_at', startISO)
         .lte('packed_at', endISO)
         .order('packed_at', { ascending: true });
+      if (activeStoreId) packedQuery = packedQuery.eq('store_id', activeStoreId);
+      const { data: packedData, error: packedError } = await packedQuery;
 
       if (packedError) throw packedError;
 
@@ -204,7 +210,7 @@ export const useShopifyOrderStats = (initialRange: DateRangeType = '7days') => {
 
   useEffect(() => {
     fetchStats();
-  }, [currentOrganization?.id, dateRange, dateRangeValues]);
+  }, [currentOrganization?.id, activeStoreId, dateRange, dateRangeValues]);
 
   return {
     stats,
