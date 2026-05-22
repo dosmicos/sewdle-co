@@ -149,7 +149,14 @@ export function useContributionMargin(
 
     // Taxes: pass-through to government (IVA, etc.). Comes from Shopify total_tax
     // per order — same approach as Triple Whale's "Taxes" expense bucket.
-    const taxCost = storeMetrics.current.taxes;
+    // Defensive: Supabase has been observed returning numeric as string in some
+    // queries, which can cause NaN to flow through the dashboard.
+    const rawTaxes = storeMetrics.current.taxes;
+    const taxCost = typeof rawTaxes === 'number' && !isNaN(rawTaxes)
+      ? rawTaxes
+      : typeof rawTaxes === 'string'
+        ? (parseFloat(rawTaxes) || 0)
+        : 0;
 
     const variableExpenses = productCost + shippingCost + paymentGatewayFees + handlingCost + taxCost;
 
