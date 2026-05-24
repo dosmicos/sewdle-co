@@ -267,15 +267,33 @@ export function useUgcPerformance() {
     enabled: !!orgId,
   });
 
+  // Detect "is video" by the actual file the UGC creator uploaded — not by the
+  // platform category they picked in a form. We look at the extension of
+  // video_url (stripping query strings) and only count true video files.
+  const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.webm', '.m4v', '.avi', '.mkv', '.3gp', '.mpeg', '.mpg', '.ogv'];
+
+  const isVideoFile = (url: string | null | undefined): boolean => {
+    if (!url) return false;
+    let path = url.toLowerCase();
+    // Strip query string and hash
+    const qIdx = path.indexOf('?');
+    if (qIdx !== -1) path = path.slice(0, qIdx);
+    const hIdx = path.indexOf('#');
+    if (hIdx !== -1) path = path.slice(0, hIdx);
+    return VIDEO_EXTENSIONS.some((ext) => path.endsWith(ext));
+  };
+
   const { data: ugcVideos = [], isLoading: videosLoading } = useQuery({
-    queryKey: ['ugc-affiliate-videos', orgId],
+    queryKey: ['ugc-affiliate-videos', orgId, periods.monthStart.toISOString()],
     queryFn: async () => {
       if (!orgId) return [];
       const { data, error } = await supabase
         .from('ugc_videos')
-        .select('id, creator_id, created_at, published_date, published_organic, published_ads, views, likes, comments')
+        .select('id, creator_id, created_at, published_date, platform, video_url, published_organic, published_ads, views, likes, comments')
         .eq('organization_id', orgId)
-        .gte('created_at', periods.monthStart.toISOString())
+        .not('video_url', 'is', null)
+        .not('published_date', 'is', null)
+        .gte('published_date', periods.monthStart.toISOString())
         .limit(10000);
       if (error) throw error;
       return (data || []) as Partial<UgcVideo>[];
@@ -382,9 +400,16 @@ export function useUgcPerformance() {
 
     for (const video of ugcVideos) {
       if (video.creator_id !== creator.id) continue;
-      const date = video.published_date || video.created_at;
-      if (isInPeriod(date, periods.weekStart)) metrics.weekContentPieces += 1;
-      if (isInPeriod(date, periods.monthStart)) metrics.monthContentPieces += 1;
+      // Only count by upload (published) date — no fallback to created_at.
+      // Drafts / unpublished videos don't count.
+      const publishedDate = video.published_date;
+      if (!publishedDate) continue;
+      // Only count if the uploaded file is actually a video (by extension).
+      // Photos uploaded into ugc_videos shouldn't count, regardless of
+      // what "platform" the creator picked in the form.
+      if (!isVideoFile(video.video_url)) continue;
+      if (isInPeriod(publishedDate, periods.weekStart)) metrics.weekContentPieces += 1;
+      if (isInPeriod(publishedDate, periods.monthStart)) metrics.monthContentPieces += 1;
     }
 
     const tags = tagsByCreator.get(creator.id) || [];
