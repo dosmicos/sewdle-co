@@ -153,7 +153,10 @@ const FinanceDashboardPage: React.FC = () => {
     storeMetrics.current.returningCustomerRevenue,
     storeMetrics.current.newCustomerOrders,
     storeMetrics.current.orders,
-    combinedAdMetrics.current.spend
+    combinedAdMetrics.current.spend,
+    storeMetrics.current.newCustomerCount,
+    storeMetrics.current.returningCustomerCount,
+    storeMetrics.current.returningCustomerRate,
   );
 
   const paymentGatewayBreakdown = usePaymentGatewayBreakdown(dateRange.current);

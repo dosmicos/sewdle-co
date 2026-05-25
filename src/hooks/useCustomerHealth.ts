@@ -15,8 +15,12 @@ export interface CustomerHealthData {
   // Current period (passed in from storeMetrics)
   newCustomerRevenue: number;
   returningCustomerRevenue: number;
+  // Unique customers (dedup by email, guest checkouts excluded) — matches Shopify
   newCustomerCount: number;
   returningCustomerCount: number;
+  // % of unique customers in the period that had prior orders (Shopify-style).
+  returningCustomerRate: number;
+  // Revenue-weighted splits (independent of customer counts)
   newCustomerPct: number;
   returningCustomerPct: number;
 
@@ -155,7 +159,12 @@ export function useCustomerHealth(
   returningCustomerRevenue: number,
   newCustomerOrders: number,
   totalOrders: number,
-  adSpend: number
+  adSpend: number,
+  // Unique-customer counts from useStoreMetrics. Older callers without these
+  // fall back to order counts, but the dashboard should pass the unique numbers.
+  newCustomerUniqueCount?: number,
+  returningCustomerUniqueCount?: number,
+  returningCustomerRateOverride?: number,
 ): { data: CustomerHealthData; isLoading: boolean } {
   const { currentOrganization } = useOrganization();
   const orgId = currentOrganization?.id;
@@ -189,14 +198,25 @@ export function useCustomerHealth(
   const activeFileTrend: 'growing' | 'shrinking' | 'stable' =
     activeFileChange > 2 ? 'growing' : activeFileChange < -2 ? 'shrinking' : 'stable';
 
+  // Prefer the unique-customer counts when provided. Fall back to order counts
+  // for callers that haven't migrated yet (preserves backward compatibility).
+  const newCustomerCount = newCustomerUniqueCount ?? newCustomerOrders;
+  const returningCustomerCount = returningCustomerUniqueCount ?? returningOrders;
+  const totalUniqueWithEmail = newCustomerCount + returningCustomerCount;
+  const returningCustomerRate = returningCustomerRateOverride !== undefined
+    ? returningCustomerRateOverride
+    : (totalUniqueWithEmail > 0 ? (returningCustomerCount / totalUniqueWithEmail) * 100 : 0);
+
   const data: CustomerHealthData = {
     newCustomerRevenue,
     returningCustomerRevenue,
-    newCustomerCount: newCustomerOrders,
-    returningCustomerCount: returningOrders,
+    newCustomerCount,
+    returningCustomerCount,
+    returningCustomerRate,
     newCustomerPct: totalRevenue > 0 ? (newCustomerRevenue / totalRevenue) * 100 : 0,
     returningCustomerPct: totalRevenue > 0 ? (returningCustomerRevenue / totalRevenue) * 100 : 0,
-    ncpa: newCustomerOrders > 0 ? adSpend / newCustomerOrders : 0,
+    // NCPA = cost per unique new customer (matches Shopify's definition).
+    ncpa: newCustomerCount > 0 ? adSpend / newCustomerCount : 0,
     ncRoas: adSpend > 0 ? newCustomerRevenue / adSpend : 0,
     amer: adSpend > 0 ? newCustomerRevenue / adSpend : 0,
     activeCustomers: activeFile.current,
