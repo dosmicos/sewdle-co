@@ -92,10 +92,13 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
   const sixMonthsAgo = startOfMonth(subMonths(now, 5)).toISOString();
   const monthEnd = endOfMonth(now).toISOString();
 
-  // Single query instead of 6 sequential ones
+  // Note on net revenue: useStoreMetrics treats raw_data->current_total_price
+  // (the post-refund value Shopify computes) as the source of truth, falling
+  // back to total_price. We replicate that here so the Layer Cake matches
+  // the rest of the dashboard.
   const { data, error } = await supabase
     .from('shopify_orders')
-    .select('current_total_price, customer_email, created_at_shopify')
+    .select('total_price, raw_data->current_total_price, customer_email, created_at_shopify')
     .eq('organization_id', orgId)
     .gte('created_at_shopify', sixMonthsAgo)
     .lte('created_at_shopify', monthEnd)
@@ -104,6 +107,19 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
     .not('financial_status', 'eq', 'refunded');
 
   if (error) throw error;
+
+  const getNetPrice = (o: any): number => {
+    if (o?.current_total_price != null) {
+      const net = typeof o.current_total_price === 'string'
+        ? parseFloat(o.current_total_price)
+        : o.current_total_price;
+      if (!isNaN(net)) return net;
+    }
+    const fallback = typeof o?.total_price === 'string'
+      ? parseFloat(o.total_price)
+      : (o?.total_price ?? 0);
+    return isNaN(fallback) ? 0 : fallback;
+  };
 
   // Determine returning customers: those with orders BEFORE the 6-month window
   const allEmails = new Set(
@@ -142,8 +158,9 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
     if (!monthMap.has(month)) monthMap.set(month, { newRev: 0, retRev: 0, newOrd: 0, retOrd: 0 });
     const m = monthMap.get(month)!;
     const isReturning = o.customer_email && returningEmails.has(o.customer_email.toLowerCase());
-    if (isReturning) { m.retRev += o.current_total_price ?? 0; m.retOrd++; }
-    else { m.newRev += o.current_total_price ?? 0; m.newOrd++; }
+    const netPrice = getNetPrice(o);
+    if (isReturning) { m.retRev += netPrice; m.retOrd++; }
+    else { m.newRev += netPrice; m.newOrd++; }
   }
 
   return Array.from(monthMap.entries())
