@@ -174,6 +174,11 @@ async function fetchMetrics(
     const batchSizeEmails = 200;
     for (let i = 0; i < emailArray.length; i += batchSizeEmails) {
       const batch = emailArray.slice(i, i + batchSizeEmails);
+      // limit() must be >> batch.length because each email can have many
+      // historical orders, and we need at least one row per email that has
+      // prior orders. Using batch.length truncates the result and misses
+      // returning customers (BUG: previously caused returning rate to be
+      // ~20% when actual was ~28%). 50k rows is a safe ceiling per batch.
       let priorQuery = supabase
         .from('shopify_orders')
         .select('customer_email')
@@ -182,7 +187,7 @@ async function fetchMetrics(
         .in('customer_email', batch)
         .is('cancelled_at', null)
         .not('financial_status', 'eq', 'voided')
-        .limit(batch.length);
+        .limit(50000);
       if (storeId) priorQuery = priorQuery.eq('store_id', storeId);
       const { data: priorOrders } = await priorQuery;
 

@@ -115,6 +115,9 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
     const batchSize = 200;
     for (let i = 0; i < emailArray.length; i += batchSize) {
       const batch = emailArray.slice(i, i + batchSize);
+      // limit() must be >> batch.length because each email can have many
+      // historical orders. Using batch.length truncates the result and misses
+      // returning customers.
       const { data: priorOrders } = await supabase
         .from('shopify_orders')
         .select('customer_email')
@@ -123,7 +126,7 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
         .in('customer_email', batch)
         .is('cancelled_at', null)
         .not('financial_status', 'eq', 'voided')
-        .limit(batch.length);
+        .limit(50000);
       if (priorOrders) {
         for (const o of priorOrders) {
           if (o.customer_email) returningEmails.add(o.customer_email.toLowerCase());
