@@ -15,6 +15,12 @@ export interface StoreMetrics {
   newCustomerRevenue: number;
   returningCustomerRevenue: number;
   newCustomerOrders: number;
+  // Unique-customer counts (dedup by email; guest-checkouts with no email
+  // are excluded so the numbers can be compared to Shopify Analytics).
+  newCustomerCount: number;
+  returningCustomerCount: number;
+  // % of unique customers in the period that had prior orders. Shopify-style.
+  returningCustomerRate: number;
   unitsSold: number;
   totalShipping: number;
   saleTaxes: number;
@@ -38,6 +44,9 @@ const emptyMetrics: StoreMetrics = {
   newCustomerRevenue: 0,
   returningCustomerRevenue: 0,
   newCustomerOrders: 0,
+  newCustomerCount: 0,
+  returningCustomerCount: 0,
+  returningCustomerRate: 0,
   unitsSold: 0,
   totalShipping: 0,
   saleTaxes: 0,
@@ -195,6 +204,23 @@ async function fetchMetrics(
   const newCustomerRevenue = newOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
   const returningCustomerRevenue = returningOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
 
+  // Unique-customer counts (dedup by email, exclude guest checkouts with no email).
+  // Matches Shopify Analytics's definition: a "customer" is identified by their email.
+  const newCustomerEmails = new Set<string>();
+  for (const o of newOrders) {
+    if (o.customer_email) newCustomerEmails.add(o.customer_email.toLowerCase());
+  }
+  const returningCustomerEmails = new Set<string>();
+  for (const o of returningOrders) {
+    if (o.customer_email) returningCustomerEmails.add(o.customer_email.toLowerCase());
+  }
+  const newCustomerCount = newCustomerEmails.size;
+  const returningCustomerCount = returningCustomerEmails.size;
+  const uniqueCustomersWithEmail = newCustomerCount + returningCustomerCount;
+  const returningCustomerRate = uniqueCustomersWithEmail > 0
+    ? (returningCustomerCount / uniqueCustomersWithEmail) * 100
+    : 0;
+
   // Daily breakdown for sparklines
   const days = eachDayOfInterval({ start: range.start, end: range.end });
   const dailyData = days.map(day => {
@@ -220,6 +246,9 @@ async function fetchMetrics(
     newCustomerRevenue,
     returningCustomerRevenue,
     newCustomerOrders: newOrders.length,
+    newCustomerCount,
+    returningCustomerCount,
+    returningCustomerRate,
     unitsSold: totalUnits,
     totalShipping: shipping,
     saleTaxes: taxes,

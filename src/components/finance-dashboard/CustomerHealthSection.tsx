@@ -152,6 +152,7 @@ export const CustomerHealthSection: React.FC<CustomerHealthSectionProps> = ({
                 <MiniMetric
                   label="New Customers"
                   value={data.newCustomerCount.toLocaleString()}
+                  sub="unique customers"
                 />
               </div>
             </CardContent>
@@ -170,8 +171,14 @@ export const CustomerHealthSection: React.FC<CustomerHealthSectionProps> = ({
                   sub={`${data.returningCustomerPct.toFixed(0)}% of total`}
                 />
                 <MiniMetric
-                  label="Returning Orders"
+                  label="Returning Customers"
                   value={data.returningCustomerCount.toLocaleString()}
+                  sub="unique customers"
+                />
+                <MiniMetric
+                  label="Returning Rate"
+                  value={`${data.returningCustomerRate.toFixed(2)}%`}
+                  sub="returning / total unique"
                 />
               </div>
             </CardContent>
