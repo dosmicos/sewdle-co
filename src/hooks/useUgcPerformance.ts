@@ -267,20 +267,21 @@ export function useUgcPerformance() {
     enabled: !!orgId,
   });
 
-  // Detect "is video" by the actual file the UGC creator uploaded — not by the
-  // platform category they picked in a form. We look at the extension of
-  // video_url (stripping query strings) and only count true video files.
-  const VIDEO_EXTENSIONS = ['.mp4', '.mov', '.webm', '.m4v', '.avi', '.mkv', '.3gp', '.mpeg', '.mpg', '.ogv'];
+  // Decide "is video" by looking at the file the UGC uploaded (URL/extension).
+  // Strategy: count everything *unless* the URL ends in a known photo
+  // extension. This way Instagram reels, TikTok links, and Supabase video
+  // uploads all count, but a .jpg / .png upload doesn't — regardless of what
+  // category the creator picked in the form.
+  const PHOTO_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.bmp', '.tiff', '.avif', '.svg'];
 
-  const isVideoFile = (url: string | null | undefined): boolean => {
+  const isPhotoFile = (url: string | null | undefined): boolean => {
     if (!url) return false;
     let path = url.toLowerCase();
-    // Strip query string and hash
     const qIdx = path.indexOf('?');
     if (qIdx !== -1) path = path.slice(0, qIdx);
     const hIdx = path.indexOf('#');
     if (hIdx !== -1) path = path.slice(0, hIdx);
-    return VIDEO_EXTENSIONS.some((ext) => path.endsWith(ext));
+    return PHOTO_EXTENSIONS.some((ext) => path.endsWith(ext));
   };
 
   const { data: ugcVideos = [], isLoading: videosLoading } = useQuery({
@@ -292,8 +293,7 @@ export function useUgcPerformance() {
         .select('id, creator_id, created_at, published_date, platform, video_url, published_organic, published_ads, views, likes, comments')
         .eq('organization_id', orgId)
         .not('video_url', 'is', null)
-        .not('published_date', 'is', null)
-        .gte('published_date', periods.monthStart.toISOString())
+        .gte('created_at', periods.monthStart.toISOString())
         .limit(10000);
       if (error) throw error;
       return (data || []) as Partial<UgcVideo>[];
@@ -400,16 +400,16 @@ export function useUgcPerformance() {
 
     for (const video of ugcVideos) {
       if (video.creator_id !== creator.id) continue;
-      // Only count by upload (published) date — no fallback to created_at.
-      // Drafts / unpublished videos don't count.
-      const publishedDate = video.published_date;
-      if (!publishedDate) continue;
-      // Only count if the uploaded file is actually a video (by extension).
-      // Photos uploaded into ugc_videos shouldn't count, regardless of
-      // what "platform" the creator picked in the form.
-      if (!isVideoFile(video.video_url)) continue;
-      if (isInPeriod(publishedDate, periods.weekStart)) metrics.weekContentPieces += 1;
-      if (isInPeriod(publishedDate, periods.monthStart)) metrics.monthContentPieces += 1;
+      // The bucket date is when the creator uploaded the file to Sewdle
+      // (creators upload actual video files via the upload page — they do not
+      // paste social media links). "Cuando subió el video" === created_at.
+      const uploadDate = video.created_at;
+      if (!uploadDate) continue;
+      // Skip photo uploads. Identified by the actual file extension of the
+      // uploaded asset (.jpg/.png/etc.) — not by the form's platform category.
+      if (isPhotoFile(video.video_url)) continue;
+      if (isInPeriod(uploadDate, periods.weekStart)) metrics.weekContentPieces += 1;
+      if (isInPeriod(uploadDate, periods.monthStart)) metrics.monthContentPieces += 1;
     }
 
     const tags = tagsByCreator.get(creator.id) || [];
