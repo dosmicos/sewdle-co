@@ -843,6 +843,67 @@ export type Database = {
           },
         ]
       }
+      delivery_item_audit_events: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          changed_fields: string[]
+          delivery_id: string
+          delivery_item_id: string
+          event_type: string
+          id: string
+          new_values: Json
+          old_values: Json | null
+          order_item_id: string | null
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          changed_fields?: string[]
+          delivery_id: string
+          delivery_item_id: string
+          event_type: string
+          id?: string
+          new_values: Json
+          old_values?: Json | null
+          order_item_id?: string | null
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          changed_fields?: string[]
+          delivery_id?: string
+          delivery_item_id?: string
+          event_type?: string
+          id?: string
+          new_values?: Json
+          old_values?: Json | null
+          order_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_item_audit_events_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_item_audit_events_delivery_item_id_fkey"
+            columns: ["delivery_item_id"]
+            isOneToOne: false
+            referencedRelation: "delivery_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_item_audit_events_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       delivery_items: {
         Row: {
           created_at: string
@@ -851,14 +912,19 @@ export type Database = {
           last_sync_attempt: string | null
           notes: string | null
           order_item_id: string
+          quality_last_saved_at: string | null
+          quality_last_saved_by: string | null
           quality_notes: string | null
           quality_status: string | null
+          quantity_last_saved_at: string | null
+          quantity_last_saved_by: string | null
           quantity_approved: number
           quantity_defective: number
           quantity_delivered: number
           sync_attempt_count: number
           sync_error_message: string | null
           synced_to_shopify: boolean
+          updated_at: string
         }
         Insert: {
           created_at?: string
@@ -867,14 +933,19 @@ export type Database = {
           last_sync_attempt?: string | null
           notes?: string | null
           order_item_id: string
+          quality_last_saved_at?: string | null
+          quality_last_saved_by?: string | null
           quality_notes?: string | null
           quality_status?: string | null
+          quantity_last_saved_at?: string | null
+          quantity_last_saved_by?: string | null
           quantity_approved?: number
           quantity_defective?: number
           quantity_delivered: number
           sync_attempt_count?: number
           sync_error_message?: string | null
           synced_to_shopify?: boolean
+          updated_at?: string
         }
         Update: {
           created_at?: string
@@ -883,14 +954,19 @@ export type Database = {
           last_sync_attempt?: string | null
           notes?: string | null
           order_item_id?: string
+          quality_last_saved_at?: string | null
+          quality_last_saved_by?: string | null
           quality_notes?: string | null
           quality_status?: string | null
+          quantity_last_saved_at?: string | null
+          quantity_last_saved_by?: string | null
           quantity_approved?: number
           quantity_defective?: number
           quantity_delivered?: number
           sync_attempt_count?: number
           sync_error_message?: string | null
           synced_to_shopify?: boolean
+          updated_at?: string
         }
         Relationships: [
           {

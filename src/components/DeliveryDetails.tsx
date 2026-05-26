@@ -1018,6 +1018,15 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     return { totalApproved, totalDefective };
   };
 
+  const formatSavedAt = (value?: string | null) => {
+    if (!value) return 'Sin registro histórico';
+
+    const savedAt = new Date(value);
+    if (Number.isNaN(savedAt.getTime())) return 'Fecha inválida';
+
+    return format(savedAt, 'dd/MM/yyyy h:mm a', { locale: es });
+  };
+
   const getDiscrepancies = () => {
     const discrepancies: any[] = [];
     
@@ -1234,6 +1243,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                   const isVariantReviewed = item.quantity_approved > 0 || item.quantity_defective > 0;
                   const canSaveVariant = hasUserInput && !hasDiscrepancy;
                   const canSyncVariant = item.quantity_approved > 0 && !item.synced_to_shopify;
+                  const savedAt = item.quality_last_saved_at || item.quantity_last_saved_at;
                   
                   return (
                     <TableRow key={item.id} className="hover:bg-muted/25">
@@ -1278,6 +1288,9 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                             </div>
                             <p className="text-xs text-muted-foreground font-mono">
                               {item.order_items?.product_variants?.sku_variant}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Guardado: {formatSavedAt(savedAt)}
                             </p>
                           </div>
                         </div>

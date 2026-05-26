@@ -103,6 +103,9 @@ export const useDeliveries = () => {
             last_sync_attempt,
             sync_error_message,
             created_at,
+            updated_at,
+            quantity_last_saved_at,
+            quality_last_saved_at,
             order_items (
               id,
               order_id,
@@ -206,6 +209,9 @@ export const useDeliveries = () => {
             last_sync_attempt,
             sync_error_message,
             created_at,
+            updated_at,
+            quantity_last_saved_at,
+            quality_last_saved_at,
             order_items (
               id,
               order_id,
