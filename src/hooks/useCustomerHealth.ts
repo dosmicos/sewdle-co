@@ -96,15 +96,22 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
   // (the post-refund value Shopify computes) as the source of truth, falling
   // back to total_price. We replicate that here so the Layer Cake matches
   // the rest of the dashboard.
+  //
+  // limit(50000): Supabase/PostgREST applies a 1000-row default cap. For
+  // high-volume stores that silently truncated the result and produced a
+  // chart that only rendered the most recent month (BUG: Layer Cake showed
+  // just one column).
   const { data, error } = await supabase
     .from('shopify_orders')
-    .select('total_price, raw_data->current_total_price, customer_email, created_at_shopify')
+    .select('total_price, raw_data->current_total_price, customer_id, customer_email, created_at_shopify')
     .eq('organization_id', orgId)
     .gte('created_at_shopify', sixMonthsAgo)
     .lte('created_at_shopify', monthEnd)
     .is('cancelled_at', null)
     .not('financial_status', 'eq', 'voided')
-    .not('financial_status', 'eq', 'refunded');
+    .not('financial_status', 'eq', 'refunded')
+    .order('created_at_shopify', { ascending: true })
+    .limit(50000);
 
   if (error) throw error;
 
@@ -121,31 +128,63 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
     return isNaN(fallback) ? 0 : fallback;
   };
 
-  // Determine returning customers: those with orders BEFORE the 6-month window
-  const allEmails = new Set(
-    (data ?? []).map(o => o.customer_email?.toLowerCase()).filter(Boolean)
-  );
-  let returningEmails = new Set<string>();
-  if (allEmails.size > 0) {
-    const emailArray = Array.from(allEmails);
+  // Determine returning customers: those with orders BEFORE the 6-month window.
+  // Match by Shopify customer_id first, fall back to email for guest checkouts.
+  const customerKey = (o: { customer_id?: number | null; customer_email?: string | null }): string | null => {
+    if (o.customer_id != null) return `id:${o.customer_id}`;
+    if (o.customer_email) return `email:${o.customer_email.toLowerCase()}`;
+    return null;
+  };
+
+  const periodIds = new Set<number>();
+  const periodEmailsOnly = new Set<string>();
+  for (const o of data ?? []) {
+    if (o.customer_id != null) periodIds.add(o.customer_id);
+    else if (o.customer_email) periodEmailsOnly.add(o.customer_email.toLowerCase());
+  }
+
+  const returningKeys = new Set<string>();
+
+  if (periodIds.size > 0) {
+    const idArray = Array.from(periodIds);
+    const batchSize = 200;
+    for (let i = 0; i < idArray.length; i += batchSize) {
+      const batch = idArray.slice(i, i + batchSize);
+      const { data: priorOrders } = await supabase
+        .from('shopify_orders')
+        .select('customer_id')
+        .eq('organization_id', orgId)
+        .lt('created_at_shopify', sixMonthsAgo)
+        .in('customer_id', batch)
+        .is('cancelled_at', null)
+        .not('financial_status', 'eq', 'voided')
+        .limit(50000);
+      if (priorOrders) {
+        for (const o of priorOrders) {
+          if (o.customer_id != null) returningKeys.add(`id:${o.customer_id}`);
+        }
+      }
+    }
+  }
+
+  if (periodEmailsOnly.size > 0) {
+    const emailArray = Array.from(periodEmailsOnly);
     const batchSize = 200;
     for (let i = 0; i < emailArray.length; i += batchSize) {
       const batch = emailArray.slice(i, i + batchSize);
-      // limit() must be >> batch.length because each email can have many
-      // historical orders. Using batch.length truncates the result and misses
-      // returning customers.
       const { data: priorOrders } = await supabase
         .from('shopify_orders')
         .select('customer_email')
         .eq('organization_id', orgId)
         .lt('created_at_shopify', sixMonthsAgo)
         .in('customer_email', batch)
+        .is('customer_id', null)
         .is('cancelled_at', null)
         .not('financial_status', 'eq', 'voided')
         .limit(50000);
       if (priorOrders) {
         for (const o of priorOrders) {
-          if (o.customer_email) returningEmails.add(o.customer_email.toLowerCase());
+          if (o.customer_email) returningKeys.add(`email:${o.customer_email.toLowerCase()}`);
         }
       }
     }
@@ -157,7 +196,8 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
     const month = format(new Date(o.created_at_shopify), 'yyyy-MM');
     if (!monthMap.has(month)) monthMap.set(month, { newRev: 0, retRev: 0, newOrd: 0, retOrd: 0 });
     const m = monthMap.get(month)!;
-    const isReturning = o.customer_email && returningEmails.has(o.customer_email.toLowerCase());
+    const k = customerKey(o);
+    const isReturning = k != null && returningKeys.has(k);
     const netPrice = getNetPrice(o);
     if (isReturning) { m.retRev += netPrice; m.retOrd++; }
     else { m.newRev += netPrice; m.newOrd++; }

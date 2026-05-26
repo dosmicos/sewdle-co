@@ -67,7 +67,7 @@ async function fetchAllOrders(orgId: string, startStr: string, endStr: string, s
   while (hasMore) {
     let q = supabase
       .from('shopify_orders')
-      .select('shopify_order_id, total_price, raw_data->current_total_price, total_tax, total_discounts, total_shipping, customer_email, customer_orders_count, created_at_shopify, financial_status, cancelled_at')
+      .select('shopify_order_id, total_price, raw_data->current_total_price, total_tax, total_discounts, total_shipping, customer_id, customer_email, customer_orders_count, created_at_shopify, financial_status, cancelled_at')
       .eq('organization_id', orgId)
       .gte('created_at_shopify', startStr)
       .lte('created_at_shopify', endStr)
@@ -160,70 +160,108 @@ async function fetchMetrics(
   const shipping = validOrders.reduce((sum, o) => sum + toNum(o.total_shipping), 0);
   const aov = totalOrders > 0 ? totalSales / totalOrders : 0;
 
-  // New vs returning customer — determine by checking if the customer had orders BEFORE this period
-  // customer_orders_count from Shopify is unreliable (often 0 from bulk sync), so we query for
-  // customers who have prior orders instead
-  const periodEmails = new Set(
-    validOrders.map(o => o.customer_email?.toLowerCase()).filter(Boolean)
-  );
+  // New vs returning customer — determine by checking if the customer had
+  // orders BEFORE this period. Match by Shopify's customer_id first (canonical
+  // numeric ID, immune to email casing/typos/changes); fall back to email
+  // when customer_id is null (guest checkouts).
+  const customerKey = (o: { customer_id?: number | null; customer_email?: string | null }): string | null => {
+    if (o.customer_id != null) return `id:${o.customer_id}`;
+    if (o.customer_email) return `email:${o.customer_email.toLowerCase()}`;
+    return null;
+  };
 
-  let returningEmails = new Set<string>();
-  if (periodEmails.size > 0) {
-    // Fetch distinct emails that have orders BEFORE the start of the period
-    const emailArray = Array.from(periodEmails);
+  const periodCustomerIds = new Set<number>();
+  const periodEmailsOnly = new Set<string>();
+  for (const o of validOrders) {
+    if (o.customer_id != null) {
+      periodCustomerIds.add(o.customer_id);
+    } else if (o.customer_email) {
+      periodEmailsOnly.add(o.customer_email.toLowerCase());
+    }
+  }
+
+  const returningKeys = new Set<string>();
+
+  // Priors keyed by customer_id (canonical Shopify identifier)
+  if (periodCustomerIds.size > 0) {
+    const idArray = Array.from(periodCustomerIds);
+    const batchSizeIds = 200;
+    for (let i = 0; i < idArray.length; i += batchSizeIds) {
+      const batch = idArray.slice(i, i + batchSizeIds);
+      let priorQuery = supabase
+        .from('shopify_orders')
+        .select('customer_id')
+        .eq('organization_id', orgId)
+        .lt('created_at_shopify', startStr)
+        .in('customer_id', batch)
+        .is('cancelled_at', null)
+        .not('financial_status', 'eq', 'voided')
+        .limit(50000);
+      if (storeId) priorQuery = priorQuery.eq('store_id', storeId);
+      const { data: priorOrders } = await priorQuery;
+      if (priorOrders) {
+        for (const o of priorOrders) {
+          if (o.customer_id != null) returningKeys.add(`id:${o.customer_id}`);
+        }
+      }
+    }
+  }
+
+  // Priors keyed by email (guest checkouts only — orders with no customer_id)
+  if (periodEmailsOnly.size > 0) {
+    const emailArray = Array.from(periodEmailsOnly);
     const batchSizeEmails = 200;
     for (let i = 0; i < emailArray.length; i += batchSizeEmails) {
       const batch = emailArray.slice(i, i + batchSizeEmails);
-      // limit() must be >> batch.length because each email can have many
-      // historical orders, and we need at least one row per email that has
-      // prior orders. Using batch.length truncates the result and misses
-      // returning customers (BUG: previously caused returning rate to be
-      // ~20% when actual was ~28%). 50k rows is a safe ceiling per batch.
       let priorQuery = supabase
         .from('shopify_orders')
         .select('customer_email')
         .eq('organization_id', orgId)
         .lt('created_at_shopify', startStr)
         .in('customer_email', batch)
+        .is('customer_id', null)
         .is('cancelled_at', null)
         .not('financial_status', 'eq', 'voided')
         .limit(50000);
       if (storeId) priorQuery = priorQuery.eq('store_id', storeId);
       const { data: priorOrders } = await priorQuery;
-
       if (priorOrders) {
         for (const o of priorOrders) {
-          if (o.customer_email) returningEmails.add(o.customer_email.toLowerCase());
+          if (o.customer_email) returningKeys.add(`email:${o.customer_email.toLowerCase()}`);
         }
       }
     }
   }
 
-  const newOrders = validOrders.filter(o =>
-    !o.customer_email || !returningEmails.has(o.customer_email.toLowerCase())
-  );
-  const returningOrders = validOrders.filter(o =>
-    o.customer_email && returningEmails.has(o.customer_email.toLowerCase())
-  );
+  const newOrders = validOrders.filter(o => {
+    const k = customerKey(o);
+    return !k || !returningKeys.has(k);
+  });
+  const returningOrders = validOrders.filter(o => {
+    const k = customerKey(o);
+    return k != null && returningKeys.has(k);
+  });
 
   const newCustomerRevenue = newOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
   const returningCustomerRevenue = returningOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
 
-  // Unique-customer counts (dedup by email, exclude guest checkouts with no email).
-  // Matches Shopify Analytics's definition: a "customer" is identified by their email.
-  const newCustomerEmails = new Set<string>();
+  // Unique-customer counts (dedup by customer_id || email).
+  // Matches Shopify Analytics's definition of a "customer".
+  const newCustomerKeys = new Set<string>();
   for (const o of newOrders) {
-    if (o.customer_email) newCustomerEmails.add(o.customer_email.toLowerCase());
+    const k = customerKey(o);
+    if (k) newCustomerKeys.add(k);
   }
-  const returningCustomerEmails = new Set<string>();
+  const returningCustomerKeys = new Set<string>();
   for (const o of returningOrders) {
-    if (o.customer_email) returningCustomerEmails.add(o.customer_email.toLowerCase());
+    const k = customerKey(o);
+    if (k) returningCustomerKeys.add(k);
   }
-  const newCustomerCount = newCustomerEmails.size;
-  const returningCustomerCount = returningCustomerEmails.size;
-  const uniqueCustomersWithEmail = newCustomerCount + returningCustomerCount;
-  const returningCustomerRate = uniqueCustomersWithEmail > 0
-    ? (returningCustomerCount / uniqueCustomersWithEmail) * 100
+  const newCustomerCount = newCustomerKeys.size;
+  const returningCustomerCount = returningCustomerKeys.size;
+  const uniqueCustomers = newCustomerCount + returningCustomerCount;
+  const returningCustomerRate = uniqueCustomers > 0
+    ? (returningCustomerCount / uniqueCustomers) * 100
     : 0;
 
   // Daily breakdown for sparklines
