@@ -65,12 +65,14 @@ const DeliveriesPage = () => {
   const activeTab = searchParams.get('tab') || 'all';
   const statusFilter = searchParams.get('status') || 'all';
   const workshopFilter = searchParams.get('workshop') || 'all';
+  const paymentFilter = searchParams.get('payment') || 'all';
 
-  const updateFilters = (updates: { 
-    search?: string; 
-    tab?: string; 
-    status?: string; 
-    workshop?: string 
+  const updateFilters = (updates: {
+    search?: string;
+    tab?: string;
+    status?: string;
+    workshop?: string;
+    payment?: string;
   }) => {
     const newParams = new URLSearchParams(searchParams);
     
@@ -105,7 +107,15 @@ const DeliveriesPage = () => {
         newParams.delete('workshop');
       }
     }
-    
+
+    if (updates.payment !== undefined) {
+      if (updates.payment && updates.payment !== 'all') {
+        newParams.set('payment', updates.payment);
+      } else {
+        newParams.delete('payment');
+      }
+    }
+
     setSearchParams(newParams);
   };
 
@@ -118,7 +128,7 @@ const DeliveriesPage = () => {
   const workshopOptions = [...new Set(deliveries.map(d => d.workshop_name).filter(Boolean))];
 
   // Count active filters
-  const activeFiltersCount = [statusFilter, workshopFilter].filter(f => f !== 'all').length;
+  const activeFiltersCount = [statusFilter, workshopFilter, paymentFilter].filter(f => f !== 'all').length;
 
   const clearFilters = () => {
     setSearchParams(new URLSearchParams());
@@ -192,6 +202,30 @@ const DeliveriesPage = () => {
       filtered = filtered.filter(delivery => delivery.workshop_name === workshopFilter);
     }
 
+    // Apply payment status filter
+    if (paymentFilter !== 'all') {
+      filtered = filtered.filter(delivery => {
+        const payment = payments.find(p => p.delivery_id === delivery.id);
+        const hasAdvance = (advancesByDeliveryId.get(delivery.id)?.total_amount || 0) > 0;
+        switch (paymentFilter) {
+          case 'paid':
+            return payment?.payment_status === 'paid';
+          case 'pending':
+            return payment?.payment_status === 'pending';
+          case 'partial':
+            return payment?.payment_status === 'partial';
+          case 'cancelled':
+            return payment?.payment_status === 'cancelled';
+          case 'no_payment':
+            return !payment;
+          case 'with_advance':
+            return hasAdvance;
+          default:
+            return true;
+        }
+      });
+    }
+
     // Apply tab filter
     if (activeTab !== 'all' && activeTab !== 'sync') {
       filtered = filtered.filter(delivery => {
@@ -209,7 +243,7 @@ const DeliveriesPage = () => {
     }
 
     return filtered;
-  }, [deliveries, searchTerm, statusFilter, workshopFilter, activeTab, activeStoreId]);
+  }, [deliveries, searchTerm, statusFilter, workshopFilter, paymentFilter, activeTab, payments, advancesByDeliveryId, activeStoreId]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -354,6 +388,24 @@ const DeliveriesPage = () => {
                 {workshop}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-700">Estado de Pago</label>
+        <Select value={paymentFilter} onValueChange={(value) => updateFilters({ payment: value })}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Todos los pagos" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los pagos</SelectItem>
+            <SelectItem value="paid">Pagado</SelectItem>
+            <SelectItem value="pending">Pendiente</SelectItem>
+            <SelectItem value="partial">Parcial</SelectItem>
+            <SelectItem value="cancelled">Cancelado</SelectItem>
+            <SelectItem value="no_payment">Sin pago registrado</SelectItem>
+            <SelectItem value="with_advance">Con anticipo</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -668,6 +720,20 @@ const DeliveriesPage = () => {
                         {workshop}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+                <Select value={paymentFilter} onValueChange={(value) => updateFilters({ payment: value })}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Estado de pago" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los pagos</SelectItem>
+                    <SelectItem value="paid">Pagado</SelectItem>
+                    <SelectItem value="pending">Pendiente</SelectItem>
+                    <SelectItem value="partial">Parcial</SelectItem>
+                    <SelectItem value="cancelled">Cancelado</SelectItem>
+                    <SelectItem value="no_payment">Sin pago registrado</SelectItem>
+                    <SelectItem value="with_advance">Con anticipo</SelectItem>
                   </SelectContent>
                 </Select>
                 {activeFiltersCount > 0 && (
