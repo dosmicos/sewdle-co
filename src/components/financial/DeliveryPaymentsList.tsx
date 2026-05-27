@@ -1,5 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useDeliveryPayments } from "@/hooks/useDeliveryPayments";
+import { useOrderAdvances } from "@/hooks/useOrderAdvances";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,15 +12,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  Search, 
-  Filter, 
-  DollarSign, 
-  CheckCircle, 
+import {
+  Search,
+  Filter,
+  DollarSign,
+  CheckCircle,
   Download,
   Calculator,
   RefreshCw,
-  Trash2
+  Trash2,
+  Banknote,
+  PiggyBank
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -31,8 +35,41 @@ interface PaymentFormData {
 
 export const DeliveryPaymentsList = () => {
   const { payments, loading, calculatePayment, createPayment, markAsPaid, deletePayment, refetch } = useDeliveryPayments();
+  const { advances } = useOrderAdvances();
   const { toast } = useToast();
-  
+
+  // Lookup de tracking_number por delivery_id para los anticipos huérfanos
+  // (entregas con anticipo pero sin delivery_payment todavía).
+  const [deliveryLookup, setDeliveryLookup] = useState<Record<string, { tracking_number: string | null; order_number: string | null; workshop_name: string | null }>>({});
+
+  useEffect(() => {
+    const deliveryIds = Array.from(new Set(
+      advances.filter(a => a.delivery_id).map(a => a.delivery_id as string)
+    ));
+    if (deliveryIds.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('deliveries')
+        .select('id, tracking_number, order_id, workshop_id, orders(order_number), workshops(name)')
+        .in('id', deliveryIds);
+      if (error || cancelled) return;
+      const map: Record<string, { tracking_number: string | null; order_number: string | null; workshop_name: string | null }> = {};
+      (data || []).forEach((d: any) => {
+        map[d.id] = {
+          tracking_number: d.tracking_number,
+          order_number: d.orders?.order_number ?? null,
+          workshop_name: d.workshops?.name ?? null,
+        };
+      });
+      setDeliveryLookup(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [advances]);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [workshopFilter, setWorkshopFilter] = useState("all");
@@ -48,26 +85,103 @@ export const DeliveryPaymentsList = () => {
     notes: ""
   });
 
+  // Resumen de anticipos por delivery_id
+  const advancesByDelivery = useMemo(() => {
+    const map = new Map<string, { total: number; count: number; latest_date: string | null }>();
+    advances.forEach(a => {
+      if (!a.delivery_id) return;
+      const existing = map.get(a.delivery_id);
+      if (existing) {
+        existing.total += a.amount;
+        existing.count += 1;
+        if (!existing.latest_date || a.advance_date > existing.latest_date) {
+          existing.latest_date = a.advance_date;
+        }
+      } else {
+        map.set(a.delivery_id, { total: a.amount, count: 1, latest_date: a.advance_date });
+      }
+    });
+    return map;
+  }, [advances]);
+
+  // Filas "virtuales" para entregas con anticipo pero sin delivery_payment todavía
+  const advanceOnlyRows = useMemo(() => {
+    const deliveryIdsWithPayment = new Set(payments.map(p => p.delivery_id));
+    const rows: Array<{
+      id: string;
+      delivery_id: string;
+      tracking_number: string | null;
+      order_number: string | null;
+      workshop_name: string | null;
+      advance_total: number;
+      latest_date: string | null;
+      isAdvanceOnly: true;
+    }> = [];
+    advancesByDelivery.forEach((summary, deliveryId) => {
+      if (deliveryIdsWithPayment.has(deliveryId)) return;
+      const lookup = deliveryLookup[deliveryId];
+      rows.push({
+        id: `advance-only-${deliveryId}`,
+        delivery_id: deliveryId,
+        tracking_number: lookup?.tracking_number ?? null,
+        order_number: lookup?.order_number ?? null,
+        workshop_name: lookup?.workshop_name ?? null,
+        advance_total: summary.total,
+        latest_date: summary.latest_date,
+        isAdvanceOnly: true,
+      });
+    });
+    return rows;
+  }, [advancesByDelivery, payments, deliveryLookup]);
+
   // Get unique workshops for filter
   const workshops = useMemo(() => {
-    const uniqueWorkshops = Array.from(new Set(payments.map(p => p.workshop_name).filter(Boolean)));
+    const fromPayments = payments.map(p => p.workshop_name).filter(Boolean) as string[];
+    const fromAdvances = advanceOnlyRows.map(r => r.workshop_name).filter(Boolean) as string[];
+    const uniqueWorkshops = Array.from(new Set([...fromPayments, ...fromAdvances]));
     return uniqueWorkshops.sort();
-  }, [payments]);
+  }, [payments, advanceOnlyRows]);
 
   // Filter payments based on search and filters
   const filteredPayments = useMemo(() => {
     return payments.filter(payment => {
-      const matchesSearch = 
+      const matchesSearch =
         payment.tracking_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         payment.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         payment.workshop_name?.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesStatus = statusFilter === "all" || payment.payment_status === statusFilter;
+
+      const matchesStatus =
+        statusFilter === "all"
+          ? true
+          : statusFilter === "advance"
+            ? false
+            : payment.payment_status === statusFilter;
       const matchesWorkshop = workshopFilter === "all" || payment.workshop_name === workshopFilter;
-      
+
       return matchesSearch && matchesStatus && matchesWorkshop;
     });
   }, [payments, searchTerm, statusFilter, workshopFilter]);
+
+  // Filas virtuales filtradas: aparecen cuando estado=all|pending, o cuando filtro
+  // específico es "advance" (un valor extra que añadimos abajo).
+  const filteredAdvanceOnly = useMemo(() => {
+    if (statusFilter !== 'all' && statusFilter !== 'pending' && statusFilter !== 'advance') return [];
+    return advanceOnlyRows.filter(row => {
+      const matchesSearch =
+        !searchTerm ||
+        row.tracking_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        row.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        row.workshop_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesWorkshop = workshopFilter === "all" || row.workshop_name === workshopFilter;
+      return matchesSearch && matchesWorkshop;
+    });
+  }, [advanceOnlyRows, searchTerm, statusFilter, workshopFilter]);
+
+  const totalAdvancesAmount = useMemo(() => {
+    let sum = 0;
+    advancesByDelivery.forEach(s => { sum += s.total; });
+    return sum;
+  }, [advancesByDelivery]);
 
   const formatCurrency = (amount: number) => {
     return `COP $${new Intl.NumberFormat('es-ES', {
@@ -249,7 +363,7 @@ export const DeliveryPaymentsList = () => {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -261,7 +375,7 @@ export const DeliveryPaymentsList = () => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -270,6 +384,19 @@ export const DeliveryPaymentsList = () => {
                 <p className="text-2xl font-bold">{formatCurrency(totalPendingAmount)}</p>
               </div>
               <Calculator className="w-8 h-8 text-red-500" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Anticipos Entregados</p>
+                <p className="text-2xl font-bold">{formatCurrency(totalAdvancesAmount)}</p>
+                <p className="text-xs text-muted-foreground">{advancesByDelivery.size} entrega(s)</p>
+              </div>
+              <PiggyBank className="w-8 h-8 text-purple-500" />
             </div>
           </CardContent>
         </Card>
@@ -319,6 +446,7 @@ export const DeliveryPaymentsList = () => {
                 <SelectItem value="paid">Pagado</SelectItem>
                 <SelectItem value="partial">Parcial</SelectItem>
                 <SelectItem value="cancelled">Cancelado</SelectItem>
+                <SelectItem value="advance">Solo Anticipo</SelectItem>
               </SelectContent>
             </Select>
 
@@ -398,79 +526,120 @@ export const DeliveryPaymentsList = () => {
                   <TableHead>Taller</TableHead>
                   <TableHead>Unidades</TableHead>
                   <TableHead>Monto Neto</TableHead>
+                  <TableHead>Anticipo</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Fecha Pago</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPayments.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell>
-                      {payment.payment_status === 'pending' && (
-                        <Checkbox
-                          checked={selectedPayments.includes(payment.id)}
-                          onCheckedChange={(checked) => handleSelectPayment(payment.id, checked as boolean)}
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {payment.tracking_number || '-'}
-                    </TableCell>
-                    <TableCell>{payment.order_number || '-'}</TableCell>
-                    <TableCell>{payment.workshop_name || '-'}</TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div>Total: {payment.total_units}</div>
-                        <div className="text-muted-foreground">Facturable: {payment.billable_units}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-medium">
-                      {formatCurrency(payment.net_amount)}
-                    </TableCell>
-                    <TableCell>
-                      {getPaymentStatusBadge(payment.payment_status)}
-                    </TableCell>
-                    <TableCell>
-                      {payment.payment_date || '-'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-2">
-                        {!payment.delivery_id && (
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => handleCreatePayment(payment.delivery_id)}
-                          >
-                            <Calculator className="w-4 h-4" />
-                          </Button>
-                        )}
+                {filteredPayments.map((payment) => {
+                  const advance = advancesByDelivery.get(payment.delivery_id);
+                  return (
+                    <TableRow key={payment.id}>
+                      <TableCell>
                         {payment.payment_status === 'pending' && (
-                          <>
-                            <Button 
-                              size="sm"
-                              onClick={() => openPaymentDialog(payment.id)}
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                            </Button>
-                            <Button 
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => openDeleteDialog(payment)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </>
+                          <Checkbox
+                            checked={selectedPayments.includes(payment.id)}
+                            onCheckedChange={(checked) => handleSelectPayment(payment.id, checked as boolean)}
+                          />
                         )}
-                      </div>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {payment.tracking_number || '-'}
+                      </TableCell>
+                      <TableCell>{payment.order_number || '-'}</TableCell>
+                      <TableCell>{payment.workshop_name || '-'}</TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          <div>Total: {payment.total_units}</div>
+                          <div className="text-muted-foreground">Facturable: {payment.billable_units}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {formatCurrency(payment.net_amount)}
+                      </TableCell>
+                      <TableCell>
+                        {advance ? (
+                          <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                            <Banknote className="w-3 h-3 mr-1" />
+                            {formatCurrency(advance.total)}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {getPaymentStatusBadge(payment.payment_status)}
+                      </TableCell>
+                      <TableCell>
+                        {payment.payment_date || '-'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          {!payment.delivery_id && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleCreatePayment(payment.delivery_id)}
+                            >
+                              <Calculator className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {payment.payment_status === 'pending' && (
+                            <>
+                              <Button
+                                size="sm"
+                                onClick={() => openPaymentDialog(payment.id)}
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => openDeleteDialog(payment)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {filteredAdvanceOnly.map((row) => (
+                  <TableRow key={row.id} className="bg-purple-50/30">
+                    <TableCell>—</TableCell>
+                    <TableCell className="font-medium">{row.tracking_number || '-'}</TableCell>
+                    <TableCell>{row.order_number || '-'}</TableCell>
+                    <TableCell>{row.workshop_name || '-'}</TableCell>
+                    <TableCell>
+                      <span className="text-muted-foreground text-xs">Sin revisión de calidad</span>
                     </TableCell>
+                    <TableCell>
+                      <span className="text-muted-foreground text-xs">Por calcular</span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                        <Banknote className="w-3 h-3 mr-1" />
+                        {formatCurrency(row.advance_total)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="bg-purple-100 text-purple-800 border-purple-300">
+                        Solo Anticipo
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{row.latest_date || '-'}</TableCell>
+                    <TableCell>—</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
 
-          {filteredPayments.length === 0 && (
+          {filteredPayments.length === 0 && filteredAdvanceOnly.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               No se encontraron pagos con los filtros aplicados
             </div>
