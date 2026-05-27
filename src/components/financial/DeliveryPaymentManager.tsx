@@ -418,11 +418,14 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
                     <Label htmlFor="advance_amount">Monto a Anticipar (COP)</Label>
                     <Input
                       id="advance_amount"
-                      type="number"
-                      min="0"
-                      step="1000"
+                      type="text"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
                       value={advancePaymentData.amount}
-                      onChange={(e) => setAdvancePaymentData(prev => ({ ...prev, amount: e.target.value }))}
+                      onChange={(e) => {
+                        const cleaned = e.target.value.replace(/[^0-9.]/g, '');
+                        setAdvancePaymentData(prev => ({ ...prev, amount: cleaned }));
+                      }}
                       placeholder="0"
                       required
                     />
@@ -531,12 +534,14 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
                         <Label htmlFor="custom_advance">Anticipo a Descontar en esta Entrega</Label>
                         <Input
                           id="custom_advance"
-                          type="number"
-                          min="0"
-                          max={calculation.total_advance_available - calculation.advance_already_used}
-                          step="1000"
+                          type="text"
+                          inputMode="decimal"
+                          pattern="[0-9]*\.?[0-9]*"
                           value={advanceAdjustment.customAdvanceDeduction}
-                          onChange={(e) => handleAdvanceAdjustmentChange(Number(e.target.value))}
+                          onChange={(e) => {
+                            const cleaned = e.target.value.replace(/[^0-9.]/g, '');
+                            handleAdvanceAdjustmentChange(cleaned === '' ? 0 : Number(cleaned));
+                          }}
                           placeholder="0"
                         />
                       </div>
