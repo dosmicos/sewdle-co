@@ -6,6 +6,7 @@ export interface OrderAdvance {
   id: string;
   order_id: string;
   workshop_id: string;
+  delivery_id?: string | null;
   amount: number;
   currency: string;
   advance_date: string;
@@ -23,6 +24,7 @@ export interface OrderAdvance {
 export interface OrderAdvanceInsert {
   order_id: string;
   workshop_id: string;
+  delivery_id?: string | null;
   amount: number;
   currency?: string;
   advance_date: string;

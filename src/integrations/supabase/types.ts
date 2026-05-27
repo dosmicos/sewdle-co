@@ -2441,6 +2441,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           currency: string
+          delivery_id: string | null
           id: string
           notes: string | null
           order_id: string
@@ -2457,6 +2458,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          delivery_id?: string | null
           id?: string
           notes?: string | null
           order_id: string
@@ -2473,6 +2475,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           currency?: string
+          delivery_id?: string | null
           id?: string
           notes?: string | null
           order_id?: string
@@ -2484,6 +2487,13 @@ export type Database = {
           workshop_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "order_advances_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "deliveries"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "order_advances_order_id_fkey"
             columns: ["order_id"]

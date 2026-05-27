@@ -19,7 +19,7 @@ import { DiscountLinkButton } from './DiscountLinkButton';
 import { CreatorPortalLinkButton } from './CreatorPortalLinkButton';
 import { UgcToolkitAssignmentsManager } from './UgcToolkitAssignmentsManager';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface UgcCreatorDetailModalProps {
@@ -130,9 +130,10 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
     const extension = extensionMatch?.[1]?.toLowerCase() || (previewIsPhoto ? 'jpg' : 'mp4');
     const handle = creator?.instagram_handle || creator?.tiktok_handle || 'sin-handle';
     const filename = `UGC-@${handle}.${extension}`;
+    const proxyUrl = `${SUPABASE_URL}/functions/v1/proxy-ugc-download?url=${encodeURIComponent(previewOriginalUrl)}&filename=${encodeURIComponent(filename)}`;
 
     try {
-      const response = await fetch(previewOriginalUrl);
+      const response = await fetch(proxyUrl);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const blob = await response.blob();
@@ -149,7 +150,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
       URL.revokeObjectURL(objectUrl);
     } catch (error) {
       console.error('Download error:', error);
-      window.open(previewOriginalUrl, '_blank', 'noopener,noreferrer');
+      window.open(proxyUrl, '_blank', 'noopener,noreferrer');
     }
   };
 

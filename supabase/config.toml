@@ -63,6 +63,9 @@ verify_jwt = false
 [functions.proxy-label]
 verify_jwt = false
 
+[functions.proxy-ugc-download]
+verify_jwt = false
+
 [functions.fulfill-pickup-order]
 verify_jwt = false
 
