@@ -347,6 +347,19 @@ export const DeliveryPaymentsList = () => {
     }, 0);
   }, [selectedPayments, filteredPayments]);
 
+  // Calculate total advances tied to selected payments (via delivery_id)
+  const selectedAdvancesTotal = useMemo(() => {
+    return selectedPayments.reduce((sum, paymentId) => {
+      const payment = filteredPayments.find(p => p.id === paymentId);
+      if (!payment) return sum;
+      const advance = advancesByDelivery.get(payment.delivery_id);
+      return sum + (advance?.total || 0);
+    }, 0);
+  }, [selectedPayments, filteredPayments, advancesByDelivery]);
+
+  // Grand total: payment net + advances
+  const selectedGrandTotal = selectedPaymentsTotal + selectedAdvancesTotal;
+
   if (loading) {
     return (
       <Card>
@@ -474,10 +487,20 @@ export const DeliveryPaymentsList = () => {
           {selectedPayments.length > 0 && (
             <div className="mb-4 p-4 bg-muted rounded-lg">
               <div className="flex items-center justify-between">
-              <div className="text-sm">
-                  <div>{selectedPayments.length} pago(s) seleccionado(s)</div>
-                  <div className="font-medium text-foreground">
-                    Total Facturable: {selectedBillableUnits.toLocaleString('es-CO')} uds · {formatCurrency(selectedPaymentsTotal)}
+              <div className="text-sm space-y-1">
+                  <div>{selectedPayments.length} pago(s) seleccionado(s) · {selectedBillableUnits.toLocaleString('es-CO')} uds facturables</div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                    <span>
+                      Monto Neto: <span className="font-medium text-foreground">{formatCurrency(selectedPaymentsTotal)}</span>
+                    </span>
+                    {selectedAdvancesTotal > 0 && (
+                      <span className="text-purple-700">
+                        Anticipos: <span className="font-medium">{formatCurrency(selectedAdvancesTotal)}</span>
+                      </span>
+                    )}
+                    <span className="font-semibold text-foreground">
+                      Total: {formatCurrency(selectedGrandTotal)}
+                    </span>
                   </div>
                 </div>
                 <div className="flex gap-2">
