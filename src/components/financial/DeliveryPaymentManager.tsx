@@ -184,6 +184,7 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
       await createAdvance({
         order_id: delivery.order_id,
         workshop_id: delivery.workshop_id,
+        delivery_id: deliveryId,
         amount,
         currency: "COP",
         advance_date: advancePaymentData.advance_date,

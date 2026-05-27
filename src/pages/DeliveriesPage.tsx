@@ -4,6 +4,7 @@ import { useFilteredDeliveries } from '@/hooks/useFilteredDeliveries';
 import { useUserContext } from '@/hooks/useUserContext';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { useDeliveryPayments } from '@/hooks/useDeliveryPayments';
+import { useDeliveryAdvances } from '@/hooks/useDeliveryAdvances';
 import { usePermissions } from '@/hooks/usePermissions';
 import DeliveryForm from '@/components/DeliveryForm';
 import InventorySyncManager from '@/components/supplies/InventorySyncManager';
@@ -26,7 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Truck, Calendar, MapPin, Eye, Search, Filter, Package, CheckCircle, AlertTriangle, Clock, XCircle, Zap, Trash2, X, MoreVertical, DollarSign } from 'lucide-react';
+import { Plus, Truck, Calendar, MapPin, Eye, Search, Filter, Package, CheckCircle, AlertTriangle, Clock, XCircle, Zap, Trash2, X, MoreVertical, DollarSign, Banknote } from 'lucide-react';
 import DeliverySyncStatus from '@/components/DeliverySyncStatus';
 import SyncMonitoringDashboard from '@/components/SyncMonitoringDashboard';
 import { format } from 'date-fns';
@@ -39,6 +40,7 @@ const DeliveriesPage = () => {
   const { deliveries, loading, error: deliveriesError, debugInfo, refetch } = useFilteredDeliveries();
   const { deleteDelivery } = useDeliveries();
   const { payments } = useDeliveryPayments();
+  const { byDeliveryId: advancesByDeliveryId } = useDeliveryAdvances();
   const { isAdmin } = useUserContext();
   const { hasPermission } = usePermissions();
   const { toast } = useToast();
@@ -242,6 +244,27 @@ const DeliveriesPage = () => {
     const payment = payments.find(p => p.delivery_id === deliveryId);
     if (!payment) return null;
     return payment.payment_status;
+  };
+
+  const AdvanceIndicator = ({ deliveryId }: { deliveryId: string }) => {
+    const summary = advancesByDeliveryId.get(deliveryId);
+    if (!summary || summary.total_amount <= 0) return null;
+
+    const formattedAmount = new Intl.NumberFormat('es-CO', {
+      style: 'currency',
+      currency: 'COP',
+      maximumFractionDigits: 0,
+    }).format(summary.total_amount);
+
+    return (
+      <div
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700"
+        title={`Pago anticipado registrado: ${formattedAmount}`}
+      >
+        <Banknote className="w-3 h-3" />
+        <span className="text-xs">Anticipo {formattedAmount}</span>
+      </div>
+    );
   };
 
   const PaymentStatusIndicator = ({ deliveryId }: { deliveryId: string }) => {
@@ -659,6 +682,7 @@ const DeliveriesPage = () => {
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              AdvanceIndicator={AdvanceIndicator}
               deliveriesError={deliveriesError}
               debugInfo={debugInfo}
               refetch={refetch}
@@ -670,6 +694,7 @@ const DeliveriesPage = () => {
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              AdvanceIndicator={AdvanceIndicator}
               deliveriesError={deliveriesError}
               debugInfo={debugInfo}
               refetch={refetch}
@@ -685,6 +710,7 @@ const DeliveriesPage = () => {
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              AdvanceIndicator={AdvanceIndicator}
               deliveriesError={deliveriesError}
               debugInfo={debugInfo}
               refetch={refetch}
@@ -696,6 +722,7 @@ const DeliveriesPage = () => {
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              AdvanceIndicator={AdvanceIndicator}
               deliveriesError={deliveriesError}
               debugInfo={debugInfo}
               refetch={refetch}
@@ -711,6 +738,7 @@ const DeliveriesPage = () => {
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              AdvanceIndicator={AdvanceIndicator}
               deliveriesError={deliveriesError}
               debugInfo={debugInfo}
               refetch={refetch}
@@ -722,6 +750,7 @@ const DeliveriesPage = () => {
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              AdvanceIndicator={AdvanceIndicator}
               deliveriesError={deliveriesError}
               debugInfo={debugInfo}
               refetch={refetch}
@@ -737,6 +766,7 @@ const DeliveriesPage = () => {
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              AdvanceIndicator={AdvanceIndicator}
               deliveriesError={deliveriesError}
               debugInfo={debugInfo}
               refetch={refetch}
@@ -748,6 +778,7 @@ const DeliveriesPage = () => {
               onDeleteDelivery={handleDeleteDelivery}
               canDeleteDeliveries={canDeleteDeliveries}
               PaymentStatusIndicator={PaymentStatusIndicator}
+              AdvanceIndicator={AdvanceIndicator}
               deliveriesError={deliveriesError}
               debugInfo={debugInfo}
               refetch={refetch}
@@ -801,6 +832,7 @@ const DeliveryCards = ({
   onDeleteDelivery,
   canDeleteDeliveries,
   PaymentStatusIndicator,
+  AdvanceIndicator,
   deliveriesError,
   debugInfo,
   refetch
@@ -810,6 +842,7 @@ const DeliveryCards = ({
   onDeleteDelivery: (delivery: any) => void,
   canDeleteDeliveries: boolean,
   PaymentStatusIndicator?: ({ deliveryId }: { deliveryId: string }) => JSX.Element | null,
+  AdvanceIndicator?: ({ deliveryId }: { deliveryId: string }) => JSX.Element | null,
   deliveriesError?: any,
   debugInfo?: string | null,
   refetch?: () => void
@@ -885,11 +918,14 @@ const DeliveryCards = ({
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
                   <div className="font-semibold text-sm">{delivery.tracking_number}</div>
-                  {PaymentStatusIndicator && (
-                    <div className="mt-1">
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {PaymentStatusIndicator && (
                       <PaymentStatusIndicator deliveryId={delivery.id} />
-                    </div>
-                  )}
+                    )}
+                    {AdvanceIndicator && (
+                      <AdvanceIndicator deliveryId={delivery.id} />
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     Orden: {delivery.order_number}
                   </div>
@@ -970,6 +1006,7 @@ const DeliveryTable = ({
   onDeleteDelivery,
   canDeleteDeliveries,
   PaymentStatusIndicator,
+  AdvanceIndicator,
   deliveriesError,
   debugInfo,
   refetch
@@ -979,6 +1016,7 @@ const DeliveryTable = ({
   onDeleteDelivery: (delivery: any) => void,
   canDeleteDeliveries: boolean,
   PaymentStatusIndicator?: ({ deliveryId }: { deliveryId: string }) => JSX.Element | null,
+  AdvanceIndicator?: ({ deliveryId }: { deliveryId: string }) => JSX.Element | null,
   deliveriesError?: any,
   debugInfo?: string | null,
   refetch?: () => void
@@ -1070,11 +1108,14 @@ const DeliveryTable = ({
                    <TableCell className="font-medium">
                      <div>
                        <div>{delivery.tracking_number}</div>
-                       {PaymentStatusIndicator && (
-                         <div className="mt-1">
+                       <div className="mt-1 flex flex-wrap gap-1">
+                         {PaymentStatusIndicator && (
                            <PaymentStatusIndicator deliveryId={delivery.id} />
-                         </div>
-                       )}
+                         )}
+                         {AdvanceIndicator && (
+                           <AdvanceIndicator deliveryId={delivery.id} />
+                         )}
+                       </div>
                      </div>
                    </TableCell>
                   <TableCell>{delivery.order_number}</TableCell>
