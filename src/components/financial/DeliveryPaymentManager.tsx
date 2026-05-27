@@ -420,7 +420,7 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
                       id="advance_amount"
                       type="number"
                       min="0"
-                      step="1000"
+                      step="any"
                       value={advancePaymentData.amount}
                       onChange={(e) => setAdvancePaymentData(prev => ({ ...prev, amount: e.target.value }))}
                       placeholder="0"
