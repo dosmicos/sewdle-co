@@ -1,8 +1,13 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { TrendingUp, TrendingDown, Minus, Users } from 'lucide-react';
 import type { CustomerHealthData } from '@/hooks/useCustomerHealth';
+
+const MONTH_SHORT: Record<string, string> = {
+  '01': 'Ene', '02': 'Feb', '03': 'Mar', '04': 'Abr', '05': 'May', '06': 'Jun',
+  '07': 'Jul', '08': 'Ago', '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dic',
+};
 
 interface CustomerHealthSectionProps {
   data: CustomerHealthData;
@@ -29,11 +34,15 @@ export const CustomerHealthSection: React.FC<CustomerHealthSectionProps> = ({
   isLoading,
   formatCOP,
 }) => {
-  const layerCakeData = data.monthlyLayers.map(l => ({
-    month: l.month.substring(5), // "MM"
-    new: l.newRevenue,
-    returning: l.returningRevenue,
-  }));
+  const layerCakeData = data.monthlyLayers
+    .slice()
+    .sort((a, b) => a.month.localeCompare(b.month)) // chronological ascending
+    .map(l => ({
+      month: MONTH_SHORT[l.month.substring(5)] ?? l.month.substring(5),
+      year: l.month.substring(0, 4),
+      new: l.newRevenue,
+      returning: l.returningRevenue,
+    }));
 
   if (isLoading) {
     return (
@@ -56,43 +65,50 @@ export const CustomerHealthSection: React.FC<CustomerHealthSectionProps> = ({
         {/* Left: Revenue Layer Cake */}
         <Card>
           <CardContent className="p-5">
-            <p className="text-sm font-medium text-gray-700 mb-3">Revenue Layer Cake</p>
+            <div className="flex items-baseline justify-between mb-3">
+              <p className="text-sm font-medium text-gray-700">Revenue Layer Cake</p>
+              <p className="text-[10px] text-gray-400">
+                {layerCakeData.length > 0
+                  ? `${layerCakeData.length} ${layerCakeData.length === 1 ? 'mes' : 'meses'} con datos`
+                  : 'últimos 6 meses'}
+              </p>
+            </div>
             <div className="h-56">
               {layerCakeData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={layerCakeData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <BarChart data={layerCakeData} margin={{ top: 4, right: 4, left: -8, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis
                       tick={{ fontSize: 11 }}
-                      tickFormatter={(v) => `${(v / 1_000_000).toFixed(1)}M`}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`}
                     />
                     <Tooltip
-                      formatter={(value: number, name: string) => [
-                        formatCOP(value),
-                        name === 'returning' ? 'Returning' : 'New',
-                      ]}
+                      formatter={(value: number, name: string) => [formatCOP(value), name]}
+                      labelFormatter={(label, payload) => {
+                        const year = payload?.[0]?.payload?.year;
+                        return year ? `${label} ${year}` : label;
+                      }}
                       contentStyle={{ fontSize: 12, borderRadius: 8 }}
                     />
-                    <Area
-                      type="monotone"
-                      dataKey="returning"
-                      stackId="1"
-                      fill="#22c55e"
-                      fillOpacity={0.6}
-                      stroke="#16a34a"
-                      name="Returning"
-                    />
-                    <Area
-                      type="monotone"
+                    <Legend wrapperStyle={{ fontSize: 11 }} iconType="circle" />
+                    <Bar
                       dataKey="new"
-                      stackId="1"
+                      stackId="rev"
                       fill="#3b82f6"
-                      fillOpacity={0.6}
-                      stroke="#2563eb"
                       name="New"
+                      radius={[0, 0, 0, 0]}
                     />
-                  </AreaChart>
+                    <Bar
+                      dataKey="returning"
+                      stackId="rev"
+                      fill="#22c55e"
+                      name="Returning"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
                 </ResponsiveContainer>
               ) : (
                 <div className="h-full flex items-center justify-center text-sm text-gray-400">

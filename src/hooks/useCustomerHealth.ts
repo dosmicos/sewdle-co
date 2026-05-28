@@ -229,15 +229,24 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
     else { m.newRev += netPrice; m.newOrd++; }
   }
 
-  return Array.from(monthMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, m]) => ({
-      month,
+  // Zero-fill the full 6-month window so the chart always renders all 6
+  // X-axis positions even if some months have no qualifying orders. This
+  // makes data gaps visible instead of silently collapsing the chart.
+  const allMonthKeys: string[] = [];
+  for (let i = 5; i >= 0; i--) {
+    allMonthKeys.push(format(startOfMonth(subMonths(now, i)), 'yyyy-MM'));
+  }
+
+  return allMonthKeys.map((monthKey) => {
+    const m = monthMap.get(monthKey) ?? { newRev: 0, retRev: 0, newOrd: 0, retOrd: 0 };
+    return {
+      month: monthKey,
       newRevenue: m.newRev,
       returningRevenue: m.retRev,
       newOrders: m.newOrd,
       returningOrders: m.retOrd,
-    }));
+    };
+  });
 }
 
 export function useCustomerHealth(
