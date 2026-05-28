@@ -190,15 +190,41 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
     }
   }
 
-  // Group by month client-side
+  // Group by month client-side, using Shopify-compatible order classification:
+  //   - first lifetime order of a customer  → "new" bucket
+  //   - any subsequent order (including reorders within the 6-month window) → "returning"
+  //
+  // For customers with orders BEFORE the 6-month window, every order inside
+  // the window is already a repeat (already in returningKeys). For customers
+  // who only appear inside the window, the very first one we see chronologically
+  // is "new" and the rest are "returning".
+  const sortedData = (data ?? []).slice().sort((a, b) =>
+    new Date(a.created_at_shopify).getTime() - new Date(b.created_at_shopify).getTime()
+  );
+  const firstOrderSeenInWindow = new Set<string>();
+
   const monthMap = new Map<string, { newRev: number; retRev: number; newOrd: number; retOrd: number }>();
-  for (const o of data ?? []) {
+  for (const o of sortedData) {
     const month = format(new Date(o.created_at_shopify), 'yyyy-MM');
     if (!monthMap.has(month)) monthMap.set(month, { newRev: 0, retRev: 0, newOrd: 0, retOrd: 0 });
     const m = monthMap.get(month)!;
     const k = customerKey(o);
-    const isReturning = k != null && returningKeys.has(k);
     const netPrice = getNetPrice(o);
+
+    let isReturning = false;
+    if (k != null) {
+      if (returningKeys.has(k)) {
+        // Had orders before the 6-month window → always a repeat in the window
+        isReturning = true;
+      } else if (firstOrderSeenInWindow.has(k)) {
+        // We've already counted this customer's first order inside the window
+        isReturning = true;
+      } else {
+        // First sighting of this customer in the window — counts as new
+        firstOrderSeenInWindow.add(k);
+      }
+    }
+
     if (isReturning) { m.retRev += netPrice; m.retOrd++; }
     else { m.newRev += netPrice; m.newOrd++; }
   }
