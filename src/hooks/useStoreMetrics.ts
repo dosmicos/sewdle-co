@@ -182,27 +182,46 @@ async function fetchMetrics(
 
   const returningKeys = new Set<string>();
 
+  // Helper: page through a query until exhausted. PostgREST silently caps
+  // any single response at max_rows (default 1000) regardless of .limit(),
+  // so .range()-based pagination is the only correct way to fetch large
+  // result sets.
+  const PAGE_SIZE = 1000;
+  async function paginate<T>(build: () => any): Promise<T[]> {
+    const all: T[] = [];
+    let from = 0;
+    while (true) {
+      const { data, error } = await build().range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      all.push(...(data as T[]));
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+    return all;
+  }
+
   // Priors keyed by customer_id (canonical Shopify identifier)
   if (periodCustomerIds.size > 0) {
     const idArray = Array.from(periodCustomerIds);
     const batchSizeIds = 200;
     for (let i = 0; i < idArray.length; i += batchSizeIds) {
       const batch = idArray.slice(i, i + batchSizeIds);
-      let priorQuery = supabase
-        .from('shopify_orders')
-        .select('customer_id')
-        .eq('organization_id', orgId)
-        .lt('created_at_shopify', startStr)
-        .in('customer_id', batch)
-        .is('cancelled_at', null)
-        .not('financial_status', 'eq', 'voided')
-        .limit(50000);
-      if (storeId) priorQuery = priorQuery.eq('store_id', storeId);
-      const { data: priorOrders } = await priorQuery;
-      if (priorOrders) {
-        for (const o of priorOrders) {
-          if (o.customer_id != null) returningKeys.add(`id:${o.customer_id}`);
-        }
+      const priorOrders = await paginate<{ customer_id: number | null }>(() => {
+        let q = supabase
+          .from('shopify_orders')
+          .select('customer_id')
+          .eq('organization_id', orgId)
+          .lt('created_at_shopify', startStr)
+          .in('customer_id', batch)
+          .is('cancelled_at', null)
+          .not('financial_status', 'eq', 'voided')
+          .order('created_at_shopify', { ascending: true });
+        if (storeId) q = q.eq('store_id', storeId);
+        return q;
+      });
+      for (const o of priorOrders) {
+        if (o.customer_id != null) returningKeys.add(`id:${o.customer_id}`);
       }
     }
   }
@@ -213,22 +232,22 @@ async function fetchMetrics(
     const batchSizeEmails = 200;
     for (let i = 0; i < emailArray.length; i += batchSizeEmails) {
       const batch = emailArray.slice(i, i + batchSizeEmails);
-      let priorQuery = supabase
-        .from('shopify_orders')
-        .select('customer_email')
-        .eq('organization_id', orgId)
-        .lt('created_at_shopify', startStr)
-        .in('customer_email', batch)
-        .is('customer_id', null)
-        .is('cancelled_at', null)
-        .not('financial_status', 'eq', 'voided')
-        .limit(50000);
-      if (storeId) priorQuery = priorQuery.eq('store_id', storeId);
-      const { data: priorOrders } = await priorQuery;
-      if (priorOrders) {
-        for (const o of priorOrders) {
-          if (o.customer_email) returningKeys.add(`email:${o.customer_email.toLowerCase()}`);
-        }
+      const priorOrders = await paginate<{ customer_email: string | null }>(() => {
+        let q = supabase
+          .from('shopify_orders')
+          .select('customer_email')
+          .eq('organization_id', orgId)
+          .lt('created_at_shopify', startStr)
+          .in('customer_email', batch)
+          .is('customer_id', null)
+          .is('cancelled_at', null)
+          .not('financial_status', 'eq', 'voided')
+          .order('created_at_shopify', { ascending: true });
+        if (storeId) q = q.eq('store_id', storeId);
+        return q;
+      });
+      for (const o of priorOrders) {
+        if (o.customer_email) returningKeys.add(`email:${o.customer_email.toLowerCase()}`);
       }
     }
   }

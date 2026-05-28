@@ -44,6 +44,27 @@ interface ActiveFileQueryResult {
   previous: number;
 }
 
+// Paginate through a Supabase select. PostgREST caps any single response at
+// max_rows (default 1000) regardless of .limit(), so a single query against a
+// high-volume table silently truncates. This helper pages with .range() until
+// the response is shorter than the page size.
+async function paginateSelect<T>(
+  build: () => any
+): Promise<T[]> {
+  const PAGE_SIZE = 1000;
+  const all: T[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await build().range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...(data as T[]));
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return all;
+}
+
 async function fetchActiveFile(orgId: string): Promise<ActiveFileQueryResult> {
   const now = new Date();
   const sixMonthsAgo = subMonths(now, 6).toISOString();
@@ -52,36 +73,38 @@ async function fetchActiveFile(orgId: string): Promise<ActiveFileQueryResult> {
   const thirtyDaysAgoStr = thirtyDaysAgo.toISOString();
 
   // Current active file: distinct customers in last 6 months
-  const { data: currentData, error: currentError } = await supabase
-    .from('shopify_orders')
-    .select('customer_email')
-    .eq('organization_id', orgId)
-    .gte('created_at_shopify', sixMonthsAgo)
-    .is('cancelled_at', null)
-    .not('financial_status', 'eq', 'voided')
-    .not('financial_status', 'eq', 'refunded');
-
-  if (currentError) throw currentError;
+  const currentData = await paginateSelect<{ customer_email: string | null }>(
+    () => supabase
+      .from('shopify_orders')
+      .select('customer_email')
+      .eq('organization_id', orgId)
+      .gte('created_at_shopify', sixMonthsAgo)
+      .is('cancelled_at', null)
+      .not('financial_status', 'eq', 'voided')
+      .not('financial_status', 'eq', 'refunded')
+      .order('created_at_shopify', { ascending: true })
+  );
 
   const currentUnique = new Set(
-    (currentData ?? []).map(o => o.customer_email).filter(Boolean)
+    currentData.map(o => o.customer_email).filter(Boolean)
   ).size;
 
   // Previous active file: distinct customers 6 months prior to 30 days ago
-  const { data: previousData, error: previousError } = await supabase
-    .from('shopify_orders')
-    .select('customer_email')
-    .eq('organization_id', orgId)
-    .gte('created_at_shopify', sixMonthsBeforeThat)
-    .lte('created_at_shopify', thirtyDaysAgoStr)
-    .is('cancelled_at', null)
-    .not('financial_status', 'eq', 'voided')
-    .not('financial_status', 'eq', 'refunded');
-
-  if (previousError) throw previousError;
+  const previousData = await paginateSelect<{ customer_email: string | null }>(
+    () => supabase
+      .from('shopify_orders')
+      .select('customer_email')
+      .eq('organization_id', orgId)
+      .gte('created_at_shopify', sixMonthsBeforeThat)
+      .lte('created_at_shopify', thirtyDaysAgoStr)
+      .is('cancelled_at', null)
+      .not('financial_status', 'eq', 'voided')
+      .not('financial_status', 'eq', 'refunded')
+      .order('created_at_shopify', { ascending: true })
+  );
 
   const previousUnique = new Set(
-    (previousData ?? []).map(o => o.customer_email).filter(Boolean)
+    previousData.map(o => o.customer_email).filter(Boolean)
   ).size;
 
   return { current: currentUnique, previous: previousUnique };
@@ -97,23 +120,26 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
   // back to total_price. We replicate that here so the Layer Cake matches
   // the rest of the dashboard.
   //
-  // limit(50000): Supabase/PostgREST applies a 1000-row default cap. For
-  // high-volume stores that silently truncated the result and produced a
-  // chart that only rendered the most recent month (BUG: Layer Cake showed
-  // just one column).
-  const { data, error } = await supabase
-    .from('shopify_orders')
-    .select('total_price, raw_data->current_total_price, customer_id, customer_email, created_at_shopify')
-    .eq('organization_id', orgId)
-    .gte('created_at_shopify', sixMonthsAgo)
-    .lte('created_at_shopify', monthEnd)
-    .is('cancelled_at', null)
-    .not('financial_status', 'eq', 'voided')
-    .not('financial_status', 'eq', 'refunded')
-    .order('created_at_shopify', { ascending: true })
-    .limit(50000);
-
-  if (error) throw error;
+  // Pagination is mandatory — see paginateSelect() above for the reason.
+  type OrderRow = {
+    total_price: number | string | null;
+    current_total_price?: number | string | null;
+    customer_id: number | null;
+    customer_email: string | null;
+    created_at_shopify: string;
+  };
+  const data = await paginateSelect<OrderRow>(() =>
+    supabase
+      .from('shopify_orders')
+      .select('total_price, raw_data->current_total_price, customer_id, customer_email, created_at_shopify')
+      .eq('organization_id', orgId)
+      .gte('created_at_shopify', sixMonthsAgo)
+      .lte('created_at_shopify', monthEnd)
+      .is('cancelled_at', null)
+      .not('financial_status', 'eq', 'voided')
+      .not('financial_status', 'eq', 'refunded')
+      .order('created_at_shopify', { ascending: true })
+  );
 
   const getNetPrice = (o: any): number => {
     if (o?.current_total_price != null) {
@@ -150,19 +176,19 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
     const batchSize = 200;
     for (let i = 0; i < idArray.length; i += batchSize) {
       const batch = idArray.slice(i, i + batchSize);
-      const { data: priorOrders } = await supabase
-        .from('shopify_orders')
-        .select('customer_id')
-        .eq('organization_id', orgId)
-        .lt('created_at_shopify', sixMonthsAgo)
-        .in('customer_id', batch)
-        .is('cancelled_at', null)
-        .not('financial_status', 'eq', 'voided')
-        .limit(50000);
-      if (priorOrders) {
-        for (const o of priorOrders) {
-          if (o.customer_id != null) returningKeys.add(`id:${o.customer_id}`);
-        }
+      const priorOrders = await paginateSelect<{ customer_id: number | null }>(() =>
+        supabase
+          .from('shopify_orders')
+          .select('customer_id')
+          .eq('organization_id', orgId)
+          .lt('created_at_shopify', sixMonthsAgo)
+          .in('customer_id', batch)
+          .is('cancelled_at', null)
+          .not('financial_status', 'eq', 'voided')
+          .order('created_at_shopify', { ascending: true })
+      );
+      for (const o of priorOrders) {
+        if (o.customer_id != null) returningKeys.add(`id:${o.customer_id}`);
       }
     }
   }
@@ -172,20 +198,20 @@ async function fetchMonthlyLayers(orgId: string): Promise<MonthlyLayer[]> {
     const batchSize = 200;
     for (let i = 0; i < emailArray.length; i += batchSize) {
       const batch = emailArray.slice(i, i + batchSize);
-      const { data: priorOrders } = await supabase
-        .from('shopify_orders')
-        .select('customer_email')
-        .eq('organization_id', orgId)
-        .lt('created_at_shopify', sixMonthsAgo)
-        .in('customer_email', batch)
-        .is('customer_id', null)
-        .is('cancelled_at', null)
-        .not('financial_status', 'eq', 'voided')
-        .limit(50000);
-      if (priorOrders) {
-        for (const o of priorOrders) {
-          if (o.customer_email) returningKeys.add(`email:${o.customer_email.toLowerCase()}`);
-        }
+      const priorOrders = await paginateSelect<{ customer_email: string | null }>(() =>
+        supabase
+          .from('shopify_orders')
+          .select('customer_email')
+          .eq('organization_id', orgId)
+          .lt('created_at_shopify', sixMonthsAgo)
+          .in('customer_email', batch)
+          .is('customer_id', null)
+          .is('cancelled_at', null)
+          .not('financial_status', 'eq', 'voided')
+          .order('created_at_shopify', { ascending: true })
+      );
+      for (const o of priorOrders) {
+        if (o.customer_email) returningKeys.add(`email:${o.customer_email.toLowerCase()}`);
       }
     }
   }
