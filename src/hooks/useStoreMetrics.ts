@@ -233,6 +233,23 @@ async function fetchMetrics(
     }
   }
 
+  // Shopify-compatible "returning" definition: a customer is returning if
+  // their LIFETIME order count is ≥ 2. That includes both customers with
+  // prior-period orders (already in returningKeys above) AND customers
+  // whose first lifetime order was in this period but who reordered within
+  // the same period (no priors, but 2+ orders here).
+  //
+  // Without this second condition our rate underreports vs Shopify Analytics
+  // because we miss the "first purchase + immediate reorder" cohort.
+  const periodOrderCountByCustomer = new Map<string, number>();
+  for (const o of validOrders) {
+    const k = customerKey(o);
+    if (k) periodOrderCountByCustomer.set(k, (periodOrderCountByCustomer.get(k) || 0) + 1);
+  }
+  for (const [k, count] of periodOrderCountByCustomer) {
+    if (count >= 2) returningKeys.add(k);
+  }
+
   const newOrders = validOrders.filter(o => {
     const k = customerKey(o);
     return !k || !returningKeys.has(k);
