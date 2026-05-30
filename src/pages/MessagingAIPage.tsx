@@ -517,7 +517,7 @@ const MessagingAIPage = () => {
   );
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="flex h-[100dvh] max-w-full overflow-hidden bg-background">
       {/* Desktop Sidebar - hidden on mobile */}
       <div className="hidden lg:flex">
         <MessagingSidebar {...sidebarProps} />
@@ -548,13 +548,12 @@ const MessagingAIPage = () => {
       </Sheet>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header - hidden on mobile for conversations view (Telegram-style) */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Desktop header. Mobile views use the compact header below. */}
         <div className={cn(
-          "flex items-center justify-between p-3 lg:p-6 border-b bg-background",
-          activeView === 'conversations' && "hidden lg:flex"
+          "hidden items-center justify-between border-b bg-background lg:flex lg:p-6"
         )}>
-          <div className="flex items-center gap-2 lg:gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             {/* Mobile hamburger menu */}
             <button
               onClick={() => setMobileSidebarOpen(true)}
@@ -565,7 +564,7 @@ const MessagingAIPage = () => {
             <div className="hidden lg:block p-2 rounded-lg bg-indigo-100">
               <MessageSquareMore className="h-6 w-6 text-indigo-600" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-lg lg:text-2xl font-bold text-foreground">Mensajería IA</h1>
               <p className="text-xs lg:text-sm text-muted-foreground hidden sm:block">
                 Gestiona conversaciones de WhatsApp, Instagram y Messenger con IA
@@ -587,15 +586,15 @@ const MessagingAIPage = () => {
 
         {/* Non-conversations views: show mobile header */}
         {activeView !== 'conversations' && (
-          <div className="flex items-center justify-between p-3 border-b bg-background lg:hidden">
-            <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center justify-between border-b bg-background p-3 lg:hidden">
+            <div className="flex min-w-0 items-center gap-2">
               <button
                 onClick={() => setMobileSidebarOpen(true)}
                 className="p-2 rounded-lg hover:bg-muted transition-colors"
               >
                 <Menu className="h-5 w-5" />
               </button>
-              <h1 className="text-lg font-bold text-foreground">Mensajería IA</h1>
+              <h1 className="min-w-0 truncate text-lg font-bold text-foreground">Mensajería IA</h1>
             </div>
           </div>
         )}
@@ -606,7 +605,14 @@ const MessagingAIPage = () => {
         )}
 
         {/* Content area */}
-        <div className="flex-1 overflow-hidden lg:overflow-auto lg:p-6 lg:space-y-6">
+        <div
+          className={cn(
+            "min-w-0 flex-1 min-h-0 lg:p-6 lg:space-y-6",
+            activeView === 'conversations'
+              ? "overflow-hidden lg:overflow-auto"
+              : "overflow-x-hidden overflow-y-auto overscroll-contain"
+          )}
+        >
           {activeView === 'conversations' && (
             <>
               {/* === MOBILE LAYOUT === */}
@@ -801,7 +807,7 @@ const MessagingAIPage = () => {
 
           {activeView === 'train' && <div className="p-4 lg:p-0"><AITrainingPanel /></div>}
 
-          {activeView === 'knowledge' && <div className="p-4 lg:p-0"><KnowledgeBaseEditor /></div>}
+          {activeView === 'knowledge' && <div className="w-full min-w-0 max-w-full overflow-x-hidden p-3 pb-10 sm:p-4 lg:p-0"><KnowledgeBaseEditor /></div>}
 
           {activeView === 'campaigns' && (
             <div className="p-4 lg:p-0">

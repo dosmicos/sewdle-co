@@ -22,6 +22,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { cn } from '@/lib/utils';
 import { KnowledgeImageUpload } from './KnowledgeImageUpload';
 
 interface KnowledgeItem {
@@ -50,6 +51,7 @@ export const KnowledgeBaseEditor = () => {
   const [items, setItems] = useState<KnowledgeItem[]>([]);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [expandedItemIds, setExpandedItemIds] = useState<Set<string>>(new Set());
   const [newItem, setNewItem] = useState<Partial<KnowledgeItem>>({
     title: '',
     content: '',
@@ -334,6 +336,18 @@ export const KnowledgeBaseEditor = () => {
     return CATEGORIES.find(c => c.value === value) || CATEGORIES[0];
   };
 
+  const toggleExpanded = (id: string) => {
+    setExpandedItemIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -343,38 +357,41 @@ export const KnowledgeBaseEditor = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full min-w-0 space-y-6 overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+      <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="hidden shrink-0 rounded-lg bg-purple-100 p-2 dark:bg-purple-900/30 sm:block">
             <BookOpen className="h-5 w-5 text-purple-600 dark:text-purple-400" />
           </div>
-          <div>
-            <h2 className="text-xl font-semibold">Base de Conocimiento</h2>
-            <p className="text-sm text-muted-foreground">
+          <div className="min-w-0">
+            <h2 className="text-2xl font-semibold leading-tight sm:text-xl">Base de Conocimiento</h2>
+            <p className="max-w-[18rem] text-sm leading-snug text-muted-foreground sm:max-w-none">
               Información que la IA usará para responder
             </p>
           </div>
         </div>
         
-        <div className="flex gap-2">
+        <div className="grid w-full min-w-0 grid-cols-2 gap-2 lg:flex lg:w-auto">
           <Button 
             variant="outline" 
             onClick={() => setShowCategoryModal(true)}
             disabled={!!selectedCategory}
+            className="h-10 w-full whitespace-normal px-3 lg:w-auto"
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Agregar conocimiento
+            <Plus className="mr-2 h-4 w-4 shrink-0" />
+            <span className="min-w-0 truncate lg:hidden">Agregar</span>
+            <span className="hidden min-w-0 truncate lg:inline">Agregar conocimiento</span>
           </Button>
           <Button 
             onClick={handleSave} 
             disabled={isSaving || !currentOrganization?.id}
+            className="h-10 w-full px-3 lg:w-auto"
           >
             {isSaving ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
             ) : (
-              <Save className="h-4 w-4 mr-2" />
+              <Save className="mr-2 h-4 w-4 shrink-0" />
             )}
             Guardar
           </Button>
@@ -394,13 +411,13 @@ export const KnowledgeBaseEditor = () => {
 
       {/* Add New Item Form */}
       {selectedCategory && (
-        <Card className="border-dashed border-2 border-primary/50">
-          <CardContent className="pt-6 space-y-4">
+        <Card className="max-w-full overflow-hidden border-dashed border-2 border-primary/50">
+          <CardContent className="space-y-4 p-4 sm:p-6">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="gap-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <Badge variant="outline" className="max-w-full gap-1">
                   {React.createElement(getCategoryInfo(selectedCategory).icon, { className: "h-3 w-3" })}
-                  {getCategoryInfo(selectedCategory).label}
+                  <span className="truncate">{getCategoryInfo(selectedCategory).label}</span>
                 </Badge>
               </div>
               <Button variant="ghost" size="icon" onClick={cancelAdd}>
@@ -410,7 +427,7 @@ export const KnowledgeBaseEditor = () => {
 
             {selectedCategory === 'general' ? (
               <>
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
                   <Label>Título / Tema</Label>
                   <Input
                     placeholder="Ej: Métodos de pago disponibles"
@@ -419,7 +436,7 @@ export const KnowledgeBaseEditor = () => {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
                   <Label>Contenido</Label>
                   <Textarea
                     placeholder="Escribe la información que la IA debe conocer..."
@@ -431,7 +448,7 @@ export const KnowledgeBaseEditor = () => {
               </>
             ) : (
               <>
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
                   <Label>Nombre del producto</Label>
                   <Input
                     placeholder="Ej: Camiseta básica blanca"
@@ -440,7 +457,7 @@ export const KnowledgeBaseEditor = () => {
                   />
                 </div>
 
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
                   <Label>¿Cuándo recomendar este producto?</Label>
                   <Input
                     placeholder="Ej: Cuando pregunte por ropa casual, básicos, outfit diario"
@@ -452,7 +469,7 @@ export const KnowledgeBaseEditor = () => {
                   </p>
                 </div>
 
-                <div className="space-y-2">
+                <div className="min-w-0 space-y-2">
                   <Label>Detalles del producto</Label>
                   <Textarea
                     placeholder="Características, tallas disponibles, precio, materiales, cuidados, etc."
@@ -472,11 +489,11 @@ export const KnowledgeBaseEditor = () => {
               />
             )}
 
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={cancelAdd}>
+            <div className="grid grid-cols-1 gap-2 sm:flex sm:justify-end">
+              <Button variant="outline" onClick={cancelAdd} className="w-full sm:w-auto">
                 Cancelar
               </Button>
-              <Button onClick={addItem}>
+              <Button onClick={addItem} className="w-full sm:w-auto">
                 <Plus className="h-4 w-4 mr-2" />
                 Agregar
               </Button>
@@ -515,14 +532,14 @@ export const KnowledgeBaseEditor = () => {
             const isEditing = editingItemId === item.id;
             
             return (
-              <Card key={item.id} className={isEditing ? 'border-primary' : ''}>
-                <CardContent className="pt-4">
+              <Card key={item.id} className={cn('max-w-full overflow-hidden rounded-md', isEditing ? 'border-primary' : '')}>
+                <CardContent className="p-3 sm:p-6">
                   {isEditing ? (
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
-                        <Badge variant="outline" className="gap-1">
+                        <Badge variant="outline" className="max-w-full gap-1">
                           <Icon className="h-3 w-3" />
-                          {categoryInfo.label}
+                          <span className="truncate">{categoryInfo.label}</span>
                         </Badge>
                         <Button variant="ghost" size="icon" onClick={cancelEditing}>
                           <X className="h-4 w-4" />
@@ -531,7 +548,7 @@ export const KnowledgeBaseEditor = () => {
                       
                       {item.category === 'general' ? (
                         <>
-                          <div className="space-y-2">
+                          <div className="min-w-0 space-y-2">
                             <Label>Título / Tema</Label>
                             <Input
                               value={editingItem.title}
@@ -539,7 +556,7 @@ export const KnowledgeBaseEditor = () => {
                               placeholder="Título del conocimiento"
                             />
                           </div>
-                          <div className="space-y-2">
+                          <div className="min-w-0 space-y-2">
                             <Label>Contenido</Label>
                             <Textarea
                               value={editingItem.content}
@@ -551,7 +568,7 @@ export const KnowledgeBaseEditor = () => {
                         </>
                       ) : (
                         <>
-                          <div className="space-y-2">
+                          <div className="min-w-0 space-y-2">
                             <Label>Nombre del producto</Label>
                             <Input
                               value={editingItem.productName}
@@ -559,7 +576,7 @@ export const KnowledgeBaseEditor = () => {
                               placeholder="Nombre del producto"
                             />
                           </div>
-                          <div className="space-y-2">
+                          <div className="min-w-0 space-y-2">
                             <Label>¿Cuándo recomendar este producto?</Label>
                             <Input
                               value={editingItem.recommendWhen}
@@ -567,7 +584,7 @@ export const KnowledgeBaseEditor = () => {
                               placeholder="Ej: Cuando pregunte por ropa casual"
                             />
                           </div>
-                          <div className="space-y-2">
+                          <div className="min-w-0 space-y-2">
                             <Label>Detalles del producto</Label>
                             <Textarea
                               value={editingItem.content}
@@ -586,32 +603,49 @@ export const KnowledgeBaseEditor = () => {
                           organizationId={currentOrganization.id}
                         />
                       )}
-                      <div className="flex gap-2 justify-end">
-                        <Button variant="outline" onClick={cancelEditing}>
+                      <div className="grid grid-cols-1 gap-2 sm:flex sm:justify-end">
+                        <Button variant="outline" onClick={cancelEditing} className="w-full sm:w-auto">
                           Cancelar
                         </Button>
-                        <Button onClick={() => saveEditing(item.id)}>
+                        <Button onClick={() => saveEditing(item.id)} className="w-full sm:w-auto">
                           <Check className="h-4 w-4 mr-2" />
                           Guardar cambios
                         </Button>
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-2">
-                        <Badge variant="outline" className="gap-1">
+                    <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <Badge variant="outline" className="max-w-full gap-1">
                           <Icon className="h-3 w-3" />
-                          {categoryInfo.label}
+                          <span className="truncate">{categoryInfo.label}</span>
                         </Badge>
-                        <p className="font-medium">{item.category === 'product' ? item.productName || item.title : item.title}</p>
+                        <p className="break-words text-[15px] font-semibold leading-snug [overflow-wrap:anywhere] sm:text-base">
+                          {item.category === 'product' ? item.productName || item.title : item.title}
+                        </p>
                         {item.category === 'product' && item.recommendWhen && (
-                          <p className="text-xs text-primary/80 bg-primary/5 px-2 py-1 rounded-md inline-block">
-                            📌 Recomendar: {item.recommendWhen}
+                          <p className="inline-block max-w-full break-words rounded-md bg-primary/5 px-2 py-1 text-xs text-primary/80 [overflow-wrap:anywhere]">
+                            Recomendar: {item.recommendWhen}
                           </p>
                         )}
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                        <p
+                          className={cn(
+                            "whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]",
+                            !expandedItemIds.has(item.id) && "line-clamp-[10] sm:line-clamp-none"
+                          )}
+                        >
                           {item.content}
                         </p>
+                        {item.content.length > 420 && (
+                          <Button
+                            type="button"
+                            variant="link"
+                            className="h-auto p-0 text-sm"
+                            onClick={() => toggleExpanded(item.id)}
+                          >
+                            {expandedItemIds.has(item.id) ? 'Ver menos' : 'Ver completo'}
+                          </Button>
+                        )}
                         {/* Display images */}
                         {item.images && item.images.length > 0 && (
                           <div className="flex flex-wrap gap-2 mt-2">
@@ -633,7 +667,7 @@ export const KnowledgeBaseEditor = () => {
                           </div>
                         )}
                       </div>
-                      <div className="flex gap-1 shrink-0">
+                      <div className="flex shrink-0 justify-end gap-1 border-t pt-2 sm:border-t-0 sm:pt-0">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -661,20 +695,20 @@ export const KnowledgeBaseEditor = () => {
       )}
 
       {/* Stats by Category */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {CATEGORIES.map(cat => {
           const count = items.filter(i => i.category === cat.value).length;
           const Icon = cat.icon;
           return (
             <Card key={cat.value}>
-              <CardContent className="pt-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-muted">
+              <CardContent className="p-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div className="shrink-0 rounded-lg bg-muted p-2">
                     <Icon className="h-4 w-4 text-muted-foreground" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-2xl font-bold">{count}</p>
-                    <p className="text-xs text-muted-foreground">{cat.label}</p>
+                    <p className="truncate text-xs text-muted-foreground">{cat.label}</p>
                   </div>
                 </div>
               </CardContent>
@@ -692,18 +726,18 @@ export const KnowledgeBaseEditor = () => {
               ¿Qué tipo de información quieres añadir?
             </p>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-3 pt-4">
+          <div className="grid grid-cols-1 gap-3 pt-4 sm:grid-cols-2">
             {CATEGORIES.map(cat => {
               const Icon = cat.icon;
               return (
                 <Button
                   key={cat.value}
                   variant="outline"
-                  className="h-auto py-4 px-4 flex flex-col items-center gap-2 hover:border-primary hover:bg-primary/5"
+                  className="h-auto px-4 py-4 flex flex-col items-center gap-2 whitespace-normal hover:border-primary hover:bg-primary/5"
                   onClick={() => handleCategorySelect(cat.value)}
                 >
                   <Icon className="h-5 w-5 text-muted-foreground" />
-                  <span className="text-sm font-medium text-center">{cat.label}</span>
+                  <span className="text-center text-sm font-medium leading-tight">{cat.label}</span>
                 </Button>
               );
             })}
