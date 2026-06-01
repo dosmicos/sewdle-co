@@ -6,6 +6,7 @@ import {
   buildKpi,
   resolveBogotaWeek,
   summarizeStaticCreatives,
+  toBogotaIsoWindow,
   worstStatus,
   type Kpi,
   type StaticDriveAssetRow,
@@ -53,10 +54,6 @@ function num(value: unknown): number {
   return 0;
 }
 
-function toDateBound(date: string, end = false) {
-  return `${date}T${end ? "00:00:00.000" : "00:00:00.000"}Z`;
-}
-
 async function fetchCurrentTarget(sb: SupabaseAny, organizationId: string, periodStart: string, periodEnd: string): Promise<GrowthWeeklyTarget> {
   const { data, error } = await sb
     .from("growth_weekly_targets")
@@ -91,6 +88,7 @@ async function fetchCurrentTarget(sb: SupabaseAny, organizationId: string, perio
 
 async function fetchProphitMetrics(authHeader: string, organizationId: string, periodStart: string, periodEnd: string) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const currentRange = toBogotaIsoWindow(periodStart, periodEnd);
   const res = await fetch(`${supabaseUrl}/functions/v1/prophit-metrics`, {
     method: "POST",
     headers: {
@@ -99,7 +97,7 @@ async function fetchProphitMetrics(authHeader: string, organizationId: string, p
     },
     body: JSON.stringify({
       organizationId,
-      currentRange: { start: toDateBound(periodStart), end: toDateBound(periodEnd, true) },
+      currentRange,
       previousRange: null,
     }),
   });

@@ -222,6 +222,13 @@ export function resolveBogotaWeek(now = new Date()): BogotaWeekWindow {
   return { label: `Semana actual · ${start} → ${addDays(end, -1)}`, start, end };
 }
 
+export function toBogotaIsoWindow(periodStart: string, periodEndExclusive: string): { start: string; end: string } {
+  return {
+    start: `${periodStart}T05:00:00.000Z`,
+    end: `${periodEndExclusive}T04:59:59.999Z`,
+  };
+}
+
 export function statusRank(status: KpiStatus): number {
   if (status === "red") return 3;
   if (status === "yellow") return 2;
