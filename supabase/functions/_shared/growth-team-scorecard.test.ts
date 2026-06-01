@@ -7,6 +7,7 @@ import {
   buildKpi,
   resolveBogotaWeek,
   summarizeStaticCreatives,
+  toBogotaIsoWindow,
 } from "./growth-team-scorecard.ts";
 
 Deno.test("attributeDrivePerson maps Angie by owner and keeps info@dosmicos shared", () => {
@@ -68,4 +69,11 @@ Deno.test("resolveBogotaWeek returns approved non-linear June milestone window",
   assertEquals(week.start, "2026-06-08");
   assertEquals(week.end, "2026-06-15");
   assert(week.label.includes("Semana 2"));
+});
+
+Deno.test("toBogotaIsoWindow maps inclusive/exclusive Bogotá dates to UTC instants", () => {
+  assertEquals(toBogotaIsoWindow("2026-06-01", "2026-06-08"), {
+    start: "2026-06-01T05:00:00.000Z",
+    end: "2026-06-08T04:59:59.999Z",
+  });
 });
