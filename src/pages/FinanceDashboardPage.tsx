@@ -165,7 +165,6 @@ const FinanceDashboardPage: React.FC = () => {
   const [metaModalOpen, setMetaModalOpen] = useState(false);
   const [googleModalOpen, setGoogleModalOpen] = useState(false);
   const [tiktokModalOpen, setTiktokModalOpen] = useState(false);
-  const [channelMetricsOpen, setChannelMetricsOpen] = useState(false);
   const [tiktokBreakdownOpen, setTiktokBreakdownOpen] = useState(false);
 
   // Auto-open modals if returning from OAuth callback
@@ -438,16 +437,18 @@ const FinanceDashboardPage: React.FC = () => {
             }}
             formatCOP={formatCOP}
           />
-          <ForecastChart
-            cmData={cmData}
-            target={monthlyTargets.target}
-            formatCOP={formatCOP}
-          />
-          <AdSpendPaceChart
-            cmData={cmData}
-            target={monthlyTargets.target}
-            formatCOP={formatCOP}
-          />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ForecastChart
+              cmData={cmData}
+              target={monthlyTargets.target}
+              formatCOP={formatCOP}
+            />
+            <AdSpendPaceChart
+              cmData={cmData}
+              target={monthlyTargets.target}
+              formatCOP={formatCOP}
+            />
+          </div>
         </section>
 
         {/* ========== SECTION 2: FOUR QUARTER VIEW ========== */}
@@ -486,61 +487,54 @@ const FinanceDashboardPage: React.FC = () => {
         </section>
 
         {/* ========== SECTION 5: CHANNEL METRICS (Contexto) ========== */}
+        {/* Always expanded — the user wants this visible at a glance, no toggle. */}
         <section>
-          <Collapsible open={channelMetricsOpen} onOpenChange={setChannelMetricsOpen}>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <CollapsibleTrigger asChild>
-                  <button className="flex items-center gap-2 group cursor-pointer">
-                    {channelMetricsOpen
-                      ? <ChevronDown className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
-                      : <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
-                    }
-                    <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider group-hover:text-gray-700">
-                      Channel Metrics (Contexto)
-                    </h3>
-                    {metaConnection.isConnected && (
-                      <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">
-                        Meta conectado
-                      </Badge>
-                    )}
-                  </button>
-                </CollapsibleTrigger>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-blue-600 hover:text-blue-700"
-                  onClick={() => navigate('/ad-performance')}
-                >
-                  Ver detalle
-                  <ExternalLink className="h-3 w-3 ml-1" />
-                </Button>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wider">
+                  Channel Metrics (Contexto)
+                </h3>
+                {metaConnection.isConnected && (
+                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-xs">
+                    Meta conectado
+                  </Badge>
+                )}
               </div>
-              <p className="text-xs text-gray-400 italic ml-6">
-                Channel ROAS es contexto, no driver de decisiones. Usa CM y MER para gobernar.
-              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-blue-600 hover:text-blue-700"
+                onClick={() => navigate('/ad-performance')}
+              >
+                Ver detalle
+                <ExternalLink className="h-3 w-3 ml-1" />
+              </Button>
             </div>
-            <CollapsibleContent className="mt-4 space-y-4">
-              <AttributionTable rows={attributionRows} formatCurrency={formatCOP} />
-              {!metaConnection.isConnected && (
-                <Card className="border-dashed border-blue-200 bg-blue-50/50">
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-blue-900">Meta Ads no conectado</p>
-                      <p className="text-xs text-blue-700 mt-0.5">Conecta tu cuenta para ver metricas reales de ads</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      className="bg-[#1877F2] hover:bg-[#166FE5] text-white"
-                      onClick={() => setMetaModalOpen(true)}
-                    >
-                      Conectar
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
-            </CollapsibleContent>
-          </Collapsible>
+            <p className="text-xs text-gray-400 italic">
+              Channel ROAS es contexto, no driver de decisiones. Usa CM y MER para gobernar.
+            </p>
+          </div>
+          <div className="mt-4 space-y-4">
+            <AttributionTable rows={attributionRows} formatCurrency={formatCOP} />
+            {!metaConnection.isConnected && (
+              <Card className="border-dashed border-blue-200 bg-blue-50/50">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">Meta Ads no conectado</p>
+                    <p className="text-xs text-blue-700 mt-0.5">Conecta tu cuenta para ver metricas reales de ads</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="bg-[#1877F2] hover:bg-[#166FE5] text-white"
+                    onClick={() => setMetaModalOpen(true)}
+                  >
+                    Conectar
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </section>
 
         {/* ========== SECTION 6: TIKTOK ADS BREAKDOWN (Ad-level) ========== */}
