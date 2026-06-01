@@ -29,6 +29,7 @@ import { useMonthlyTargets } from '@/hooks/useMonthlyTargets';
 import { useProphitMetrics } from '@/hooks/useProphitMetrics';
 import { useCustomerHealth } from '@/hooks/useCustomerHealth';
 import { usePaymentGatewayBreakdown } from '@/hooks/usePaymentGatewayBreakdown';
+import { useGrowthTeamScorecard } from '@/hooks/useGrowthTeamScorecard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -160,6 +161,7 @@ const FinanceDashboardPage: React.FC = () => {
   );
 
   const paymentGatewayBreakdown = usePaymentGatewayBreakdown(dateRange.current);
+  const teamScorecard = useGrowthTeamScorecard();
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [metaModalOpen, setMetaModalOpen] = useState(false);
@@ -421,6 +423,37 @@ const FinanceDashboardPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        <Card className="border-blue-100 bg-blue-50/60 shadow-sm">
+          <CardContent className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="bg-blue-600 text-white hover:bg-blue-600">Team Scorecard</Badge>
+                {teamScorecard.data && (
+                  <Badge variant="outline" className={teamScorecard.data.blockers.some((b) => b.severity === 'red')
+                    ? 'border-red-200 bg-red-100 text-red-800'
+                    : teamScorecard.data.blockers.length > 0
+                      ? 'border-amber-200 bg-amber-100 text-amber-800'
+                      : 'border-emerald-200 bg-emerald-100 text-emerald-800'}>
+                    {teamScorecard.data.blockers.some((b) => b.severity === 'red') ? 'Rojo' : teamScorecard.data.blockers.length > 0 ? 'Amarillo' : 'Verde'}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm font-medium text-slate-900">
+                {teamScorecard.data
+                  ? `${teamScorecard.data.period.label}: revenue ${formatCOP(teamScorecard.data.company.revenue.actual)} / ${formatCOP(teamScorecard.data.company.revenue.target)} · statics ${teamScorecard.data.staticCreatives.total}/${teamScorecard.data.staticCreatives.target}`
+                  : 'Scorecard semanal por Julian, Sebastián, Angie y Ana María.'}
+              </p>
+              <p className="text-xs text-slate-500">
+                KPIs por owner, milestones semanales no lineales y conteo Drive de imágenes estáticas con UGC excluido.
+              </p>
+            </div>
+            <Button size="sm" onClick={() => navigate('/team-scorecard')} className="shrink-0">
+              Ver Team Scorecard
+              <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+            </Button>
+          </CardContent>
+        </Card>
 
         {/* ========== SECTION 1: THE SCOREBOARD ========== */}
         <section className="space-y-4">
