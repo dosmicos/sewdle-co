@@ -420,6 +420,11 @@ serve(async (req) => {
       "target_country",
       "funnel_stage",
       "offer_type",
+      "angle_family",
+      "specific_angle",
+      "hook_pattern",
+      "buyer_problem",
+      "proof_type",
     ];
 
     const PERIOD_CONFIGS = [

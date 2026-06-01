@@ -37,7 +37,12 @@ interface RawRow {
   spend: number;
   revenue: number;
   purchases: number;
-  ad_tags: { product: string | null; product_name: string | null } | null;
+}
+
+interface ProductTagRow {
+  ad_id: string;
+  product: string | null;
+  product_name: string | null;
 }
 
 async function fetchProductMVPData(orgId: string): Promise<ProductMVP[]> {
@@ -48,10 +53,15 @@ async function fetchProductMVPData(orgId: string): Promise<ProductMVP[]> {
   const midStr = format(fifteenDaysAgo, 'yyyy-MM-dd');
   const endStr = format(now, 'yyyy-MM-dd');
 
-  // Fetch ad_performance_daily joined with ad_tags for last 30 days
+  // Fetch performance and tags separately instead of relying on an embedded
+  // Supabase join. The Intelligence page already proves product tags can exist
+  // in performance_patterns, but the Product MVP card was empty when the
+  // ad_performance_daily → ad_tags relationship was missing/stale in PostgREST.
+  // A client-side join by ad_id matches the compute-ad-intelligence edge
+  // function and keeps the matrix resilient to schema-cache/FK drift.
   const { data, error } = await supabase
     .from('ad_performance_daily')
-    .select('ad_id, date, spend, revenue, purchases, ad_tags!inner(product, product_name)')
+    .select('ad_id, date, spend, revenue, purchases')
     .eq('organization_id', orgId)
     .gte('date', startStr)
     .lte('date', endStr);
@@ -62,6 +72,30 @@ async function fetchProductMVPData(orgId: string): Promise<ProductMVP[]> {
   }
 
   if (!data || data.length === 0) return [];
+
+  const adIds = Array.from(new Set((data as unknown as RawRow[]).map((row) => row.ad_id).filter(Boolean)));
+  if (adIds.length === 0) return [];
+
+  const tagsMap = new Map<string, ProductTagRow>();
+  const TAG_BATCH_SIZE = 500;
+
+  for (let i = 0; i < adIds.length; i += TAG_BATCH_SIZE) {
+    const batch = adIds.slice(i, i + TAG_BATCH_SIZE);
+    const { data: tagsData, error: tagsError } = await supabase
+      .from('ad_tags')
+      .select('ad_id, product, product_name')
+      .eq('organization_id', orgId)
+      .in('ad_id', batch);
+
+    if (tagsError) {
+      console.error('Error fetching product tags for MVP data:', tagsError);
+      return [];
+    }
+
+    for (const tag of (tagsData || []) as ProductTagRow[]) {
+      tagsMap.set(tag.ad_id, tag);
+    }
+  }
 
   // Group by product
   const productMap = new Map<
@@ -80,7 +114,9 @@ async function fetchProductMVPData(orgId: string): Promise<ProductMVP[]> {
   >();
 
   for (const row of data as unknown as RawRow[]) {
-    const tags = row.ad_tags;
+    const tags = tagsMap.get(row.ad_id);
+    if (!tags?.product && !tags?.product_name) continue;
+
     const productName = tags?.product_name || tags?.product || 'Sin Producto';
     const normalizedName = productName.trim() || 'Sin Producto';
 
