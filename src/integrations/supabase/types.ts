@@ -4931,6 +4931,7 @@ export type Database = {
           avatar_url: string | null
           avg_likes: number | null
           avg_views: number | null
+          bre_b: string | null
           city: string | null
           content_types: string[] | null
           created_at: string
@@ -4953,6 +4954,7 @@ export type Database = {
           avatar_url?: string | null
           avg_likes?: number | null
           avg_views?: number | null
+          bre_b?: string | null
           city?: string | null
           content_types?: string[] | null
           created_at?: string
@@ -4975,6 +4977,7 @@ export type Database = {
           avatar_url?: string | null
           avg_likes?: number | null
           avg_views?: number | null
+          bre_b?: string | null
           city?: string | null
           content_types?: string[] | null
           created_at?: string

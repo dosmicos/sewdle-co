@@ -47,6 +47,7 @@ export const useUgcCreators = () => {
           platform: formData.platform || 'instagram',
           content_types: formData.content_types || null,
           tiktok_handle: formData.tiktok_handle || null,
+          bre_b: formData.bre_b || null,
         })
         .select()
         .single();
@@ -90,6 +91,7 @@ export const useUgcCreators = () => {
           platform: formData.platform || 'instagram',
           content_types: formData.content_types || null,
           tiktok_handle: formData.tiktok_handle || null,
+          bre_b: formData.bre_b || null,
         })
         .eq('id', id)
         .eq('organization_id', orgId)

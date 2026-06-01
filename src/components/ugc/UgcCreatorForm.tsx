@@ -43,6 +43,7 @@ export const UgcCreatorForm: React.FC<UgcCreatorFormProps> = ({
   const [platform, setPlatform] = useState(creator?.platform || 'instagram');
   const [contentTypes, setContentTypes] = useState<string[]>(creator?.content_types || []);
   const [tiktokHandle, setTiktokHandle] = useState(creator?.tiktok_handle || '');
+  const [breB, setBreB] = useState(creator?.bre_b || '');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
   const { tags: allTags } = useUgcCreatorTags();
@@ -60,6 +61,7 @@ export const UgcCreatorForm: React.FC<UgcCreatorFormProps> = ({
       setPlatform(creator?.platform || 'instagram');
       setContentTypes(creator?.content_types || []);
       setTiktokHandle(creator?.tiktok_handle || '');
+      setBreB(creator?.bre_b || '');
       setSelectedTagIds([]); // reset tags on open
     }
   }, [open, creator]);
@@ -91,6 +93,7 @@ export const UgcCreatorForm: React.FC<UgcCreatorFormProps> = ({
       platform: platform || 'instagram',
       content_types: contentTypes.length > 0 ? contentTypes : undefined,
       tiktok_handle: tiktokHandle.replace('@', '').trim() || undefined,
+      bre_b: breB.trim() || undefined,
       tagIds: selectedTagIds.length > 0 ? selectedTagIds : undefined,
     });
   };
@@ -181,6 +184,15 @@ export const UgcCreatorForm: React.FC<UgcCreatorFormProps> = ({
               <Label htmlFor="city">Ciudad</Label>
               <Input id="city" value={city} onChange={(e) => setCity(e.target.value)} />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="bre_b">Bre-B (llave de pago)</Label>
+            <Input
+              id="bre_b"
+              value={breB}
+              onChange={(e) => setBreB(e.target.value)}
+              placeholder="@usuario, #3001234567, documento o correo"
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="notes">Notas</Label>

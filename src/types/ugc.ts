@@ -18,6 +18,7 @@ export interface UgcCreator {
   tiktok_handle: string | null;
   last_contact_date: string | null;
   access_code: string | null;
+  bre_b: string | null;
   created_at: string;
   updated_at: string;
 
@@ -136,6 +137,7 @@ export interface UgcCreatorFormData {
   platform?: string;
   content_types?: string[];
   tiktok_handle?: string;
+  bre_b?: string;
   tagIds?: string[];
 }
 

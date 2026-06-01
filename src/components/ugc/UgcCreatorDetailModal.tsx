@@ -424,6 +424,26 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
                   </div>
                 </div>
               )}
+              <div className="col-span-2">
+                <span className="text-muted-foreground">Bre-B <span className="text-xs">(llave de pago)</span>:</span>
+                {creator.bre_b ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <code className="font-mono font-bold text-sm bg-muted px-2 py-0.5 rounded break-all">
+                      {creator.bre_b}
+                    </code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(creator.bre_b!);
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2 flex-shrink-0"
+                    >
+                      Copiar
+                    </button>
+                  </div>
+                ) : (
+                  <p className="font-medium text-muted-foreground">Sin configurar</p>
+                )}
+              </div>
               <div>
                 <span className="text-muted-foreground">Plataforma:</span>
                 <p className="font-medium capitalize">{creator.platform || 'Instagram'}</p>
