@@ -57,6 +57,8 @@ export function useAdCreativeSync() {
         queryClient.invalidateQueries({ queryKey: ['ad-performance'] });
         queryClient.invalidateQueries({ queryKey: ['ad-tags'] });
         queryClient.invalidateQueries({ queryKey: ['ad-intelligence'] });
+        queryClient.invalidateQueries({ queryKey: ['product-mvp'] });
+        queryClient.invalidateQueries({ queryKey: ['angle-winners'] });
         return true;
       } else {
         toast.error(data.error || 'Error al sincronizar creative/tags');

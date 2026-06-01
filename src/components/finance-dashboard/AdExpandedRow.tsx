@@ -13,6 +13,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { type AdPerformanceRow } from '@/hooks/useAdPerformance';
 import { type AdTagData, type AdCreativeData, type AdLifecycleData } from '@/hooks/useAdTags';
+import { getSpecificAngleLabel } from '@/lib/angleIntelligence';
 
 interface Props {
   ad: AdPerformanceRow;
@@ -216,6 +217,39 @@ const AdExpandedRow: React.FC<Props> = ({
               </div>
               {tagData.hook_description && (
                 <InfoItem label="Hook" value={tagData.hook_description} />
+              )}
+              {(tagData.specific_angle || tagData.angle_family || tagData.hook_pattern) && (
+                <div className="rounded-md bg-purple-50 border border-purple-100 p-2 space-y-1">
+                  <p className="text-[10px] font-semibold text-purple-700 uppercase tracking-wide">
+                    AngleOS
+                  </p>
+                  <InfoItem label="Specific angle" value={getSpecificAngleLabel(tagData.specific_angle)} />
+                  <div className="flex flex-wrap gap-1">
+                    {tagData.angle_family && (
+                      <Badge variant="secondary" className="text-[10px] bg-purple-100 text-purple-700">
+                        {tagData.angle_family.replace(/_/g, ' ')}
+                      </Badge>
+                    )}
+                    {tagData.hook_pattern && (
+                      <Badge variant="secondary" className="text-[10px] bg-white text-purple-700 border border-purple-100">
+                        {tagData.hook_pattern.replace(/_/g, ' ')}
+                      </Badge>
+                    )}
+                    {tagData.angle_confidence && (
+                      <Badge variant="outline" className="text-[10px] border-purple-200 text-purple-700">
+                        {tagData.angle_confidence} confidence
+                      </Badge>
+                    )}
+                    {tagData.needs_human_review && (
+                      <Badge variant="outline" className="text-[10px] border-amber-200 text-amber-700">
+                        review
+                      </Badge>
+                    )}
+                  </div>
+                  <InfoItem label="Buyer problem" value={tagData.buyer_problem?.replace(/_/g, ' ')} />
+                  <InfoItem label="Desired outcome" value={tagData.desired_outcome?.replace(/_/g, ' ')} />
+                  <InfoItem label="Proof" value={tagData.proof_type?.replace(/_/g, ' ')} />
+                </div>
               )}
               <div className="flex items-center gap-2 mt-1">
                 <span className="text-[10px] text-gray-400">
