@@ -160,7 +160,10 @@ serve(async (req) => {
       `Loaded ${perfData.length} daily rows, ${tagsMap.size} tags`
     );
 
-    const today = new Date().toISOString().split("T")[0];
+    const today = perfData.reduce((latest: string, row: any) => {
+      const rowDate = String(row.date || "");
+      return rowDate > latest ? rowDate : latest;
+    }, "");
 
     // ═══════════════════════════════════════════════════════════
     // 1. Ad Lifecycle
