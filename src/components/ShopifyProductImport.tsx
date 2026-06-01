@@ -13,6 +13,7 @@ interface ProductVariant {
   size: string;
   color: string;
   sku: string;
+  shopify_variant_id?: number; // Shopify variant ID — usado como fallback de SKU cuando no hay SKU configurado
   price: number;
   stock_quantity: number;
 }
@@ -85,6 +86,7 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
             size: variant.title !== 'Default Title' ? variant.title : '',
             color: variant.option2 || '',
             sku: variant.sku || '',
+            shopify_variant_id: variant.id, // ID numérico de Shopify — fallback de SKU
             price: parseFloat(variant.price || '0'),
             stock_quantity: variant.stock_quantity || 0
           }))
@@ -184,24 +186,36 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
     try {
       console.log('Importing product with original Shopify data:', product);
 
-      // CAMBIO CRÍTICO: Usar el SKU original de Shopify (primera variante)
+      // Determinar SKU del producto (se mantiene igual para compatibilidad)
       const mainVariant = product.variants[0];
       const originalProductSku = mainVariant?.sku || `SHOPIFY-${product.id}`;
 
       console.log('Using original product SKU:', originalProductSku);
 
-      // Verificar si el producto ya existe por SKU original
-      const { data: existingProduct } = await supabase
-        .from('products')
-        .select('id')
-        .eq('sku', originalProductSku)
-        .maybeSingle();
+      // Verificar si el producto ya existe — intentar con SKU actual y también formato anterior
+      const checkBySkus = async (skus: string[]) => {
+        for (const sku of skus) {
+          const { data, error } = await supabase
+            .from('products')
+            .select('id, sku')
+            .eq('sku', sku)
+            .maybeSingle();
+          if (error) console.warn('Check existing product error (continuing):', error.message);
+          if (data) return data;
+        }
+        return null;
+      };
+
+      // Incluir formato de fallback "SHOPIFY-{id}" para detectar importaciones previas
+      const skusToCheck = [originalProductSku];
+      if (!mainVariant?.sku) skusToCheck.push(`SHOPIFY-${product.id}`);
+
+      const existingProduct = await checkBySkus(skusToCheck);
 
       if (existingProduct) {
         toast({
           title: "Producto ya existe",
-          description: `${product.title} ya está en tu catálogo con SKU ${originalProductSku}.`,
-          variant: "destructive",
+          description: `${product.title} ya está en tu catálogo.`,
         });
         return;
       }
@@ -226,6 +240,14 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
 
       if (productError) {
         console.error('Error creating product:', productError);
+        // Detectar violación de constraint única (producto ya existe con ese SKU)
+        if (productError.code === '23505') {
+          toast({
+            title: "Producto ya existe",
+            description: `${product.title} ya está en tu catálogo.`,
+          });
+          return;
+        }
         throw productError;
       }
 
@@ -234,9 +256,11 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
       // Crear las variantes con SKUs originales de Shopify
       if (product.variants && product.variants.length > 0) {
         const variants = product.variants.map((variant, index) => {
-          // CAMBIO CRÍTICO: Usar el SKU original de cada variante de Shopify
-          const originalVariantSku = variant.sku || `${originalProductSku}-V${index + 1}`;
-          
+          // Prioridad: SKU real de Shopify → ID numérico de variante → fallback con prefijo
+          const originalVariantSku = variant.sku
+            || (variant.shopify_variant_id ? String(variant.shopify_variant_id) : null)
+            || `${originalProductSku}-V${index + 1}`;
+
           console.log(`Variant ${index + 1} original SKU:`, originalVariantSku);
           
           return {
@@ -407,10 +431,10 @@ const ShopifyProductImport = ({ onProductSelect }: ShopifyProductImportProps) =>
                       {product.variants.length} variantes
                     </Badge>
                   )}
-                  {/* Mostrar SKU principal para verificación */}
-                  {product.variants?.[0]?.sku && (
+                  {/* Mostrar SKU / ID de variante para verificación */}
+                  {(product.variants?.[0]?.sku || product.variants?.[0]?.shopify_variant_id) && (
                     <div className="text-xs text-gray-500 mt-1">
-                      SKU: {product.variants[0].sku}
+                      SKU: {product.variants[0].sku || String(product.variants[0].shopify_variant_id)}
                     </div>
                   )}
                 </Card>

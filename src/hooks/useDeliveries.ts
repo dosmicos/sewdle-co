@@ -82,7 +82,13 @@ export const useDeliveries = () => {
           *,
           orders (
             id,
-            order_number
+            order_number,
+            store_id,
+            stores (
+              id,
+              name,
+              country_code
+            )
           ),
           workshops (
             id,
@@ -188,7 +194,13 @@ export const useDeliveries = () => {
           *,
           orders (
             id,
-            order_number
+            order_number,
+            store_id,
+            stores (
+              id,
+              name,
+              country_code
+            )
           ),
           workshops (
             id,

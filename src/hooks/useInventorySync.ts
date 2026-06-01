@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 
 interface SyncInventoryData {
   deliveryId: string;
+  storeId?: string;
   approvedItems: {
     variantId: string;
     skuVariant: string;

@@ -46,6 +46,10 @@ interface DeliveryDetailsProps {
 const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated, onPrevious, onNext }: DeliveryDetailsProps) => {
   const navigate = useNavigate();
   const [delivery, setDelivery] = useState(initialDelivery);
+
+  // Detectar si es una entrega de la tienda USA → imprimir 2 etiquetas por unidad
+  const isUsaDelivery = delivery?.orders?.stores?.country_code === 'US';
+  const labelsPerUnit = isUsaDelivery ? 2 : 1;
   const [isEditing, setIsEditing] = useState(false);
   const [isReEditingQuality, setIsReEditingQuality] = useState(false); // Nuevo estado para re-edición
   const [quantityData, setQuantityData] = useState<any>({});
@@ -409,6 +413,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     try {
       const syncData = {
         deliveryId: delivery.id,
+        storeId: delivery?.orders?.store_id ?? undefined,
         approvedItems: pendingVariants.map((item: any) => ({
           variantId: item.order_items?.product_variants?.id,
           skuVariant: item.order_items?.product_variants?.sku_variant,
@@ -495,6 +500,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     try {
       const syncData = {
         deliveryId: delivery.id,
+        storeId: delivery?.orders?.store_id ?? undefined,
         approvedItems: [{
           variantId: deliveredItem.order_items?.product_variants?.id,
           skuVariant: deliveredItem.order_items?.product_variants?.sku_variant,
@@ -689,7 +695,10 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
 
     if (quantity <= 0) return;
 
-    const labels = Array.from({ length: quantity }, (_, i) => ({
+    // USA: imprimir 2 etiquetas por unidad aprobada (para pegar en producto y en caja)
+    const totalLabels = quantity * labelsPerUnit;
+
+    const labels = Array.from({ length: totalLabels }, (_, i) => ({
       sku,
       productName,
       variant: variantText,
@@ -886,6 +895,7 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
 
       const syncData = {
         deliveryId: delivery.id,
+        storeId: delivery?.orders?.store_id ?? undefined,
         approvedItems: itemsToSync.map(item => ({
           variantId: item.order_items?.product_variants?.id,
           skuVariant: item.order_items?.product_variants?.sku_variant,
@@ -1482,10 +1492,10 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
                                   variant="outline"
                                   onClick={() => handlePrintItemBarcodes(item)}
                                   className="text-xs gap-1"
-                                  title="Imprimir códigos de barras"
+                                  title={isUsaDelivery ? "Imprimir 2 etiquetas por unidad (USA)" : "Imprimir códigos de barras"}
                                 >
                                   <Printer className="w-3 h-3" />
-                                  Imprimir ({item.quantity_approved})
+                                  Imprimir ({item.quantity_approved * labelsPerUnit}){isUsaDelivery ? ' ×2' : ''}
                                 </Button>
                               )}
                             </div>

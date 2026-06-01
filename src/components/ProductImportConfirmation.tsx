@@ -9,6 +9,7 @@ interface ProductVariant {
   size: string;
   color: string;
   sku: string;
+  shopify_variant_id?: number;
   price: number;
   stock_quantity: number;
 }
@@ -106,11 +107,12 @@ const ProductImportConfirmation = ({
                           </span>
                         </div>
                       )}
-                      {variant.sku && (
+                      {(variant.sku || variant.shopify_variant_id) && (
                         <div className="flex items-center gap-2">
                           <Hash className="w-3 h-3 text-gray-500" />
                           <span className="text-sm">
-                            <span className="font-medium">SKU:</span> {variant.sku}
+                            <span className="font-medium">SKU:</span>{' '}
+                            {variant.sku || String(variant.shopify_variant_id)}
                           </span>
                         </div>
                       )}
