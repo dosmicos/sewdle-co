@@ -122,7 +122,7 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
     setPreviewOpen(true);
   };
 
-  const downloadContent = async () => {
+  const downloadContent = () => {
     if (!previewOriginalUrl) return;
 
     const normalizedUrl = previewOriginalUrl.split('?')[0];
@@ -132,22 +132,18 @@ export const UgcCreatorDetailModal: React.FC<UgcCreatorDetailModalProps> = ({
     const filename = `UGC-@${handle}.${extension}`;
     const proxyUrl = `${SUPABASE_URL}/functions/v1/proxy-ugc-download?url=${encodeURIComponent(previewOriginalUrl)}&filename=${encodeURIComponent(filename)}`;
 
+    // El proxy ya devuelve Content-Disposition: attachment con el nombre deseado,
+    // así que una navegación directa dispara la descarga nativa del navegador
+    // (streaming, sin cargar el archivo entero en memoria — los videos pesan decenas de MB).
     try {
-      const response = await fetch(proxyUrl);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const blob = await response.blob();
-      if (!blob.size) throw new Error('Archivo vacío');
-
-      const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = objectUrl;
-      link.download = filename;
+      link.href = proxyUrl;
+      link.download = filename; // hint; cross-origin lo ignora pero Content-Disposition manda
       link.rel = 'noopener noreferrer';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(objectUrl);
+      toast.success(`Descargando ${filename}`);
     } catch (error) {
       console.error('Download error:', error);
       window.open(proxyUrl, '_blank', 'noopener,noreferrer');
