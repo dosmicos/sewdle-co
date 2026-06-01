@@ -3,9 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, ChevronDown } from 'lucide-react';
-import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DatePreset, type FinanceDateRange } from '@/hooks/useFinanceDateRange';
+import { formatBogotaDateLabel } from '@/lib/bogotaDateRange';
 import { cn } from '@/lib/utils';
 
 interface FinanceDatePickerProps {
@@ -52,7 +52,7 @@ const FinanceDatePicker: React.FC<FinanceDatePickerProps> = ({ dateRange }) => {
   };
 
   const displayLabel = dateRange.preset === 'custom'
-    ? `${format(dateRange.current.start, 'dd MMM', { locale: es })} - ${format(dateRange.current.end, 'dd MMM', { locale: es })}`
+    ? `${formatBogotaDateLabel(dateRange.current.start, { day: '2-digit', month: 'short' })} - ${formatBogotaDateLabel(dateRange.current.end, { day: '2-digit', month: 'short' })}`
     : presetLabels[dateRange.preset];
 
   return (
@@ -110,7 +110,7 @@ const FinanceDatePicker: React.FC<FinanceDatePickerProps> = ({ dateRange }) => {
         </PopoverContent>
       </Popover>
       <span className="h-9 px-3 text-sm font-medium text-gray-400 flex items-center" title="Comparación automática con el período anterior">
-        vs {format(dateRange.previous.start, 'dd/MM', { locale: es })} – {format(dateRange.previous.end, 'dd/MM', { locale: es })}
+        vs {formatBogotaDateLabel(dateRange.previous.start, { day: '2-digit', month: '2-digit' })} – {formatBogotaDateLabel(dateRange.previous.end, { day: '2-digit', month: '2-digit' })}
       </span>
     </div>
   );
