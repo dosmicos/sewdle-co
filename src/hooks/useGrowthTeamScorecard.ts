@@ -31,6 +31,17 @@ export interface StaticCreativeProductSummary {
   lastUploadAt: string | null;
 }
 
+export interface GrowthRiskMatrixRow {
+  key: string;
+  label: string;
+  owner: string;
+  actual: number | null;
+  target: number | null;
+  status: KpiStatus;
+  trigger: string;
+  valueType: 'cop' | 'number' | 'percent' | 'mer';
+}
+
 export interface GrowthTeamScorecardResponse {
   period: { label: string; start: string; end: string };
   milestone: {
@@ -46,11 +57,14 @@ export interface GrowthTeamScorecardResponse {
     static_published_target: number;
   };
   company: Record<string, GrowthKpi>;
-  owners: {
-    julian: OwnerScorecard;
-    sebastian: OwnerScorecard;
-    angie: OwnerScorecard;
-    anaMaria: OwnerScorecard;
+  owners: Record<string, OwnerScorecard> & {
+    julian?: OwnerScorecard;
+    sebastian?: OwnerScorecard;
+    creativeProduction?: OwnerScorecard;
+    kira?: OwnerScorecard;
+    hermes?: OwnerScorecard;
+    angie?: OwnerScorecard;
+    anaMaria?: OwnerScorecard;
   };
   staticCreatives: {
     total: number;
@@ -59,8 +73,9 @@ export interface GrowthTeamScorecardResponse {
     byProduct: StaticCreativeProductSummary[];
     latestAssets: Array<{ name: string; productName: string; personLabel: string; createdTime: string; webViewLink: string | null }>;
   };
+  riskMatrix?: GrowthRiskMatrixRow[];
   blockers: Array<{ severity: 'red' | 'yellow'; owner: string; message: string; due?: string }>;
-  metadata: { computedAt: string; sources: string[]; missingMetrics: string[]; notes?: string[] };
+  metadata: { computedAt: string; sources: string[]; missingMetrics: string[]; notes?: string[]; orders?: number | null };
 }
 
 export interface UseGrowthTeamScorecardOptions {
@@ -91,7 +106,7 @@ export function useGrowthTeamScorecard(options: UseGrowthTeamScorecardOptions = 
     refetchOnWindowFocus: false,
   });
 
-  const syncDriveStatics = useMutation({
+  const syncDriveStatics = useMutation<unknown, Error, number | undefined>({
     mutationFn: async (daysBack = 45) => {
       const { data, error } = await supabase.functions.invoke('sync-drive-static-creatives', {
         body: { organizationId: orgId, daysBack },

@@ -13,3 +13,17 @@ Deno.test("Growth Team Scorecard is routed, visible in sidebar, and linked from 
   assert(sidebar.includes("team-scorecard"), "sidebar must derive active team-scorecard section");
   assert(home.includes("Ver Team Scorecard"), "summary home must link to the new scorecard page");
 });
+
+Deno.test("Growth Team Scorecard renders June 600M owner contract", async () => {
+  const page = await Deno.readTextFile("src/pages/GrowthTeamScorecardPage.tsx");
+  const edge = await Deno.readTextFile("supabase/functions/growth-team-scorecard/index.ts");
+
+  assert(page.includes("Junio 600M Operating Dashboard"), "page must use the June 600M dashboard framing");
+  assert(page.includes("Risk matrix — triggers automáticos"), "page must expose the operating risk matrix");
+  assert(page.includes("Kira") && page.includes("dirección creativa IA"), "page must show Kira as AI creative direction");
+  assert(page.includes("Angie + Ana María") && page.includes("productoras 50/50"), "page must show Angie + Ana María as 50/50 production");
+  assert(page.includes("Data no disponible = action item"), "missing metrics must be explicit action items");
+  assert(edge.includes("static_creatives_target: 30"), "edge fallback must use 30 statics/week");
+  assert(edge.includes("static_published_target: 24"), "edge fallback must use 24 published/tested statics/week");
+  assert(edge.includes("riskMatrix"), "edge response must include riskMatrix");
+});

@@ -42,10 +42,10 @@ Deno.test("summarizeStaticCreatives counts current window by product/person and 
     { drive_file_id: "3", product_key: "combos", product_name: "Combos", source_folder_id: "folder-combos", file_name: "c.webp", created_time: "2026-05-31T10:00:00Z", attributed_person_key: "angie", attributed_person_label: "Angie", web_view_link: "https://drive/3" },
   ];
 
-  const summary = summarizeStaticCreatives(assets, folders, "2026-06-01", "2026-06-08", 25);
+  const summary = summarizeStaticCreatives(assets, folders, "2026-06-01", "2026-06-08", 30);
 
   assertEquals(summary.total, 2);
-  assertEquals(summary.target, 25);
+  assertEquals(summary.target, 30);
   assertEquals(summary.byPerson.angie, 1);
   assertEquals(summary.byPerson.shared, 1);
   assertEquals(summary.byProduct[0].productKey, "ruanas");
