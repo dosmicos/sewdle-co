@@ -3,6 +3,7 @@ import { Sparkles, RefreshCw, Loader2, TrendingUp, TrendingDown, Users, Zap } fr
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
 import MetaAdsConnectionModal from '@/components/finance-dashboard/MetaAdsConnectionModal';
 import ProductMVPMatrix from '@/components/finance-dashboard/ProductMVPMatrix';
+import AngleWinnersPanel from '@/components/finance-dashboard/AngleWinnersPanel';
 import { useMetaAdsConnection } from '@/hooks/useMetaAdsConnection';
 import { useAdIntelligence, type PerformancePattern } from '@/hooks/useAdIntelligence';
 import { useAdCreativeSync } from '@/hooks/useAdCreativeSync';
@@ -33,6 +34,11 @@ const DIMENSION_LABELS: Record<string, string> = {
   target_country: 'Country',
   funnel_stage: 'Funnel Stage',
   offer_type: 'Offer Type',
+  angle_family: 'Angle Family',
+  specific_angle: 'Specific Angle',
+  hook_pattern: 'Hook Pattern',
+  buyer_problem: 'Buyer Problem',
+  proof_type: 'Proof Type',
 };
 
 // ── Pattern Card ─────────────────────────────────────────────────
@@ -201,6 +207,8 @@ const AdIntelligencePage: React.FC = () => {
               </h2>
               <ProductMVPMatrix />
             </div>
+
+            <AngleWinnersPanel periodType={periodType as '7d' | '30d'} />
 
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

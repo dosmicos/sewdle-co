@@ -9,6 +9,14 @@ export interface AdTagData {
   sales_angle: string | null;
   copy_type: string | null;
   hook_description: string | null;
+  angle_family: string | null;
+  specific_angle: string | null;
+  hook_pattern: string | null;
+  buyer_problem: string | null;
+  desired_outcome: string | null;
+  proof_type: string | null;
+  angle_confidence: string | null;
+  needs_human_review: boolean | null;
   product: string | null;
   product_name: string | null;
   landing_page_type: string | null;

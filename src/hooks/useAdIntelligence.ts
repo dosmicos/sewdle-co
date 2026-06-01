@@ -108,6 +108,8 @@ export function useAdIntelligence(periodType: string = '7d') {
           `Intelligence computed: ${data.lifecycle} lifecycles, ${data.weeklySummaries} weekly, ${data.patterns} patterns`
         );
         queryClient.invalidateQueries({ queryKey: ['ad-intelligence'] });
+        queryClient.invalidateQueries({ queryKey: ['product-mvp'] });
+        queryClient.invalidateQueries({ queryKey: ['angle-winners'] });
         return true;
       } else {
         toast.error(data.error || 'Error al computar inteligencia');

@@ -58,6 +58,14 @@ export interface AdPerformanceRow {
     sales_angle?: string | null;
     copy_type?: string | null;
     hook_description?: string | null;
+    angle_family?: string | null;
+    specific_angle?: string | null;
+    hook_pattern?: string | null;
+    buyer_problem?: string | null;
+    desired_outcome?: string | null;
+    proof_type?: string | null;
+    angle_confidence?: string | null;
+    needs_human_review?: boolean | null;
     product?: string | null;
     product_name?: string | null;
     offer_type?: string | null;
@@ -409,6 +417,7 @@ export function useAdPerformance(
             `Ads sincronizados: ${data.syncedAds} registros de ${data.totalAds}`
           );
           queryClient.invalidateQueries({ queryKey: ['ad-performance'] });
+          queryClient.invalidateQueries({ queryKey: ['angle-winners'] });
           return true;
         } else {
           toast.error(data.error || 'Error al sincronizar ads');

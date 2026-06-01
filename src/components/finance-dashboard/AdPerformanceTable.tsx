@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/tooltip';
 import { type AdPerformanceRow } from '@/hooks/useAdPerformance';
 import { type AdTagData, type AdCreativeData, type AdLifecycleData } from '@/hooks/useAdTags';
+import { getSpecificAngleLabel } from '@/lib/angleIntelligence';
 import AdExpandedRow from './AdExpandedRow';
 
 // ── Color thresholds ──────────────────────────────────────────────
@@ -341,7 +342,7 @@ const AdPerformanceTable: React.FC<Props> = ({
                 {hasTags && <TH colKey="audience_type" label="Audience" />}
                 {hasTags && (
                   <th className="px-2 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap">
-                    Tags
+                    Angle / Tags
                   </th>
                 )}
                 <TH colKey="phase" label="Phase" />
@@ -445,13 +446,23 @@ const AdPerformanceTable: React.FC<Props> = ({
                       {/* Tags */}
                       {hasTags && (() => {
                         const tag = tagsMap?.get(ad.ad_id);
+                        const angleLabel = getSpecificAngleLabel(tag?.specific_angle);
                         const pills: string[] = [];
                         if (tag?.creative_type) pills.push(tag.creative_type);
-                        if (tag?.sales_angle) pills.push(tag.sales_angle);
+                        if (tag?.hook_pattern) pills.push(tag.hook_pattern);
                         if (tag?.product) pills.push(tag.product);
                         return (
-                          <td className="px-2 py-2 max-w-[160px]">
-                            {pills.length > 0 ? (
+                          <td className="px-2 py-2 max-w-[220px]">
+                            {tag?.specific_angle || pills.length > 0 ? (
+                              <div className="space-y-1">
+                                {tag?.specific_angle && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-[10px] px-1.5 py-0 bg-purple-50 text-purple-700 border border-purple-100 max-w-[200px] truncate"
+                                  >
+                                    {angleLabel}
+                                  </Badge>
+                                )}
                               <div className="flex flex-wrap gap-0.5">
                                 {pills.slice(0, 3).map((p) => (
                                   <Badge
@@ -462,6 +473,7 @@ const AdPerformanceTable: React.FC<Props> = ({
                                     {p.replace(/_/g, ' ')}
                                   </Badge>
                                 ))}
+                              </div>
                               </div>
                             ) : (
                               <span className="text-gray-300">-</span>

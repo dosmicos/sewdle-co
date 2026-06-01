@@ -516,6 +516,14 @@ interface AITags {
   salesAngle: string | null;
   copyType: string | null;
   hookDescription: string | null;
+  angleFamily: string | null;
+  specificAngle: string | null;
+  hookPattern: string | null;
+  buyerProblem: string | null;
+  desiredOutcome: string | null;
+  proofType: string | null;
+  angleConfidence: "high" | "medium" | "low" | null;
+  needsHumanReview: boolean;
 }
 
 async function aiTagBatch(
@@ -543,14 +551,42 @@ async function aiTagBatch(
     )
     .join("\n\n");
 
-  const prompt = `Eres un analista de performance marketing. Clasifica cada ad con estos campos:
+  const prompt = `Eres un analista senior de performance marketing para Dosmicos (ropa infantil: sleepings, ruanas, parkas/chaquetas). Clasifica cada ad con campos legacy y con AngleOS.
 
-1. sales_angle: El ángulo de venta principal. Opciones: beneficio_producto, social_proof, urgencia, educativo, lifestyle, dolor_problema, comparación, autoridad, novedad, regalo, sostenibilidad, otro
-2. copy_type: Estilo del copy. Opciones: storytelling, directo, pregunta, testimonio, lista_beneficios, estadística, emocional, humor, before_after, otro
-3. hook_description: Descripción corta (max 15 palabras) del gancho principal del ad
+Campos legacy:
+1. sales_angle: categoría amplia. Opciones: beneficio_producto, social_proof, urgencia, educativo, lifestyle, dolor_problema, comparación, autoridad, novedad, regalo, sostenibilidad, otro
+2. copy_type: estilo del copy. Opciones: storytelling, directo, pregunta, testimonio, lista_beneficios, estadística, emocional, humor, before_after, otro
+3. hook_description: descripción corta (max 15 palabras) del gancho principal del ad
+
+Campos AngleOS para identificar ángulos ganadores:
+4. angle_family: problem_solution, product_benefit, use_case, gift, social_proof, technical_education, lifestyle, offer, other
+5. specific_angle: slug específico y estable. Usa uno de estos si aplica:
+   - sleeping_se_destapa_sin_cobijas
+   - sleeping_rutina_noche_tranquila
+   - sleeping_tog_clima_correcto
+   - sleeping_bebe_abrigado_sin_sobrecalentar
+   - ruana_facil_de_poner
+   - ruana_cobijita_puesta
+   - ruana_animalitos_ninos_la_aman
+   - ruana_regalo_util
+   - ruana_casa_carro_jardin
+   - parka_tierra_fria
+   - parka_frio_lluvia_salidas
+   - parka_viaje_clima_frio
+   - parka_abrigo_sin_peso
+   - generic_product_benefit
+   - unknown
+6. hook_pattern: antes_despues, pregunta_problema, pov_mama, demo_rapida, error_comun, comparacion, recomendacion_amiga, beneficio_directo, otro
+7. buyer_problem: dolor concreto en snake_case (ej. bebe_se_destapa, chaquetas_dificiles_o_afan, frio_tierra_fria)
+8. desired_outcome: resultado deseado en snake_case (ej. duerme_abrigado_sin_cobijas_sueltas, poner_en_segundos)
+9. proof_type: demo_producto, testimonio_mama, antes_despues, producto_en_uso_real, review_social_proof, educacion_producto, unknown
+10. angle_confidence: high, medium, low
+11. needs_human_review: boolean. true si el producto/ángulo no queda claro.
+
+Regla clave: NO uses solo categorías genéricas como ángulo final. Si sales_angle=dolor_problema, specific_angle debe decir cuál dolor concreto es.
 
 Responde SOLO en JSON array, un objeto por ad:
-[{"ad_id":"...","sales_angle":"...","copy_type":"...","hook_description":"..."}]
+[{"ad_id":"...","sales_angle":"...","copy_type":"...","hook_description":"...","angle_family":"...","specific_angle":"...","hook_pattern":"...","buyer_problem":"...","desired_outcome":"...","proof_type":"...","angle_confidence":"high","needs_human_review":false}]
 
 Ads a clasificar:
 ${adDescriptions}`;
@@ -592,6 +628,16 @@ ${adDescriptions}`;
         salesAngle: item.sales_angle || null,
         copyType: item.copy_type || null,
         hookDescription: item.hook_description || null,
+        angleFamily: item.angle_family || null,
+        specificAngle: item.specific_angle || null,
+        hookPattern: item.hook_pattern || null,
+        buyerProblem: item.buyer_problem || null,
+        desiredOutcome: item.desired_outcome || null,
+        proofType: item.proof_type || null,
+        angleConfidence: ["high", "medium", "low"].includes(item.angle_confidence)
+          ? item.angle_confidence
+          : null,
+        needsHumanReview: Boolean(item.needs_human_review),
       });
     }
   } catch (err) {
@@ -1139,6 +1185,15 @@ serve(async (req) => {
               sales_angle: aiTags?.salesAngle || null,
               copy_type: aiTags?.copyType || null,
               hook_description: aiTags?.hookDescription || null,
+              // AngleOS tags (AI)
+              angle_family: aiTags?.angleFamily || null,
+              specific_angle: aiTags?.specificAngle || null,
+              hook_pattern: aiTags?.hookPattern || null,
+              buyer_problem: aiTags?.buyerProblem || null,
+              desired_outcome: aiTags?.desiredOutcome || null,
+              proof_type: aiTags?.proofType || null,
+              angle_confidence: aiTags?.angleConfidence || null,
+              needs_human_review: aiTags?.needsHumanReview || false,
               // Product tags (rules only)
               product: tag.rules.product,
               product_name: tag.rules.productName,
