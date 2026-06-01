@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useStoreContext } from '@/contexts/StoreContext';
+import { SHOPIFY_ANALYTICS_SALE_STATUSES } from '@/lib/shopifyFinancialStatus';
 import { type DateRange } from './useFinanceDateRange';
 import { format, eachDayOfInterval, startOfDay } from 'date-fns';
 
@@ -71,7 +72,7 @@ async function fetchAllOrders(orgId: string, startStr: string, endStr: string, s
       .eq('organization_id', orgId)
       .gte('created_at_shopify', startStr)
       .lte('created_at_shopify', endStr)
-      .not('financial_status', 'eq', 'voided')
+      .in('financial_status', SHOPIFY_ANALYTICS_SALE_STATUSES)
       .is('cancelled_at', null)
       .order('created_at_shopify', { ascending: true })
       .range(from, from + pageSize - 1);
@@ -195,7 +196,7 @@ async function fetchMetrics(
         .lt('created_at_shopify', startStr)
         .in('customer_id', batch)
         .is('cancelled_at', null)
-        .not('financial_status', 'eq', 'voided')
+        .in('financial_status', SHOPIFY_ANALYTICS_SALE_STATUSES)
         .limit(50000);
       if (storeId) priorQuery = priorQuery.eq('store_id', storeId);
       const { data: priorOrders } = await priorQuery;
@@ -221,7 +222,7 @@ async function fetchMetrics(
         .in('customer_email', batch)
         .is('customer_id', null)
         .is('cancelled_at', null)
-        .not('financial_status', 'eq', 'voided')
+        .in('financial_status', SHOPIFY_ANALYTICS_SALE_STATUSES)
         .limit(50000);
       if (storeId) priorQuery = priorQuery.eq('store_id', storeId);
       const { data: priorOrders } = await priorQuery;

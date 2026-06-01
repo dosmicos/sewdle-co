@@ -31,6 +31,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SHOPIFY_ANALYTICS_SALE_STATUSES } from "../_shared/prophit-financial-status.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -331,7 +332,7 @@ async function fetchAllOrders(
       .eq("organization_id", orgId)
       .gte("created_at_shopify", startISO)
       .lte("created_at_shopify", endISO)
-      .not("financial_status", "eq", "voided")
+      .in("financial_status", SHOPIFY_ANALYTICS_SALE_STATUSES)
       .is("cancelled_at", null)
       .order("created_at_shopify", { ascending: true })
       .range(from, from + pageSize - 1);
@@ -383,7 +384,7 @@ async function fetchReturningEmails(
       .lt("created_at_shopify", beforeISO)
       .in("customer_email", batch)
       .is("cancelled_at", null)
-      .not("financial_status", "eq", "voided")
+      .in("financial_status", SHOPIFY_ANALYTICS_SALE_STATUSES)
       .limit(batch.length);
     if (error) throw new Error(`shopify_orders (returning): ${error.message}`);
     for (const o of data || []) {
