@@ -442,7 +442,7 @@ const FinanceDashboardPage: React.FC = () => {
               <p className="text-sm font-medium text-slate-900">
                 {teamScorecard.data
                   ? `${teamScorecard.data.period.label}: revenue ${formatCOP(teamScorecard.data.company.revenue.actual)} / ${formatCOP(teamScorecard.data.company.revenue.target)} · statics ${teamScorecard.data.staticCreatives.total}/${teamScorecard.data.staticCreatives.target}`
-                  : 'Scorecard semanal por Julian, Sebastián, Angie y Ana María.'}
+                  : 'Scorecard semanal por Company, Julian, Sebastián, Angie + Ana María, Kira y Hermes.'}
               </p>
               <p className="text-xs text-slate-500">
                 KPIs por owner, milestones semanales no lineales y conteo Drive de imágenes estáticas con UGC excluido.

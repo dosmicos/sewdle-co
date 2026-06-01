@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useGrowthTeamScorecard, type GrowthKpi, type KpiStatus, type OwnerScorecard } from '@/hooks/useGrowthTeamScorecard';
+import { useGrowthTeamScorecard, type GrowthKpi, type GrowthRiskMatrixRow, type KpiStatus, type OwnerScorecard } from '@/hooks/useGrowthTeamScorecard';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -21,7 +21,7 @@ const statusLabel: Record<KpiStatus, string> = {
   green: 'Verde',
   yellow: 'Amarillo',
   red: 'Rojo',
-  missing: 'Sin data',
+  missing: 'No disponible',
 };
 
 const kpiLabels: Record<string, string> = {
@@ -35,13 +35,27 @@ const kpiLabels: Record<string, string> = {
   ncRevenuePercent: 'NC-Rev%',
   spend: 'Spend',
   mutations: 'Mutaciones',
+  graduatedAds: 'Ads graduados T→S→O',
+  testingWaste: 'Waste Testing',
   ugcPieces: 'UGC piezas',
   activeCreators: 'Creadoras activas',
   activeLinks: 'CMD links activos',
   cmdRevenue: 'CMD revenue',
   cmdOrders: 'CMD orders',
-  staticsProduced: 'Statics Drive',
-  staticsPublished: 'Statics publicados',
+  googleQueryMix: 'Google query mix',
+  pixelNcRevDeepDive: 'Pixel / NC-Rev deep-dive',
+  staticsProduced: 'Statics producidos',
+  angieStatics: 'Angie statics',
+  anaMariaStatics: 'Ana María statics',
+  staticsPublished: 'Statics publicados/tested',
+  needsReviewBacklog: 'Backlog needs_review',
+  trackerCompleteness: 'Tracker completo',
+  salesAngleReport: 'Sales-angle report',
+  topAnglesRanked: 'Top ángulos rankeados',
+  focusDefined: 'Foco semanal definido',
+  anglesAtRisk: 'Ángulos en riesgo',
+  publishedToTesting: 'Publicados a Testing ABO',
+  metaWrapperStatus: 'Wrapper Meta status',
   driveAttributedStatics: 'Statics atribuidos',
   briefs: 'Briefs',
   firstFrames: 'First frames',
@@ -60,7 +74,14 @@ function formatNumber(value: number | null, suffix = '') {
 function formatKpiValue(key: string, value: number | null) {
   if (['revenue', 'adSpend', 'spend', 'cmdRevenue', 'aov', 'ncpa'].includes(key)) return formatCOP(value);
   if (['mer'].includes(key)) return formatNumber(value, 'x');
-  if (['cmPercent', 'ncRevenuePercent'].includes(key)) return formatNumber(value, '%');
+  if (['cmPercent', 'ncRevenuePercent', 'testingWaste'].includes(key)) return formatNumber(value, '%');
+  return formatNumber(value);
+}
+
+function formatRiskValue(row: GrowthRiskMatrixRow, value: number | null) {
+  if (row.valueType === 'cop') return formatCOP(value);
+  if (row.valueType === 'mer') return formatNumber(value, 'x');
+  if (row.valueType === 'percent') return formatNumber(value, '%');
   return formatNumber(value);
 }
 
@@ -165,6 +186,14 @@ const GrowthTeamScorecardPage: React.FC = () => {
   const periodEndInclusive = new Date(`${data.period.end}T12:00:00Z`);
   periodEndInclusive.setUTCDate(periodEndInclusive.getUTCDate() - 1);
   const periodEndLabel = periodEndInclusive.toISOString().slice(0, 10);
+  const ownerCards = [
+    data.owners.julian,
+    data.owners.sebastian,
+    data.owners.creativeProduction,
+    data.owners.kira,
+    data.owners.hermes,
+  ].filter(Boolean) as OwnerScorecard[];
+  const riskRows = data.riskMatrix ?? [];
 
   return (
     <FinanceDashboardLayout activeSection="team-scorecard">
@@ -172,9 +201,10 @@ const GrowthTeamScorecardPage: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-900">Team Scorecard</h1>
+              <h1 className="text-xl font-bold text-slate-900">Junio 600M Operating Dashboard</h1>
               <StatusBadge status={overallStatus} />
-              <Badge variant="outline" className="bg-blue-50 text-blue-700">UGC folders excluded</Badge>
+              <Badge variant="outline" className="bg-blue-50 text-blue-700">Milestones no lineales</Badge>
+              <Badge variant="outline" className="bg-purple-50 text-purple-700">Owners + agentes IA</Badge>
             </div>
             <p className="text-sm text-slate-500">{data.period.label} · {data.period.start} → {periodEndLabel}</p>
           </div>
@@ -190,25 +220,103 @@ const GrowthTeamScorecardPage: React.FC = () => {
           </div>
         </div>
 
-        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <Card className="border-blue-100 bg-blue-50/50 shadow-sm xl:col-span-2">
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <Gauge className="h-4 w-4 text-blue-600" /> Contrato semanal
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-2 p-4 pt-2 text-xs md:grid-cols-4">
+              <div><p className="text-slate-500">Revenue</p><p className="font-semibold text-slate-900">{formatCOP(data.milestone.revenue_target)}</p></div>
+              <div><p className="text-slate-500">Spend</p><p className="font-semibold text-slate-900">{formatCOP(data.milestone.ad_spend_budget)}</p></div>
+              <div><p className="text-slate-500">MER</p><p className="font-semibold text-slate-900">{formatNumber(data.milestone.mer_target, 'x')}</p></div>
+              <div><p className="text-slate-500">NC</p><p className="font-semibold text-slate-900">{formatNumber(data.milestone.new_customers_target)}</p></div>
+            </CardContent>
+          </Card>
           <KpiPill label="Revenue" metricKey="revenue" kpi={data.company.revenue} />
           <KpiPill label="Spend" metricKey="adSpend" kpi={data.company.adSpend} />
           <KpiPill label="MER" metricKey="mer" kpi={data.company.mer} />
-          <KpiPill label="New customers" metricKey="newCustomers" kpi={data.company.newCustomers} />
         </section>
 
-        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <KpiPill label="New customers" metricKey="newCustomers" kpi={data.company.newCustomers} />
           <KpiPill label="CM% post-tax" metricKey="cmPercent" kpi={data.company.cmPercent} />
           <KpiPill label="AOV" metricKey="aov" kpi={data.company.aov} />
           <KpiPill label="NCPA" metricKey="ncpa" kpi={data.company.ncpa} />
           <KpiPill label="NC-Rev%" metricKey="ncRevenuePercent" kpi={data.company.ncRevenuePercent} />
         </section>
 
-        <section className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-4">
-          <OwnerCard owner={data.owners.julian} />
-          <OwnerCard owner={data.owners.sebastian} />
-          <OwnerCard owner={data.owners.angie} />
-          <OwnerCard owner={data.owners.anaMaria} />
+        <section className="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-5">
+          {ownerCards.map((owner) => <OwnerCard key={owner.label} owner={owner} />)}
+        </section>
+
+        <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
+          <Card className="shadow-sm">
+            <CardHeader className="p-4 pb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-sm font-semibold text-slate-900">Risk matrix — triggers automáticos</CardTitle>
+                  <p className="text-xs text-slate-500">Semáforos del anexo 600M. Si no hay fuente confiable, queda No disponible y se abre action item.</p>
+                </div>
+                <Badge variant="outline" className="bg-slate-50">{riskRows.filter((row) => row.status === 'red').length} rojos</Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 pt-2">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>KPI</TableHead>
+                      <TableHead>Owner</TableHead>
+                      <TableHead className="text-right">Real / target</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Trigger</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {riskRows.map((row) => (
+                      <TableRow key={row.key}>
+                        <TableCell className="font-medium">{row.label}</TableCell>
+                        <TableCell className="text-xs text-slate-600">{row.owner}</TableCell>
+                        <TableCell className="whitespace-nowrap text-right text-xs">
+                          {formatRiskValue(row, row.actual)}
+                          {row.target !== null && <span className="text-slate-400"> / {formatRiskValue(row, row.target)}</span>}
+                        </TableCell>
+                        <TableCell><StatusBadge status={row.status} /></TableCell>
+                        <TableCell className="max-w-[340px] text-xs text-slate-500">{row.trigger}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-sm">
+            <CardHeader className="p-4 pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                Action items / blockers
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 p-4 pt-2">
+              {data.blockers.map((blocker) => (
+                <div key={`${blocker.owner}-${blocker.message}`} className="rounded-lg border border-slate-200 bg-white p-3 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-slate-700">{blocker.owner}</span>
+                    <StatusBadge status={blocker.severity} />
+                  </div>
+                  <p className="mt-1 text-slate-600">{blocker.message}</p>
+                </div>
+              ))}
+              {data.blockers.length === 0 && (
+                <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">
+                  <CheckCircle2 className="h-4 w-4" /> Sin blockers críticos.
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </section>
 
         <section className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
@@ -217,7 +325,7 @@ const GrowthTeamScorecardPage: React.FC = () => {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <CardTitle className="text-sm font-semibold text-slate-900">Static creative production by product</CardTitle>
-                  <p className="text-xs text-slate-500">Solo imágenes en Estáticos/static roots. Carpetas UGC excluidas.</p>
+                  <p className="text-xs text-slate-500">Meta 30/semana entre Angie + Ana María 50/50. Solo imágenes en Estáticos/static roots; carpetas UGC excluidas.</p>
                 </div>
                 <Badge variant="outline" className="bg-slate-50">
                   {data.staticCreatives.total}/{data.staticCreatives.target} esta semana
@@ -263,25 +371,16 @@ const GrowthTeamScorecardPage: React.FC = () => {
           <Card className="shadow-sm">
             <CardHeader className="p-4 pb-2">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
-                Action items / blockers
+                <Users className="h-4 w-4 text-blue-600" />
+                Roles corregidos
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2 p-4 pt-2">
-              {data.blockers.map((blocker) => (
-                <div key={`${blocker.owner}-${blocker.message}`} className="rounded-lg border border-slate-200 bg-white p-3 text-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-slate-700">{blocker.owner}</span>
-                    <StatusBadge status={blocker.severity} />
-                  </div>
-                  <p className="mt-1 text-slate-600">{blocker.message}</p>
-                </div>
-              ))}
-              {data.blockers.length === 0 && (
-                <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">
-                  <CheckCircle2 className="h-4 w-4" /> Sin blockers críticos.
-                </div>
-              )}
+            <CardContent className="space-y-2 p-4 pt-2 text-xs text-slate-600">
+              <p><strong>Kira:</strong> dirección creativa IA con sales-angle report y foco semanal.</p>
+              <p><strong>Angie + Ana María:</strong> productoras 50/50; target 30/semana, ~15 c/u.</p>
+              <p><strong>Hermes:</strong> ops, publicación a Testing ABO, pausas, medición y graduación T→S→O.</p>
+              <p><strong>info@dosmicos.co:</strong> Shared / Sin asignar hasta confirmación explícita; no se atribuye a Ana María por defecto.</p>
+              <p className="text-slate-400">Fuentes: {data.metadata.sources.join(', ')} · computed {new Date(data.metadata.computedAt).toLocaleString('es-CO')}</p>
             </CardContent>
           </Card>
         </section>
@@ -311,16 +410,15 @@ const GrowthTeamScorecardPage: React.FC = () => {
 
           <Card className="shadow-sm">
             <CardHeader className="p-4 pb-2">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                <Users className="h-4 w-4 text-blue-600" />
-                Attribution guardrail
-              </CardTitle>
+              <CardTitle className="text-sm font-semibold text-slate-900">Data no disponible = action item</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 p-4 pt-2 text-xs text-slate-600">
-              <p><strong>Angie:</strong> `angiecdiazb@gmail.com`.</p>
-              <p><strong>info@dosmicos.co:</strong> Shared / Sin asignar hasta confirmación explícita.</p>
-              <p><strong>Unknown:</strong> visible como Sin asignar; no se oculta ni se asigna a Ana María.</p>
-              <p className="text-slate-400">Fuentes: {data.metadata.sources.join(', ')} · computed {new Date(data.metadata.computedAt).toLocaleString('es-CO')}</p>
+              <p>El dashboard no inventa proxies silenciosos. Las métricas sin fuente confiable se muestran como <strong>No disponible</strong> y quedan en blockers/instrumentación.</p>
+              <div className="flex flex-wrap gap-1.5">
+                {data.metadata.missingMetrics.map((metric) => (
+                  <Badge key={metric} variant="outline" className="bg-slate-50 text-[10px] text-slate-600">{metric}</Badge>
+                ))}
+              </div>
             </CardContent>
           </Card>
         </section>
