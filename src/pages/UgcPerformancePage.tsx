@@ -18,7 +18,11 @@ import {
   Target,
   Wallet,
 } from 'lucide-react';
+import { format, differenceInCalendarDays, isSameDay, startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { useUgcPerformance, type UgcCreatorWithAffiliate } from '@/hooks/useUgcPerformance';
+import { useFinanceDateRange } from '@/hooks/useFinanceDateRange';
+import FinanceDatePicker from '@/components/finance-dashboard/FinanceDatePicker';
 import { TierBadge } from '@/components/finance-dashboard/TierBadge';
 import { CreatorPerformanceProfile } from '@/components/finance-dashboard/CreatorPerformanceProfile';
 import { CreatorComparisonView } from '@/components/finance-dashboard/CreatorComparisonView';
@@ -55,6 +59,7 @@ const DEFAULT_MONTHLY_GOAL = {
 };
 
 const UgcPerformancePage: React.FC = () => {
+  const dateRange = useFinanceDateRange();
   const {
     creators,
     creatorAdsMap,
@@ -64,7 +69,35 @@ const UgcPerformancePage: React.FC = () => {
     isLoading,
     computing,
     computeUgcScores,
-  } = useUgcPerformance();
+    usesCustomRange,
+    rangeStart,
+    rangeEnd,
+  } = useUgcPerformance(dateRange.current);
+
+  // Build a human-readable label for the currently selected period.
+  // - "Hoy" / "Ayer" → just the preset
+  // - "Este mes" → "May 2026" or similar
+  // - Custom or specific multi-day → "dd MMM – dd MMM"
+  const periodLabel = useMemo(() => {
+    const days = differenceInCalendarDays(rangeEnd, rangeStart);
+    if (days === 0) {
+      return format(rangeStart, "d 'de' MMM", { locale: es });
+    }
+    // Detect "calendar month exactly" — useful for showing "May 2026"
+    const monthStart = startOfDay(startOfMonth(rangeStart));
+    const monthEnd = endOfDay(endOfMonth(rangeStart));
+    if (isSameDay(rangeStart, monthStart) && isSameDay(rangeEnd, monthEnd)) {
+      return format(rangeStart, "LLLL yyyy", { locale: es });
+    }
+    return `${format(rangeStart, 'd MMM', { locale: es })} – ${format(rangeEnd, 'd MMM', { locale: es })}`;
+  }, [rangeStart, rangeEnd]);
+
+  const isCalendarMonth = useMemo(() => {
+    const monthStart = startOfDay(startOfMonth(rangeStart));
+    const monthEnd = endOfDay(endOfMonth(rangeStart));
+    return isSameDay(rangeStart, monthStart) && isSameDay(rangeEnd, monthEnd);
+  }, [rangeStart, rangeEnd]);
+
   const [tierFilter, setTierFilter] = useState<string>('all');
   const [affiliateFilter, setAffiliateFilter] = useState<AffiliateFilter>('cmd');
   const [sortKey, setSortKey] = useState<SortKey>('affiliate_month_commission');
@@ -174,6 +207,7 @@ const UgcPerformancePage: React.FC = () => {
             </Badge>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <FinanceDatePicker dateRange={dateRange} />
             {compareIds.size >= 2 && (
               <Button
                 size="sm"
@@ -223,46 +257,50 @@ const UgcPerformancePage: React.FC = () => {
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div>
                 <p className="text-xs uppercase tracking-widest text-pink-700 font-semibold">Plan afiliados CMD</p>
-                <h2 className="text-lg font-bold text-foreground">Scoreboard semanal + objetivo mensual</h2>
+                <h2 className="text-lg font-bold text-foreground">
+                  Scoreboard <span className="text-pink-700">{periodLabel}</span>
+                </h2>
                 <p className="text-sm text-muted-foreground">
                   12% comisión para mamá · 5% descuento cliente · ranking para incentivar contenido y ventas.
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-xs text-muted-foreground">Reporte SQL semanal</p>
+                <p className="text-xs text-muted-foreground">
+                  {isCalendarMonth ? 'Objetivos del mes calendario' : 'Vista de periodo personalizado'}
+                </p>
                 <p className="text-sm font-medium">
-                  {weeklyReport ? 'Activo' : 'Pendiente de migración'}
+                  {weeklyReport ? 'Reporte SQL activo' : 'Pendiente de migración'}
                 </p>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <GoalProgress
-                label="Revenue mes"
+                label={`Revenue ${periodLabel}`}
                 value={affiliateSummary.monthRevenue}
-                goal={Number(goals.revenue_goal)}
+                goal={isCalendarMonth ? Number(goals.revenue_goal) : 0}
                 valueLabel={formatFullCOP(affiliateSummary.monthRevenue)}
-                goalLabel={formatFullCOP(Number(goals.revenue_goal))}
+                goalLabel={isCalendarMonth ? formatFullCOP(Number(goals.revenue_goal)) : ''}
               />
               <GoalProgress
-                label="Órdenes mes"
+                label={`Órdenes ${periodLabel}`}
                 value={affiliateSummary.monthOrders}
-                goal={Number(goals.orders_goal)}
+                goal={isCalendarMonth ? Number(goals.orders_goal) : 0}
                 valueLabel={`${affiliateSummary.monthOrders}`}
-                goalLabel={`${goals.orders_goal}`}
+                goalLabel={isCalendarMonth ? `${goals.orders_goal}` : ''}
               />
               <GoalProgress
-                label="Creadoras activas semana"
-                value={affiliateSummary.weekActiveCreators}
-                goal={Number(goals.weekly_active_creators_goal)}
-                valueLabel={`${affiliateSummary.weekActiveCreators}`}
-                goalLabel={`${goals.weekly_active_creators_goal}`}
+                label={`Creadoras activas ${usesCustomRange ? '' : 'semana'}`.trim()}
+                value={usesCustomRange ? affiliateSummary.monthActiveCreators : affiliateSummary.weekActiveCreators}
+                goal={isCalendarMonth ? Number(goals.weekly_active_creators_goal) : 0}
+                valueLabel={`${usesCustomRange ? affiliateSummary.monthActiveCreators : affiliateSummary.weekActiveCreators}`}
+                goalLabel={isCalendarMonth ? `${goals.weekly_active_creators_goal}` : ''}
               />
               <GoalProgress
-                label="Contenido mes"
+                label={`Contenido ${periodLabel}`}
                 value={affiliateSummary.monthContentPieces}
-                goal={Number(goals.content_pieces_goal)}
+                goal={isCalendarMonth ? Number(goals.content_pieces_goal) : 0}
                 valueLabel={`${affiliateSummary.monthContentPieces} piezas`}
-                goalLabel={`${goals.content_pieces_goal}`}
+                goalLabel={isCalendarMonth ? `${goals.content_pieces_goal}` : ''}
               />
             </div>
           </CardContent>
@@ -271,10 +309,30 @@ const UgcPerformancePage: React.FC = () => {
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4">
           <MetricCard icon={<Link2 className="h-4 w-4" />} label="Links CMD" value={`${affiliateSummary.activeLinks}/${affiliateSummary.cmdCreators}`} hint={`${affiliateSummary.linkActivationRate.toFixed(0)}% activación`} />
-          <MetricCard icon={<DollarSign className="h-4 w-4" />} label="Comisión semana" value={formatCOP(affiliateSummary.weekCommission)} hint={`${affiliateSummary.weekOrders} órdenes`} />
-          <MetricCard icon={<TrendingUp className="h-4 w-4" />} label="Revenue mes" value={formatCOP(affiliateSummary.monthRevenue)} hint={`${affiliateSummary.monthOrders} órdenes`} />
-          <MetricCard icon={<MousePointerClick className="h-4 w-4" />} label="Clicks semana" value={`${affiliateSummary.weekClicks}`} hint="nuevo tracking" />
-          <MetricCard icon={<FileVideo className="h-4 w-4" />} label="Contenido semana" value={`${affiliateSummary.weekContentPieces}`} hint="piezas UGC" />
+          <MetricCard
+            icon={<DollarSign className="h-4 w-4" />}
+            label={usesCustomRange ? 'Comisión' : 'Comisión semana'}
+            value={formatCOP(usesCustomRange ? affiliateSummary.monthCommission : affiliateSummary.weekCommission)}
+            hint={`${usesCustomRange ? affiliateSummary.monthOrders : affiliateSummary.weekOrders} órdenes`}
+          />
+          <MetricCard
+            icon={<TrendingUp className="h-4 w-4" />}
+            label={usesCustomRange ? 'Revenue' : 'Revenue mes'}
+            value={formatCOP(affiliateSummary.monthRevenue)}
+            hint={`${affiliateSummary.monthOrders} órdenes`}
+          />
+          <MetricCard
+            icon={<MousePointerClick className="h-4 w-4" />}
+            label={usesCustomRange ? 'Clicks' : 'Clicks semana'}
+            value={`${usesCustomRange ? affiliateSummary.monthClicks : affiliateSummary.weekClicks}`}
+            hint="link tracking"
+          />
+          <MetricCard
+            icon={<FileVideo className="h-4 w-4" />}
+            label={usesCustomRange ? 'Contenido' : 'Contenido semana'}
+            value={`${usesCustomRange ? affiliateSummary.monthContentPieces : affiliateSummary.weekContentPieces}`}
+            hint="piezas UGC"
+          />
           <MetricCard icon={<Wallet className="h-4 w-4" />} label="Saldo pendiente" value={formatCOP(affiliateSummary.pendingBalance)} hint="por pagar" />
           <MetricCard icon={<Trophy className="h-4 w-4" />} label="Tier S + A" value={`${tierSA}`} hint={`${avgRoas.toFixed(2)}x ROAS avg`} />
           <MetricCard icon={<Target className="h-4 w-4" />} label="Ad Spend" value={formatCOP(totalAdSpend)} hint="ads UGC" />
@@ -495,18 +553,22 @@ function GoalProgress({
   valueLabel: string;
   goalLabel: string;
 }) {
-  const pct = goal > 0 ? Math.min((value / goal) * 100, 100) : 0;
+  const hasGoal = goal > 0;
+  const pct = hasGoal ? Math.min((value / goal) * 100, 100) : 0;
   return (
     <div className="rounded-lg bg-white/70 border border-white p-3 space-y-2">
       <div className="flex items-center justify-between text-xs">
         <span className="font-medium text-foreground">{label}</span>
-        <span className="text-muted-foreground">{pct.toFixed(0)}%</span>
+        {hasGoal && <span className="text-muted-foreground">{pct.toFixed(0)}%</span>}
       </div>
-      <div className="h-2 rounded-full bg-muted overflow-hidden">
-        <div className="h-full rounded-full bg-pink-500" style={{ width: `${pct}%` }} />
-      </div>
+      {hasGoal && (
+        <div className="h-2 rounded-full bg-muted overflow-hidden">
+          <div className="h-full rounded-full bg-pink-500" style={{ width: `${pct}%` }} />
+        </div>
+      )}
       <p className="text-xs text-muted-foreground">
-        <span className="font-semibold text-foreground">{valueLabel}</span> / {goalLabel}
+        <span className="font-semibold text-foreground">{valueLabel}</span>
+        {hasGoal && goalLabel && <> / {goalLabel}</>}
       </p>
     </div>
   );

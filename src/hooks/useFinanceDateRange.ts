@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
-import { startOfDay, endOfDay, subDays, startOfMonth, subMonths, format } from 'date-fns';
+import { startOfDay, endOfDay, subDays, startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 
-export type DatePreset = 'today' | 'yesterday' | '7d' | 'mtd' | '30d' | '90d' | 'custom';
+export type DatePreset = 'today' | 'yesterday' | '7d' | 'mtd' | 'last-month' | '30d' | '90d' | 'custom';
 
 export interface DateRange {
   start: Date;
@@ -42,6 +42,10 @@ export function useFinanceDateRange(): FinanceDateRange {
         return { start: startOfDay(subDays(now, 6)), end: endOfDay(now) };
       case 'mtd':
         return { start: startOfDay(startOfMonth(now)), end: endOfDay(now) };
+      case 'last-month': {
+        const lastMonth = subMonths(now, 1);
+        return { start: startOfDay(startOfMonth(lastMonth)), end: endOfDay(endOfMonth(lastMonth)) };
+      }
       case '30d':
         return { start: startOfDay(subDays(now, 29)), end: endOfDay(now) };
       case '90d':

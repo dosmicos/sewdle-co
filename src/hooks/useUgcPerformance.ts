@@ -122,6 +122,17 @@ const isInPeriod = (timestamp: string | null | undefined, periodStart: Date) => 
   return new Date(timestamp) >= periodStart;
 };
 
+const isInRange = (timestamp: string | null | undefined, rangeStart: Date, rangeEnd: Date) => {
+  if (!timestamp) return false;
+  const t = new Date(timestamp).getTime();
+  return t >= rangeStart.getTime() && t <= rangeEnd.getTime();
+};
+
+export interface UgcDateRange {
+  start: Date;
+  end: Date;
+}
+
 const defaultAffiliateMetrics = (): UgcAffiliateMetrics => ({
   hasActiveLink: false,
   linkId: null,
@@ -146,13 +157,22 @@ const defaultAffiliateMetrics = (): UgcAffiliateMetrics => ({
   lastOrderDate: null,
 });
 
-export function useUgcPerformance() {
+export function useUgcPerformance(dateRange?: UgcDateRange) {
   const { currentOrganization } = useOrganization();
   const queryClient = useQueryClient();
   const orgId = currentOrganization?.id;
   const [computing, setComputing] = useState(false);
 
   const periods = useMemo(getPeriodStarts, []);
+
+  // When a custom dateRange is provided, ALL "week" and "month" affiliate
+  // metrics collapse onto that single range (the page treats them as one
+  // "selected period"). When omitted (no date picker on the page), behaviour
+  // falls back to the historical week-vs-month split.
+  const rangeStart = dateRange?.start ?? periods.monthStart;
+  const rangeEnd = dateRange?.end ?? new Date();
+  const rangeStartIso = rangeStart.toISOString();
+  const usesCustomRange = !!dateRange;
 
   // Fetch all creators: affiliate program needs CMD moms even if they do not have ad-score data yet.
   const { data: creators = [], isLoading: creatorsLoading } = useQuery({
@@ -247,14 +267,14 @@ export function useUgcPerformance() {
   });
 
   const { data: linkClicks = [], isLoading: clicksLoading } = useQuery({
-    queryKey: ['ugc-affiliate-link-clicks', orgId],
+    queryKey: ['ugc-affiliate-link-clicks', orgId, rangeStartIso],
     queryFn: async () => {
       if (!orgId) return [];
       const { data, error } = await looseSupabase
         .from<LinkClickRow[]>('ugc_link_clicks')
         .select('id, creator_id, discount_link_id, clicked_at')
         .eq('organization_id', orgId)
-        .gte('clicked_at', periods.monthStart.toISOString())
+        .gte('clicked_at', rangeStartIso)
         .order('clicked_at', { ascending: false })
         .limit(10000);
       if (error) {
@@ -285,7 +305,7 @@ export function useUgcPerformance() {
   };
 
   const { data: ugcVideos = [], isLoading: videosLoading } = useQuery({
-    queryKey: ['ugc-affiliate-videos', orgId, periods.monthStart.toISOString()],
+    queryKey: ['ugc-affiliate-videos', orgId, rangeStartIso],
     queryFn: async () => {
       if (!orgId) return [];
       const { data, error } = await supabase
@@ -293,7 +313,8 @@ export function useUgcPerformance() {
         .select('id, creator_id, created_at, published_date, platform, video_url, published_organic, published_ads, views, likes, comments')
         .eq('organization_id', orgId)
         .not('video_url', 'is', null)
-        .gte('created_at', periods.monthStart.toISOString())
+        .gte('created_at', rangeStartIso)
+        .lte('created_at', rangeEnd.toISOString())
         .limit(10000);
       if (error) throw error;
       return (data || []) as Partial<UgcVideo>[];
@@ -380,22 +401,41 @@ export function useUgcPerformance() {
       if (!metrics.lastOrderDate || new Date(order.order_date) > new Date(metrics.lastOrderDate)) {
         metrics.lastOrderDate = order.order_date;
       }
-      if (isInPeriod(order.order_date, periods.weekStart)) {
-        metrics.weekOrders += 1;
-        metrics.weekRevenue += orderTotal;
-        metrics.weekCommission += commission;
-      }
-      if (isInPeriod(order.order_date, periods.monthStart)) {
-        metrics.monthOrders += 1;
-        metrics.monthRevenue += orderTotal;
-        metrics.monthCommission += commission;
+      if (usesCustomRange) {
+        // Selected period collapses week + month metrics into one bucket
+        if (isInRange(order.order_date, rangeStart, rangeEnd)) {
+          metrics.weekOrders += 1;
+          metrics.weekRevenue += orderTotal;
+          metrics.weekCommission += commission;
+          metrics.monthOrders += 1;
+          metrics.monthRevenue += orderTotal;
+          metrics.monthCommission += commission;
+        }
+      } else {
+        if (isInPeriod(order.order_date, periods.weekStart)) {
+          metrics.weekOrders += 1;
+          metrics.weekRevenue += orderTotal;
+          metrics.weekCommission += commission;
+        }
+        if (isInPeriod(order.order_date, periods.monthStart)) {
+          metrics.monthOrders += 1;
+          metrics.monthRevenue += orderTotal;
+          metrics.monthCommission += commission;
+        }
       }
     }
 
     for (const click of linkClicks) {
       if (click.creator_id !== creator.id) continue;
-      if (isInPeriod(click.clicked_at, periods.weekStart)) metrics.weekClicks += 1;
-      if (isInPeriod(click.clicked_at, periods.monthStart)) metrics.monthClicks += 1;
+      if (usesCustomRange) {
+        if (isInRange(click.clicked_at, rangeStart, rangeEnd)) {
+          metrics.weekClicks += 1;
+          metrics.monthClicks += 1;
+        }
+      } else {
+        if (isInPeriod(click.clicked_at, periods.weekStart)) metrics.weekClicks += 1;
+        if (isInPeriod(click.clicked_at, periods.monthStart)) metrics.monthClicks += 1;
+      }
     }
 
     for (const video of ugcVideos) {
@@ -408,8 +448,15 @@ export function useUgcPerformance() {
       // Skip photo uploads. Identified by the actual file extension of the
       // uploaded asset (.jpg/.png/etc.) — not by the form's platform category.
       if (isPhotoFile(video.video_url)) continue;
-      if (isInPeriod(uploadDate, periods.weekStart)) metrics.weekContentPieces += 1;
-      if (isInPeriod(uploadDate, periods.monthStart)) metrics.monthContentPieces += 1;
+      if (usesCustomRange) {
+        if (isInRange(uploadDate, rangeStart, rangeEnd)) {
+          metrics.weekContentPieces += 1;
+          metrics.monthContentPieces += 1;
+        }
+      } else {
+        if (isInPeriod(uploadDate, periods.weekStart)) metrics.weekContentPieces += 1;
+        if (isInPeriod(uploadDate, periods.monthStart)) metrics.monthContentPieces += 1;
+      }
     }
 
     const tags = tagsByCreator.get(creator.id) || [];
@@ -521,6 +568,11 @@ export function useUgcPerformance() {
       clicksLoading || videosLoading || goalsLoading || reportLoading,
     computing,
     computeUgcScores,
+    // True when the page is feeding a custom date range. The page uses this to
+    // collapse the week + month labels into a single "selected period" label.
+    usesCustomRange,
+    rangeStart,
+    rangeEnd,
   };
 }
 
