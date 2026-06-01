@@ -564,7 +564,7 @@ ${adDescriptions}`;
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-5-20250929",
         max_tokens: 2048,
         messages: [{ role: "user", content: prompt }],
       }),
@@ -1171,7 +1171,7 @@ serve(async (req) => {
               // Metadata
               confidence: aiTags ? "alto" : "medio",
               tagged_by: aiTags ? "ai_auto" : "rules_only",
-              ai_model: aiTags ? "claude-sonnet-4" : null,
+              ai_model: aiTags ? "claude-sonnet-4-5" : null,
               human_reviewed: false,
               updated_at: new Date().toISOString(),
             },
