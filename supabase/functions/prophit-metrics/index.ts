@@ -282,6 +282,21 @@ function diffCalendarMonths(later: Date, earlier: Date): number {
   return (later.getUTCFullYear() - earlier.getUTCFullYear()) * 12 +
          (later.getUTCMonth() - earlier.getUTCMonth());
 }
+/**
+ * Calendar-month diff in America/Bogota.
+ * UTC version is OFF-BY-ONE for Bogotá-aligned bounds: a date picker showing
+ * "01 may – 31 may" produces end = 2026-06-01T04:59:59Z, whose UTC month is
+ * June (5) — so UTC diff returns 1, +1 = 2 months. That doubles every
+ * monthly recurring expense in computeExpensesForPeriod and inflates OpEx.
+ * Convert both ends to Bogotá local first, then diff.
+ */
+function diffBogotaCalendarMonths(later: Date, earlier: Date): number {
+  const a = toBogotaDate(later);   // "YYYY-MM-DD"
+  const b = toBogotaDate(earlier);
+  const ay = +a.slice(0, 4), am = +a.slice(5, 7);
+  const by = +b.slice(0, 4), bm = +b.slice(5, 7);
+  return (ay - by) * 12 + (am - bm);
+}
 function diffCalendarWeeks(later: Date, earlier: Date): number {
   return Math.floor(diffCalendarDays(later, earlier) / 7);
 }
@@ -706,7 +721,11 @@ function computeExpensesForPeriod(
       const effStart = expStart > start ? expStart : start;
       const effEnd = expEnd < end ? expEnd : end;
       if (effStart <= effEnd) {
-        const months = diffCalendarMonths(effEnd, effStart) + 1;
+        // Use Bogotá-local diff — UTC would count a month boundary that the
+        // user never crossed in their local calendar (BUG: doubled monthly
+        // OpEx for any "full month" date range selection because end-of-month
+        // 23:59:59 BOG = next-month 04:59:59 UTC).
+        const months = diffBogotaCalendarMonths(effEnd, effStart) + 1;
         contribution = e.amount * months;
       }
     }
