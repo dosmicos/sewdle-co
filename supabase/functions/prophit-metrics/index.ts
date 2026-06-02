@@ -376,20 +376,33 @@ async function fetchReturningEmails(
   if (emails.length === 0) return new Set();
   const returning = new Set<string>();
   const batchSize = 200;
+  const PAGE_SIZE = 1000;
   for (let i = 0; i < emails.length; i += batchSize) {
     const batch = emails.slice(i, i + batchSize);
-    const { data, error } = await sb
-      .from("shopify_orders")
-      .select("customer_email")
-      .eq("organization_id", orgId)
-      .lt("created_at_shopify", beforeISO)
-      .in("customer_email", batch)
-      .is("cancelled_at", null)
-      .not("financial_status", "eq", "voided")
-      .limit(batch.length);
-    if (error) throw new Error(`shopify_orders (returning): ${error.message}`);
-    for (const o of data || []) {
-      if (o.customer_email) returning.add(o.customer_email.toLowerCase());
+    // Paginate per batch with .range() — each email can have many historical
+    // orders. A single .limit(batch.length) would let a VIP-customer's order
+    // history exhaust the cap and silently drop other returning customers
+    // from the batch, under-counting returning revenue and over-inflating
+    // NCPA / AMER. Same fix already applied in src/hooks/useStoreMetrics.ts.
+    let from = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from("shopify_orders")
+        .select("customer_email")
+        .eq("organization_id", orgId)
+        .lt("created_at_shopify", beforeISO)
+        .in("customer_email", batch)
+        .is("cancelled_at", null)
+        .not("financial_status", "eq", "voided")
+        .order("created_at_shopify", { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw new Error(`shopify_orders (returning): ${error.message}`);
+      if (!data || data.length === 0) break;
+      for (const o of data) {
+        if (o.customer_email) returning.add(o.customer_email.toLowerCase());
+      }
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
   }
   return returning;
