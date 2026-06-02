@@ -50,6 +50,7 @@ import TermsOfServicePage from "@/pages/TermsOfServicePage";
 import DataDeletionPage from "@/pages/DataDeletionPage";
 // Finance dashboard — lazy loaded (heavy: Recharts, date-fns)
 const FinanceDashboardPage = React.lazy(() => import("@/pages/FinanceDashboardPage"));
+const GrowthTeamScorecardPage = React.lazy(() => import("@/pages/GrowthTeamScorecardPage"));
 const AdPerformancePage = React.lazy(() => import("@/pages/AdPerformancePage"));
 const AdIntelligencePage = React.lazy(() => import("@/pages/AdIntelligencePage"));
 const AdAnalysisPage = React.lazy(() => import("@/pages/AdAnalysisPage"));
@@ -208,6 +209,13 @@ const FinanceAppContent = () => {
         <PasswordChangeRouteGuard>
           <PermissionRoute module="growth" action="view">
             <AdPerformancePage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/team-scorecard" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="growth" action="view">
+            <GrowthTeamScorecardPage />
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
