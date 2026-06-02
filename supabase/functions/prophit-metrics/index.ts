@@ -9,7 +9,7 @@
 //
 // This function ports the logic of the following React hooks:
 //   - useStoreMetrics        → shopify_orders + shopify_order_line_items
-//   - useAdMetrics           → ad_metrics_daily (Meta + Google)
+//   - useAdMetrics           → ad_metrics_daily (Meta + Google + TikTok)
 //   - useFinanceSettings     → finance_settings
 //   - useMonthlyTargets      → monthly_targets
 //   - useProductCosts        → product_costs  (for per-product COGS override)
@@ -124,6 +124,7 @@ interface AdMetricsInternal {
   purchases: number;
   metaSpend: number;
   googleSpend: number;
+  tiktokSpend: number;
   dailyData: Array<{ date: string; spend: number; purchases: number }>;
 }
 
@@ -160,6 +161,7 @@ interface ProphitMetrics {
   adSpend: number;
   metaSpend: number;
   googleSpend: number;
+  tiktokSpend: number;
 
   // Results
   contributionMargin: number;
@@ -321,7 +323,16 @@ async function fetchAllOrders(
   const pageSize = 1000;
   let all: any[] = [];
   let from = 0;
-  // Loop until page returns fewer than pageSize rows
+  // Loop until page returns fewer than pageSize rows.
+  //
+  // NOTE on cancelled orders: we drop voided unconditionally, but a cancelled
+  // order can still have non-zero `current_total_price` (Shopify keeps the
+  // post-refund balance there when only part of the order was refunded). The
+  // raw cancelled_at-IS-NULL filter throws those away entirely and produces
+  // a Net Sales below Shopify's "Total sales over time" report. Include
+  // cancelled orders whose net price is still > 0 so the contribution is
+  // recovered; orders with current_total_price = 0 still contribute 0 either
+  // way so they're filtered at compute time.
   while (true) {
     const { data, error } = await sb
       .from("shopify_orders")
@@ -332,7 +343,6 @@ async function fetchAllOrders(
       .gte("created_at_shopify", startISO)
       .lte("created_at_shopify", endISO)
       .not("financial_status", "eq", "voided")
-      .is("cancelled_at", null)
       .order("created_at_shopify", { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throw new Error(`shopify_orders: ${error.message}`);
@@ -374,20 +384,33 @@ async function fetchReturningEmails(
   if (emails.length === 0) return new Set();
   const returning = new Set<string>();
   const batchSize = 200;
+  const PAGE_SIZE = 1000;
   for (let i = 0; i < emails.length; i += batchSize) {
     const batch = emails.slice(i, i + batchSize);
-    const { data, error } = await sb
-      .from("shopify_orders")
-      .select("customer_email")
-      .eq("organization_id", orgId)
-      .lt("created_at_shopify", beforeISO)
-      .in("customer_email", batch)
-      .is("cancelled_at", null)
-      .not("financial_status", "eq", "voided")
-      .limit(batch.length);
-    if (error) throw new Error(`shopify_orders (returning): ${error.message}`);
-    for (const o of data || []) {
-      if (o.customer_email) returning.add(o.customer_email.toLowerCase());
+    // Paginate per batch with .range() — each email can have many historical
+    // orders. A single .limit(batch.length) would let a VIP-customer's order
+    // history exhaust the cap and silently drop other returning customers
+    // from the batch, under-counting returning revenue and over-inflating
+    // NCPA / AMER. Same fix already applied in src/hooks/useStoreMetrics.ts.
+    let from = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from("shopify_orders")
+        .select("customer_email")
+        .eq("organization_id", orgId)
+        .lt("created_at_shopify", beforeISO)
+        .in("customer_email", batch)
+        .is("cancelled_at", null)
+        .not("financial_status", "eq", "voided")
+        .order("created_at_shopify", { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw new Error(`shopify_orders (returning): ${error.message}`);
+      if (!data || data.length === 0) break;
+      for (const o of data) {
+        if (o.customer_email) returning.add(o.customer_email.toLowerCase());
+      }
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
     }
   }
   return returning;
@@ -399,18 +422,23 @@ async function fetchAdMetricsByPlatform(
   startDate: string,
   endDate: string
 ): Promise<AdMetricsInternal> {
+  // Include TikTok alongside Meta and Google. Previously the platform IN-list
+  // omitted "tiktok_ads", so TikTok spend was excluded from total adSpend and
+  // therefore from Contribution Margin — dashboard's AD SPEND row in the CM
+  // breakdown was lower than the Channel Metrics total by exactly TikTok's
+  // spend. Now all three platforms feed both the total and the breakdown.
   const { data, error } = await sb
     .from("ad_metrics_daily")
     .select("spend, impressions, clicks, conversions, conversion_value, purchases, platform, date")
     .eq("organization_id", orgId)
-    .in("platform", ["meta", "google_ads"])
+    .in("platform", ["meta", "google_ads", "tiktok_ads"])
     .gte("date", startDate)
     .lte("date", endDate)
     .order("date", { ascending: true });
   if (error) throw new Error(`ad_metrics_daily: ${error.message}`);
 
   let spend = 0, impressions = 0, clicks = 0, conversions = 0, conversionValue = 0, purchases = 0;
-  let metaSpend = 0, googleSpend = 0;
+  let metaSpend = 0, googleSpend = 0, tiktokSpend = 0;
   const dailyMap = new Map<string, { spend: number; purchases: number }>();
 
   for (const row of data || []) {
@@ -429,6 +457,7 @@ async function fetchAdMetricsByPlatform(
     purchases += rPurch;
     if (row.platform === "meta") metaSpend += rSpend;
     else if (row.platform === "google_ads") googleSpend += rSpend;
+    else if (row.platform === "tiktok_ads") tiktokSpend += rSpend;
 
     const existing = dailyMap.get(row.date) ?? { spend: 0, purchases: 0 };
     existing.spend += rSpend;
@@ -442,7 +471,7 @@ async function fetchAdMetricsByPlatform(
 
   return {
     spend, impressions, clicks, conversions, conversionValue, purchases,
-    metaSpend, googleSpend, dailyData,
+    metaSpend, googleSpend, tiktokSpend, dailyData,
   };
 }
 
@@ -772,7 +801,15 @@ async function fetchStoreMetrics(
     return o.total_price || 0;
   };
 
-  const validOrders = orders.filter(o => o.financial_status !== "refunded");
+  // Skip fully refunded. Cancelled orders ARE fetched (see fetchAllOrders
+  // comment) but only kept here when their net price is still > 0 — i.e. the
+  // customer received only a partial refund. Cancelled-with-zero-net stays
+  // out so order count / taxes / shipping don't inflate from voided activity.
+  const validOrders = orders.filter(o => {
+    if (o.financial_status === "refunded") return false;
+    if (o.cancelled_at != null && getNetPrice(o) <= 0) return false;
+    return true;
+  });
   const refundedOrders = orders.filter(o => o.financial_status === "refunded");
 
   const totalSales = validOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
@@ -1021,6 +1058,7 @@ function computeProphitMetrics(
     adSpend,
     metaSpend: ad.metaSpend,
     googleSpend: ad.googleSpend,
+    tiktokSpend: ad.tiktokSpend,
     contributionMargin,
     cmPercent,
     costOfDelivery,
