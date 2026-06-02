@@ -323,7 +323,16 @@ async function fetchAllOrders(
   const pageSize = 1000;
   let all: any[] = [];
   let from = 0;
-  // Loop until page returns fewer than pageSize rows
+  // Loop until page returns fewer than pageSize rows.
+  //
+  // NOTE on cancelled orders: we drop voided unconditionally, but a cancelled
+  // order can still have non-zero `current_total_price` (Shopify keeps the
+  // post-refund balance there when only part of the order was refunded). The
+  // raw cancelled_at-IS-NULL filter throws those away entirely and produces
+  // a Net Sales below Shopify's "Total sales over time" report. Include
+  // cancelled orders whose net price is still > 0 so the contribution is
+  // recovered; orders with current_total_price = 0 still contribute 0 either
+  // way so they're filtered at compute time.
   while (true) {
     const { data, error } = await sb
       .from("shopify_orders")
@@ -334,7 +343,6 @@ async function fetchAllOrders(
       .gte("created_at_shopify", startISO)
       .lte("created_at_shopify", endISO)
       .not("financial_status", "eq", "voided")
-      .is("cancelled_at", null)
       .order("created_at_shopify", { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throw new Error(`shopify_orders: ${error.message}`);
@@ -793,7 +801,15 @@ async function fetchStoreMetrics(
     return o.total_price || 0;
   };
 
-  const validOrders = orders.filter(o => o.financial_status !== "refunded");
+  // Skip fully refunded. Cancelled orders ARE fetched (see fetchAllOrders
+  // comment) but only kept here when their net price is still > 0 — i.e. the
+  // customer received only a partial refund. Cancelled-with-zero-net stays
+  // out so order count / taxes / shipping don't inflate from voided activity.
+  const validOrders = orders.filter(o => {
+    if (o.financial_status === "refunded") return false;
+    if (o.cancelled_at != null && getNetPrice(o) <= 0) return false;
+    return true;
+  });
   const refundedOrders = orders.filter(o => o.financial_status === "refunded");
 
   const totalSales = validOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
