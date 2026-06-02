@@ -821,7 +821,28 @@ async function fetchStoreMetrics(
   );
   const refundedOrders = realOrders.filter(o => o.financial_status === "refunded");
 
-  const totalSales = validOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
+  // Order-date net revenue: each period order's current_total_price (already
+  // net of its OWN refunds, whenever processed).
+  const orderDateNetSales = validOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
+
+  // Refund-date attribution (Shopify "Total Sales over time" model): also
+  // subtract refunds ISSUED in this period for orders PLACED in earlier
+  // periods. Shopify's tooltip: "Revenue values are based on the order date;
+  // refund values are based on the refund date." Without this we over-report
+  // vs Shopify by the amount of prior-period refunds processed in-window.
+  // Computed in Postgres (jsonb traversal of raw_data->refunds) for speed.
+  let priorOrderRefunds = 0;
+  try {
+    const { data: refundData, error: refundErr } = await sb.rpc(
+      "prior_order_refunds_in_period",
+      { p_org: orgId, p_start: startISO, p_end: endISO }
+    );
+    if (!refundErr && refundData != null) priorOrderRefunds = Number(refundData) || 0;
+  } catch (_) {
+    priorOrderRefunds = 0; // never let a refund-RPC hiccup break the dashboard
+  }
+
+  const totalSales = orderDateNetSales - priorOrderRefunds;
   const grossRevenueBeforeRefunds = realOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
   const totalOrders = validOrders.length;
   const returns = refundedOrders.length;
