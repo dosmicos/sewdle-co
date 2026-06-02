@@ -57,6 +57,13 @@ type RiskMatrixRow = {
   valueType: "cop" | "number" | "percent" | "mer";
 };
 
+type NewCustomerMetrics = {
+  newCustomerCount: number;
+  returningCustomerCount: number;
+  newCustomerOrders: number;
+  returningOrders: number;
+};
+
 function num(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -227,6 +234,125 @@ async function fetchUgcMetrics(sb: SupabaseAny, organizationId: string, periodSt
   };
 }
 
+function customerKey(order: { customer_id?: number | string | null; customer_email?: string | null }): string | null {
+  if (order.customer_id !== null && order.customer_id !== undefined) return `id:${order.customer_id}`;
+  if (order.customer_email) return `email:${order.customer_email.toLowerCase()}`;
+  return null;
+}
+
+async function fetchAllPeriodOrders(sb: SupabaseAny, organizationId: string, startIso: string, endIso: string) {
+  const pageSize = 1000;
+  let from = 0;
+  const rows: Array<{
+    shopify_order_id: string | number;
+    customer_id?: number | string | null;
+    customer_email?: string | null;
+    financial_status?: string | null;
+  }> = [];
+
+  while (true) {
+    const { data, error } = await sb
+      .from("shopify_orders")
+      .select("shopify_order_id, customer_id, customer_email, financial_status")
+      .eq("organization_id", organizationId)
+      .gte("created_at_shopify", startIso)
+      .lte("created_at_shopify", endIso)
+      .not("financial_status", "eq", "voided")
+      .is("cancelled_at", null)
+      .order("created_at_shopify", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return rows;
+}
+
+async function fetchNewCustomerMetrics(sb: SupabaseAny, organizationId: string, periodStart: string, periodEnd: string): Promise<NewCustomerMetrics> {
+  // Match the main Growth dashboard's useStoreMetrics logic: active, non-voided,
+  // non-cancelled orders in the Bogotá business window; fully refunded orders are
+  // excluded from the count, and customers are deduped by Shopify customer_id with
+  // email fallback for guest checkouts.
+  const { start: startIso, end: endIso } = toBogotaIsoWindow(periodStart, periodEnd);
+  const periodOrders = await fetchAllPeriodOrders(sb, organizationId, startIso, endIso);
+  const validOrders = periodOrders.filter((order) => order.financial_status !== "refunded");
+
+  const periodCustomerIds = Array.from(new Set(validOrders
+    .map((order) => order.customer_id)
+    .filter((id): id is number | string => id !== null && id !== undefined)));
+  const periodGuestEmails = Array.from(new Set(validOrders
+    .filter((order) => order.customer_id === null || order.customer_id === undefined)
+    .map((order) => order.customer_email?.toLowerCase())
+    .filter((email): email is string => Boolean(email))));
+
+  const returningKeys = new Set<string>();
+  const batchSize = 200;
+
+  for (let i = 0; i < periodCustomerIds.length; i += batchSize) {
+    const batch = periodCustomerIds.slice(i, i + batchSize);
+    const { data, error } = await sb
+      .from("shopify_orders")
+      .select("customer_id")
+      .eq("organization_id", organizationId)
+      .lt("created_at_shopify", startIso)
+      .in("customer_id", batch)
+      .is("cancelled_at", null)
+      .not("financial_status", "eq", "voided")
+      .limit(50000);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      if (row.customer_id !== null && row.customer_id !== undefined) returningKeys.add(`id:${row.customer_id}`);
+    }
+  }
+
+  for (let i = 0; i < periodGuestEmails.length; i += batchSize) {
+    const batch = periodGuestEmails.slice(i, i + batchSize);
+    const { data, error } = await sb
+      .from("shopify_orders")
+      .select("customer_email")
+      .eq("organization_id", organizationId)
+      .lt("created_at_shopify", startIso)
+      .in("customer_email", batch)
+      .is("customer_id", null)
+      .is("cancelled_at", null)
+      .not("financial_status", "eq", "voided")
+      .limit(50000);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      if (row.customer_email) returningKeys.add(`email:${row.customer_email.toLowerCase()}`);
+    }
+  }
+
+  const periodOrderCountByCustomer = new Map<string, number>();
+  for (const order of validOrders) {
+    const key = customerKey(order);
+    if (key) periodOrderCountByCustomer.set(key, (periodOrderCountByCustomer.get(key) ?? 0) + 1);
+  }
+  for (const [key, count] of periodOrderCountByCustomer) {
+    if (count >= 2) returningKeys.add(key);
+  }
+
+  const newOrders = validOrders.filter((order) => {
+    const key = customerKey(order);
+    return !key || !returningKeys.has(key);
+  });
+  const returningOrders = validOrders.filter((order) => {
+    const key = customerKey(order);
+    return key !== null && returningKeys.has(key);
+  });
+
+  return {
+    newCustomerCount: new Set(newOrders.map(customerKey).filter((key): key is string => Boolean(key))).size,
+    returningCustomerCount: new Set(returningOrders.map(customerKey).filter((key): key is string => Boolean(key))).size,
+    newCustomerOrders: newOrders.length,
+    returningOrders: returningOrders.length,
+  };
+}
+
 function owner(label: string, role: string, kpis: Record<string, Kpi>, notes: string[] = []): OwnerScorecard {
   return { label, role, kpis, notes, status: worstStatus(Object.values(kpis).map((kpi) => kpi.status)) };
 }
@@ -257,10 +383,11 @@ serve(async (req) => {
 
     const sb = createClient(supabaseUrl, serviceRoleKey, { global: { headers: { Authorization: authHeader } } });
 
-    const [target, prophit, ugc, foldersRes, assetsRes] = await Promise.all([
+    const [target, prophit, ugc, customerMetrics, foldersRes, assetsRes] = await Promise.all([
       fetchCurrentTarget(sb, organizationId, week.start, week.end),
       fetchProphitMetrics(authHeader, organizationId, week.start, week.end),
       fetchUgcMetrics(sb, organizationId, week.start, week.end),
+      fetchNewCustomerMetrics(sb, organizationId, week.start, week.end),
       sb.from("growth_static_drive_folders").select("product_key, product_name, drive_folder_id").eq("organization_id", organizationId).eq("active", true).order("product_key"),
       sb.from("growth_static_drive_assets").select("drive_file_id, product_key, product_name, source_folder_id, file_name, created_time, attributed_person_key, attributed_person_label, web_view_link").eq("organization_id", organizationId).gte("created_time", `${week.start}T00:00:00.000Z`).lt("created_time", `${week.end}T00:00:00.000Z`).eq("trashed", false).order("created_time", { ascending: false }),
     ]);
@@ -273,10 +400,10 @@ serve(async (req) => {
     const adSpend = maybeNum(current.adSpend);
     const mer = maybeNum(current.mer);
     const cmPercent = maybeNum(current.cmPercent);
-    const newCustomers = maybeNum(current.newCustomerCount ?? current.newCustomers);
+    const newCustomers = customerMetrics.newCustomerCount;
     const orders = maybeNum(current.orders);
     const aov = maybeNum(current.aov);
-    const ncpa = adSpend !== null && newCustomers !== null && newCustomers > 0 ? adSpend / newCustomers : null;
+    const ncpa = adSpend !== null && newCustomers > 0 ? adSpend / newCustomers : null;
     const ncRevenuePercent = maybeNum(current.newCustomerRevenuePct);
 
     const staticCreatives = summarizeStaticCreatives(
@@ -381,7 +508,7 @@ serve(async (req) => {
       blockers,
       metadata: {
         computedAt: new Date().toISOString(),
-        sources: ["prophit-metrics", "ad_metrics_daily", "ugc_*", "growth_weekly_targets", "growth_static_drive_assets"],
+        sources: ["prophit-metrics", "shopify_orders", "ad_metrics_daily", "ugc_*", "growth_weekly_targets", "growth_static_drive_assets"],
         missingMetrics: ["mutations", "graduated_ads", "testing_waste", "frequency_winners", "stock_active_sku", "statics_published", "needs_review_backlog", "tracker_completeness", "kira_sales_angle_report", "kira_focus", "hermes_meta_wrapper_status", "google_query_mix", "pixel_nc_rev_deep_dive"],
         notes: [
           "June 600M dashboard uses non-linear weekly milestones from the 2026-06-01 operating anexo.",
@@ -389,6 +516,7 @@ serve(async (req) => {
           "info@dosmicos.co is mapped as shared/unassigned by default.",
         ],
         orders,
+        customerMetrics,
       },
     };
 
