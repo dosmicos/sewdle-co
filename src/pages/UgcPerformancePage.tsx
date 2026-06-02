@@ -98,6 +98,21 @@ const UgcPerformancePage: React.FC = () => {
     return isSameDay(rangeStart, monthStart) && isSameDay(rangeEnd, monthEnd);
   }, [rangeStart, rangeEnd]);
 
+  const isMonthToDate = useMemo(() => {
+    const monthStart = startOfDay(startOfMonth(rangeStart));
+    const monthEnd = endOfDay(endOfMonth(rangeStart));
+    return (
+      isSameDay(rangeStart, monthStart) &&
+      rangeEnd.getTime() >= monthStart.getTime() &&
+      rangeEnd.getTime() <= monthEnd.getTime()
+    );
+  }, [rangeStart, rangeEnd]);
+
+  // "Este mes" is month-to-date, not the full calendar month. Still show the
+  // monthly goals there; otherwise the scoreboard looks like goals disappeared
+  // on the most important default view.
+  const showMonthlyGoals = dateRange.preset === 'mtd' || isCalendarMonth || isMonthToDate;
+
   const [tierFilter, setTierFilter] = useState<string>('all');
   const [affiliateFilter, setAffiliateFilter] = useState<AffiliateFilter>('cmd');
   const [sortKey, setSortKey] = useState<SortKey>('affiliate_month_commission');
@@ -266,7 +281,7 @@ const UgcPerformancePage: React.FC = () => {
               </div>
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">
-                  {isCalendarMonth ? 'Objetivos del mes calendario' : 'Vista de periodo personalizado'}
+                  {showMonthlyGoals ? 'Objetivos del mes calendario' : 'Vista de periodo personalizado'}
                 </p>
                 <p className="text-sm font-medium">
                   {weeklyReport ? 'Reporte SQL activo' : 'Pendiente de migración'}
@@ -277,30 +292,30 @@ const UgcPerformancePage: React.FC = () => {
               <GoalProgress
                 label={`Revenue ${periodLabel}`}
                 value={affiliateSummary.monthRevenue}
-                goal={isCalendarMonth ? Number(goals.revenue_goal) : 0}
+                goal={showMonthlyGoals ? Number(goals.revenue_goal) : 0}
                 valueLabel={formatFullCOP(affiliateSummary.monthRevenue)}
-                goalLabel={isCalendarMonth ? formatFullCOP(Number(goals.revenue_goal)) : ''}
+                goalLabel={showMonthlyGoals ? formatFullCOP(Number(goals.revenue_goal)) : ''}
               />
               <GoalProgress
                 label={`Órdenes ${periodLabel}`}
                 value={affiliateSummary.monthOrders}
-                goal={isCalendarMonth ? Number(goals.orders_goal) : 0}
+                goal={showMonthlyGoals ? Number(goals.orders_goal) : 0}
                 valueLabel={`${affiliateSummary.monthOrders}`}
-                goalLabel={isCalendarMonth ? `${goals.orders_goal}` : ''}
+                goalLabel={showMonthlyGoals ? `${goals.orders_goal}` : ''}
               />
               <GoalProgress
                 label={`Creadoras activas ${usesCustomRange ? '' : 'semana'}`.trim()}
                 value={usesCustomRange ? affiliateSummary.monthActiveCreators : affiliateSummary.weekActiveCreators}
-                goal={isCalendarMonth ? Number(goals.weekly_active_creators_goal) : 0}
+                goal={showMonthlyGoals ? Number(goals.weekly_active_creators_goal) : 0}
                 valueLabel={`${usesCustomRange ? affiliateSummary.monthActiveCreators : affiliateSummary.weekActiveCreators}`}
-                goalLabel={isCalendarMonth ? `${goals.weekly_active_creators_goal}` : ''}
+                goalLabel={showMonthlyGoals ? `${goals.weekly_active_creators_goal}` : ''}
               />
               <GoalProgress
                 label={`Contenido ${periodLabel}`}
                 value={affiliateSummary.monthContentPieces}
-                goal={isCalendarMonth ? Number(goals.content_pieces_goal) : 0}
+                goal={showMonthlyGoals ? Number(goals.content_pieces_goal) : 0}
                 valueLabel={`${affiliateSummary.monthContentPieces} piezas`}
-                goalLabel={isCalendarMonth ? `${goals.content_pieces_goal}` : ''}
+                goalLabel={showMonthlyGoals ? `${goals.content_pieces_goal}` : ''}
               />
             </div>
           </CardContent>
