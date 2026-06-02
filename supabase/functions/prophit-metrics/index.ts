@@ -526,6 +526,11 @@ async function fetchMetaSpendFreshness(
   } else if (account.last_sync_status === "error" && account.last_sync_error) {
     warnings.push(`Último sync de Meta falló: ${String(account.last_sync_error).slice(0, 180)}`);
   }
+  // NOTE: last_sync_status === "rate_limited" is intentionally NOT warned here.
+  // Rate limits are transient and self-healing — the previous successful sync's
+  // data is still valid and the next hourly cron retries automatically. If a
+  // rate limit persists long enough to make the data genuinely stale, the
+  // "no se sincroniza hace Xh" staleness check below fires on its own.
 
   if (rangeTouchesRecentData) {
     if (!lastSyncAt) {

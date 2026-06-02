@@ -4,6 +4,7 @@ import {
   recordMetaReconnectRequired,
   recordMetaSyncError,
   recordMetaSyncSuccess,
+  isMetaRateLimited,
 } from "../_shared/meta-sync-health.ts";
 
 const corsHeaders = {
@@ -75,7 +76,7 @@ function extractCPA(costPerAction: any[] | undefined): number {
 /** Fetch with retry and exponential backoff for transient Meta API throttling */
 async function fetchWithRetry(
   url: string,
-  maxRetries = 3
+  maxRetries = 4
 ): Promise<Response> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const res = await fetch(url);
@@ -83,15 +84,20 @@ async function fetchWithRetry(
     if (res.ok) return res;
 
     const body = await res.json().catch(() => null);
-    const errorCode = body?.error?.code;
 
-    // Rate limit errors (32 = API Too Many Calls, 17 = User request limit)
-    if ((errorCode === 32 || errorCode === 17) && attempt < maxRetries) {
-      const delay = Math.pow(2, attempt + 1) * 1000;
+    // Retry ALL throttling classes — including code 4 (Application request
+    // limit reached) and the BUC ads-insights subcodes — not just 17/32.
+    // App-level limits (code 4) take longer to clear, so use a longer base
+    // backoff: 3s, 6s, 12s, 24s, 48s. Honour Retry-After when Meta sends it.
+    if (isMetaRateLimited(body?.error) && attempt < maxRetries) {
+      const retryAfterHeader = Number(res.headers.get("retry-after"));
+      const backoff = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+        ? retryAfterHeader * 1000
+        : Math.pow(2, attempt) * 3000;
       console.log(
-        `Rate limited (code ${errorCode}), retrying in ${delay}ms...`
+        `Meta rate limited (code ${body?.error?.code}, subcode ${body?.error?.error_subcode ?? body?.error?.subcode}), retrying in ${backoff}ms (attempt ${attempt + 1}/${maxRetries})...`
       );
-      await new Promise((r) => setTimeout(r, delay));
+      await new Promise((r) => setTimeout(r, backoff));
       continue;
     }
 

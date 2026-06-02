@@ -4,6 +4,7 @@ import {
   recordMetaReconnectRequired,
   recordMetaSyncError,
   recordMetaSyncSuccess,
+  isMetaRateLimited,
 } from "../_shared/meta-sync-health.ts";
 
 const corsHeaders = {
@@ -85,7 +86,7 @@ function extractVideoMetric(videoActions: any[] | undefined): number {
 /** Fetch with retry and exponential backoff for rate limits */
 async function fetchWithRetry(
   url: string,
-  maxRetries = 3
+  maxRetries = 4
 ): Promise<Response> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const res = await fetch(url);
@@ -93,13 +94,18 @@ async function fetchWithRetry(
     if (res.ok) return res;
 
     const body = await res.json().catch(() => null);
-    const errorCode = body?.error?.code;
 
-    // Rate limit errors (32 = API Too Many Calls, 17 = User request limit)
-    if ((errorCode === 32 || errorCode === 17) && attempt < maxRetries) {
-      const delay = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+    // Retry ALL throttling classes (code 4 app-level, 17/32 user/page,
+    // BUC ads-insights subcodes) — not just 17/32. App-level limits clear
+    // slower, so use a longer base backoff: 3s, 6s, 12s, 24s, 48s. Honour
+    // Retry-After when Meta sends it.
+    if (isMetaRateLimited(body?.error) && attempt < maxRetries) {
+      const retryAfterHeader = Number(res.headers.get("retry-after"));
+      const delay = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+        ? retryAfterHeader * 1000
+        : Math.pow(2, attempt) * 3000;
       console.log(
-        `Rate limited (code ${errorCode}), retrying in ${delay}ms...`
+        `Meta rate limited (code ${body?.error?.code}, subcode ${body?.error?.error_subcode ?? body?.error?.subcode}), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`
       );
       await new Promise((r) => setTimeout(r, delay));
       continue;
