@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isMetaRateLimited } from "../_shared/meta-sync-health.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,19 +46,23 @@ const ADSET_FIELDS = [
 
 async function fetchWithRetry(
   url: string,
-  maxRetries = 3
+  maxRetries = 4
 ): Promise<Response> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     const res = await fetch(url);
     if (res.ok) return res;
 
     const body = await res.json().catch(() => null);
-    const errorCode = body?.error?.code;
 
-    if ((errorCode === 32 || errorCode === 17) && attempt < maxRetries) {
-      const delay = Math.pow(2, attempt + 1) * 1000;
+    // Retry ALL throttling classes (code 4 app-level, 17/32 user/page, BUC
+    // ads-insights subcodes). Longer base backoff for app-level: 3s..48s.
+    if (isMetaRateLimited(body?.error) && attempt < maxRetries) {
+      const retryAfterHeader = Number(res.headers.get("retry-after"));
+      const delay = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+        ? retryAfterHeader * 1000
+        : Math.pow(2, attempt) * 3000;
       console.log(
-        `Rate limited (code ${errorCode}), retrying in ${delay}ms...`
+        `Meta rate limited (code ${body?.error?.code}, subcode ${body?.error?.error_subcode ?? body?.error?.subcode}), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`
       );
       await new Promise((r) => setTimeout(r, delay));
       continue;

@@ -18,6 +18,37 @@ const INVALID_TOKEN_SUBCODES = new Set([
   492, // Invalid session
 ]);
 
+// Transient throttling. These recover on their own — the previous successful
+// sync's data is still valid, so they must NOT mark the account as error
+// (which would surface the "Meta spend necesita validación" alarm) nor as
+// reconnect_required.
+const RATE_LIMIT_CODES = new Set([
+  4,   // Application request limit reached (app-level hourly budget)
+  17,  // User request limit reached (per ad account)
+  32,  // Page request limit reached
+  613, // Calls to this API have exceeded the rate limit
+  80000, // Business Use Case: ads insights throttle
+  80001,
+  80002,
+  80003,
+  80004,
+  80014,
+]);
+const RATE_LIMIT_SUBCODES = new Set([
+  1504022, // Ad insights rate limit (the subcode in the user-reported error)
+  1504039,
+  2446079,
+]);
+
+export function isMetaRateLimited(error: MetaApiError | null | undefined): boolean {
+  if (!error) return false;
+  const code = toNumber(error.code);
+  const subcode = toNumber(error.error_subcode ?? error.subcode);
+  if (code !== null && RATE_LIMIT_CODES.has(code)) return true;
+  if (subcode !== null && RATE_LIMIT_SUBCODES.has(subcode)) return true;
+  return false;
+}
+
 function toNumber(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
@@ -81,12 +112,27 @@ export async function recordMetaSyncError(
   adAccountId: string,
   metaError: MetaApiError | null | undefined,
   fallback = "Error de la API de Meta"
-): Promise<{ needsReconnect: boolean; message: string }> {
+): Promise<{ needsReconnect: boolean; rateLimited: boolean; message: string }> {
   const now = new Date().toISOString();
   const needsReconnect = isMetaReconnectRequired(metaError);
+  const rateLimited = !needsReconnect && isMetaRateLimited(metaError);
   const message = compactMetaError(metaError, fallback);
+
+  // Classification:
+  //  - reconnect_required → invalid/expired token; account disabled, UI shows Reconectar.
+  //  - rate_limited       → transient throttle; account stays active, NO error alarm.
+  //                         The last successful sync's data is still valid and the next
+  //                         hourly cron tick will retry. Only the staleness check
+  //                         (lastSyncAt age) should eventually warn if it persists.
+  //  - error              → genuine failure worth surfacing now.
+  const status = needsReconnect
+    ? "reconnect_required"
+    : rateLimited
+      ? "rate_limited"
+      : "error";
+
   const update: Record<string, unknown> = {
-    last_sync_status: needsReconnect ? "reconnect_required" : "error",
+    last_sync_status: status,
     last_sync_error: message,
     needs_reconnect: needsReconnect,
     updated_at: now,
@@ -108,7 +154,7 @@ export async function recordMetaSyncError(
     console.error("[meta-sync-health] Failed to record sync error:", error);
   }
 
-  return { needsReconnect, message };
+  return { needsReconnect, rateLimited, message };
 }
 
 export async function recordMetaSyncSuccess(
