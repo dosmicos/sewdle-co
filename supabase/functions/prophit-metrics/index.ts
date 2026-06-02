@@ -100,7 +100,8 @@ interface FinanceExpense {
 interface StoreMetricsInternal {
   totalSales: number;
   grossRevenueBeforeRefunds: number;
-  orders: number;
+  orders: number;          // revenue-eligible orders (cost proration, customer math)
+  ordersPlaced: number;    // ALL orders placed incl. cancelled/voided — matches Shopify "Orders" KPI
   returns: number;
   taxes: number;
   aov: number;
@@ -323,16 +324,12 @@ async function fetchAllOrders(
   const pageSize = 1000;
   let all: any[] = [];
   let from = 0;
-  // Loop until page returns fewer than pageSize rows.
-  //
-  // NOTE on cancelled orders: we drop voided unconditionally, but a cancelled
-  // order can still have non-zero `current_total_price` (Shopify keeps the
-  // post-refund balance there when only part of the order was refunded). The
-  // raw cancelled_at-IS-NULL filter throws those away entirely and produces
-  // a Net Sales below Shopify's "Total sales over time" report. Include
-  // cancelled orders whose net price is still > 0 so the contribution is
-  // recovered; orders with current_total_price = 0 still contribute 0 either
-  // way so they're filtered at compute time.
+  // Fetch ALL orders in the window — including voided and cancelled. We need
+  // them so the "Orders" KPI matches Shopify's Orders count (Shopify counts
+  // every order placed, including cancelled/voided). Revenue, taxes, COGS and
+  // cost proration are computed downstream over the revenue-eligible subset
+  // only (non-refunded, non-cancelled, non-voided); cancelled/voided orders
+  // contribute 0 revenue but DO count toward orders placed.
   while (true) {
     const { data, error } = await sb
       .from("shopify_orders")
@@ -342,7 +339,6 @@ async function fetchAllOrders(
       .eq("organization_id", orgId)
       .gte("created_at_shopify", startISO)
       .lte("created_at_shopify", endISO)
-      .not("financial_status", "eq", "voided")
       .order("created_at_shopify", { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throw new Error(`shopify_orders: ${error.message}`);
@@ -789,7 +785,7 @@ async function fetchStoreMetrics(
   const orders = await fetchAllOrders(sb, orgId, startISO, endISO);
 
   const emptyResult: StoreMetricsInternal = {
-    totalSales: 0, grossRevenueBeforeRefunds: 0, orders: 0, returns: 0, taxes: 0, aov: 0,
+    totalSales: 0, grossRevenueBeforeRefunds: 0, orders: 0, ordersPlaced: 0, returns: 0, taxes: 0, aov: 0,
     discounts: 0, newCustomerRevenue: 0, returningCustomerRevenue: 0,
     newCustomerOrders: 0, unitsSold: 0, totalShipping: 0, lineItemCogs: 0, gatewayFees: 0,
     dailyData: [],
@@ -806,19 +802,27 @@ async function fetchStoreMetrics(
     return o.total_price || 0;
   };
 
-  // Skip fully refunded. Cancelled orders ARE fetched (see fetchAllOrders
-  // comment) but only kept here when their net price is still > 0 — i.e. the
-  // customer received only a partial refund. Cancelled-with-zero-net stays
-  // out so order count / taxes / shipping don't inflate from voided activity.
-  const validOrders = orders.filter(o => {
-    if (o.financial_status === "refunded") return false;
-    if (o.cancelled_at != null && getNetPrice(o) <= 0) return false;
-    return true;
-  });
-  const refundedOrders = orders.filter(o => o.financial_status === "refunded");
+  // Exclude test/draft orders entirely (Shopify excludes them from its KPIs).
+  const realOrders = orders.filter(o => o.raw_data?.test !== true);
+
+  // "Orders placed" = every real order in the window, INCLUDING cancelled and
+  // voided. This is what Shopify's "Orders" KPI counts, so it's the number the
+  // dashboard displays. (User audit: Shopify showed 104, we showed 102 because
+  // we were dropping the 2 cancelled orders from the count.)
+  const ordersPlaced = realOrders.length;
+
+  // Revenue-eligible subset: drop refunded, cancelled and voided. These
+  // generate no net revenue (Shopify "Total Sales" also excludes cancelled),
+  // and they must not inflate taxes / shipping / COGS / cost proration.
+  const validOrders = realOrders.filter(o =>
+    o.financial_status !== "refunded" &&
+    o.financial_status !== "voided" &&
+    o.cancelled_at == null
+  );
+  const refundedOrders = realOrders.filter(o => o.financial_status === "refunded");
 
   const totalSales = validOrders.reduce((sum, o) => sum + getNetPrice(o), 0);
-  const grossRevenueBeforeRefunds = orders.reduce((sum, o) => sum + (o.total_price || 0), 0);
+  const grossRevenueBeforeRefunds = realOrders.reduce((sum, o) => sum + (o.total_price || 0), 0);
   const totalOrders = validOrders.length;
   const returns = refundedOrders.length;
   // Supabase JS client returns `numeric` columns as strings on some queries,
@@ -835,7 +839,9 @@ async function fetchStoreMetrics(
   const taxes = validOrders.reduce((sum, o) => sum + toNum(o.total_tax), 0);
   const discounts = validOrders.reduce((sum, o) => sum + toNum(o.total_discounts), 0);
   const shipping = validOrders.reduce((sum, o) => sum + toNum(o.total_shipping), 0);
-  const aov = totalOrders > 0 ? totalSales / totalOrders : 0;
+  // AOV uses ordersPlaced (matches Shopify: Total Sales / Orders). Keeps
+  // AOV × Orders ≈ Revenue internally consistent on the dashboard.
+  const aov = ordersPlaced > 0 ? totalSales / ordersPlaced : 0;
 
   // Line items → units sold + per-product COGS
   const orderIds = validOrders.map(o => o.shopify_order_id);
@@ -888,6 +894,7 @@ async function fetchStoreMetrics(
     totalSales,
     grossRevenueBeforeRefunds,
     orders: totalOrders,
+    ordersPlaced,
     returns,
     taxes,
     aov,
@@ -1091,7 +1098,7 @@ function computeProphitMetrics(
     shippingCostPct,
     dailyBurn,
     projectedMonthlyProfit,
-    orders: store.orders,
+    orders: store.ordersPlaced,  // KPI matches Shopify "Orders" (incl. cancelled/voided)
     unitsSold: store.unitsSold,
     aov: store.aov,
     purchases: ad.purchases,
