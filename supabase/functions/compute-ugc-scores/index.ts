@@ -8,6 +8,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 };
 
+// Media file extensions that leak into ad names (the creative file is named
+// "@handle.mp4"). We strip these so a handle like "@maye.montejo.mov" matches
+// the real creator "maye.montejo" instead of being treated as a new one.
+const MEDIA_EXT_RE = /\.(mov|mp4|m4v|webm|mkv|mpeg|jpeg|jpg|png|gif|avif|heic|heif)$/i;
+
 // ─── Scoring Functions ──────────────────────────────────────────
 
 function computeRoasScore(avgRoas: number): number {
@@ -290,41 +295,28 @@ serve(async (req: Request) => {
 
     // ─── 5. Process each creator handle ─────────────────────────
     let creatorsScored = 0;
+    let skippedNoCreator = 0;
     let adsLinked = 0;
-    let autoCreated = 0;
     const errors: string[] = [];
 
     for (const [handle, handleAds] of adsByHandle) {
       try {
-        const strippedHandle = handle.replace(/^@/, "").toLowerCase();
-        let creator = creatorsMap.get(strippedHandle);
+        // Normalize: strip @ and any media extension that leaked in from ad
+        // names like "... - UGC video - @maye.montejo.mov".
+        const strippedHandle = handle
+          .replace(/^@/, "")
+          .replace(MEDIA_EXT_RE, "")
+          .toLowerCase();
+        const creator = creatorsMap.get(strippedHandle);
 
-        // Auto-create if not found
+        // Do NOT auto-create creators from ad handles. Ad-name parsing is not a
+        // reliable source of real Instagram handles (creative filenames, _ugc
+        // suffixes, etc.), and auto-creation polluted the creator list with
+        // junk entries. Only attribute performance to creators that already
+        // exist; ads for unknown handles are skipped until the creator is added.
         if (!creator) {
-          const displayName = strippedHandle.charAt(0).toUpperCase() + strippedHandle.slice(1);
-          const { data: newCreator, error: createErr } = await supabase
-            .from("ugc_creators")
-            .insert({
-              organization_id: organizationId,
-              name: displayName,
-              instagram_handle: strippedHandle,
-              status: "activo",
-              avatar_url: `https://unavatar.io/instagram/${strippedHandle}`,
-              platform: "instagram",
-            })
-            .select("id, name")
-            .single();
-
-          if (createErr) {
-            // Might already exist via tiktok_handle or race condition
-            console.warn(`[UGC Scores] Failed to auto-create ${strippedHandle}: ${createErr.message}`);
-            continue;
-          }
-
-          creator = { id: newCreator.id, name: newCreator.name };
-          creatorsMap.set(strippedHandle, creator);
-          autoCreated++;
-          console.log(`[UGC Scores] Auto-created creator: ${strippedHandle}`);
+          skippedNoCreator++;
+          continue;
         }
 
         // ─── Aggregate metrics across all this creator's ads ────
@@ -590,7 +582,7 @@ serve(async (req: Request) => {
     }
 
     console.log(
-      `[UGC Scores] Done: ${creatorsScored} scored, ${adsLinked} ads linked, ${autoCreated} auto-created`
+      `[UGC Scores] Done: ${creatorsScored} scored, ${adsLinked} ads linked, ${skippedNoCreator} skipped (no existing creator)`
     );
 
     return new Response(
@@ -598,7 +590,7 @@ serve(async (req: Request) => {
         success: true,
         creatorsScored,
         adsLinked,
-        autoCreated,
+        skippedNoCreator,
         totalHandles: adsByHandle.size,
         errors: errors.length > 0 ? errors : undefined,
       }),

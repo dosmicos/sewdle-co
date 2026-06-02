@@ -60,13 +60,21 @@ function parseDestinationUrl(url: string | null) {
   }
 }
 
+// Strip media file extensions that leak in from ad names like "@maye.montejo.mov"
+// (the creative file is named after the handle). Without this, the extension
+// becomes part of the stored handle and creates duplicate/junk creators.
+const MEDIA_EXT_RE = /\.(mov|mp4|m4v|webm|mkv|mpeg|jpeg|jpg|png|gif|avif|heic|heif)$/i;
+
 function extractUGCHandle(
   ...sources: (string | null | undefined)[]
 ): string | null {
   for (const src of sources) {
     if (!src) continue;
     const match = src.match(/@([\w.]+)/);
-    if (match) return `@${match[1]}`;
+    if (match) {
+      const handle = match[1].replace(MEDIA_EXT_RE, "");
+      if (handle) return `@${handle}`;
+    }
   }
   return null;
 }
