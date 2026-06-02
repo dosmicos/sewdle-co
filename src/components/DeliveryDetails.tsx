@@ -50,6 +50,9 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
   // Detectar si es una entrega de la tienda USA → imprimir 2 etiquetas por unidad
   const isUsaDelivery = delivery?.orders?.stores?.country_code === 'US';
   const labelsPerUnit = isUsaDelivery ? 2 : 1;
+  // USA only: toggle whether printed labels include the size/color line.
+  // Default ON (con talla) — non-USA deliveries always keep the size (switch hidden).
+  const [showSizeOnLabels, setShowSizeOnLabels] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [isReEditingQuality, setIsReEditingQuality] = useState(false); // Nuevo estado para re-edición
   const [quantityData, setQuantityData] = useState<any>({});
@@ -689,7 +692,8 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
     if (!variant) return;
 
     const productName = variant.products?.name || 'Producto';
-    const variantText = [variant.size, variant.color].filter(Boolean).join(' - ');
+    // When the size toggle is off (USA), omit the variant line → only name + SKU
+    const variantText = showSizeOnLabels ? [variant.size, variant.color].filter(Boolean).join(' - ') : '';
     const sku = variant.sku_variant || '';
     const quantity = item.quantity_approved;
 
@@ -1150,11 +1154,14 @@ const DeliveryDetails = ({ delivery: initialDelivery, onBack, onDeliveryUpdated,
       </div>
 
       {/* Resumen de Revisión - Solo mostrar si ha sido procesada */}
-      <DeliveryReviewSummary 
+      <DeliveryReviewSummary
         delivery={delivery}
         totalDelivered={totals.delivered}
         totalApproved={totals.approved}
         totalDefective={totals.defective}
+        isUsaDelivery={isUsaDelivery}
+        showSizeOnLabels={showSizeOnLabels}
+        onShowSizeOnLabelsChange={setShowSizeOnLabels}
       />
 
       {/* Delivery Information */}

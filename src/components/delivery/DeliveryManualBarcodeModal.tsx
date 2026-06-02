@@ -25,6 +25,7 @@ interface DeliveryManualBarcodeModalProps {
   onClose: () => void;
   deliveryItems: DeliveryItem[];
   trackingNumber: string;
+  showSize?: boolean;
 }
 
 interface LabelData {
@@ -38,7 +39,8 @@ const DeliveryManualBarcodeModal = ({
   isOpen, 
   onClose, 
   deliveryItems,
-  trackingNumber 
+  trackingNumber,
+  showSize = true,
 }: DeliveryManualBarcodeModalProps) => {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
 
@@ -215,9 +217,10 @@ const DeliveryManualBarcodeModal = ({
       if (qty > 0) {
         const variant = item.order_items?.product_variants;
         const productName = variant?.products?.name || 'Producto';
-        const variantText = [variant?.size, variant?.color].filter(Boolean).join(' - ');
+        // When size toggle is off (USA), omit the variant line → only name + SKU
+        const variantText = showSize ? [variant?.size, variant?.color].filter(Boolean).join(' - ') : '';
         const sku = variant?.sku_variant || '';
-        
+
         for (let i = 0; i < qty; i++) {
           labels.push({ sku, productName, variant: variantText, unitIndex: i + 1 });
         }

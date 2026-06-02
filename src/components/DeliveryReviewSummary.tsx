@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { CheckCircle, AlertTriangle, XCircle, Clock, RefreshCw, ArrowRight, Barcode } from 'lucide-react';
 import { format } from 'date-fns';
@@ -13,9 +15,20 @@ interface DeliveryReviewSummaryProps {
   totalDelivered: number;
   totalApproved: number;
   totalDefective: number;
+  isUsaDelivery?: boolean;
+  showSizeOnLabels?: boolean;
+  onShowSizeOnLabelsChange?: (value: boolean) => void;
 }
 
-const DeliveryReviewSummary = ({ delivery, totalDelivered, totalApproved, totalDefective }: DeliveryReviewSummaryProps) => {
+const DeliveryReviewSummary = ({
+  delivery,
+  totalDelivered,
+  totalApproved,
+  totalDefective,
+  isUsaDelivery = false,
+  showSizeOnLabels = true,
+  onShowSizeOnLabelsChange,
+}: DeliveryReviewSummaryProps) => {
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
   const approvalRate = totalDelivered > 0 ? ((totalApproved / totalDelivered) * 100) : 0;
   
@@ -124,8 +137,21 @@ const DeliveryReviewSummary = ({ delivery, totalDelivered, totalApproved, totalD
 
           {/* Barcode Print Button - Always visible when there are approved items */}
           {totalApproved > 0 && (
-            <div className="mt-6 pt-4 border-t">
-              <Button 
+            <div className="mt-6 pt-4 border-t space-y-3">
+              {/* USA only: toggle size on printed labels */}
+              {isUsaDelivery && (
+                <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
+                  <Label htmlFor="show-size-labels" className="text-sm cursor-pointer">
+                    Mostrar talla en etiquetas
+                  </Label>
+                  <Switch
+                    id="show-size-labels"
+                    checked={showSizeOnLabels}
+                    onCheckedChange={(v) => onShowSizeOnLabelsChange?.(v)}
+                  />
+                </div>
+              )}
+              <Button
                 onClick={() => setShowBarcodeModal(true)}
                 variant="outline"
                 className="w-full gap-2"
@@ -144,6 +170,7 @@ const DeliveryReviewSummary = ({ delivery, totalDelivered, totalApproved, totalD
         onClose={() => setShowBarcodeModal(false)}
         deliveryItems={delivery.delivery_items || []}
         trackingNumber={delivery.tracking_number || ''}
+        showSize={showSizeOnLabels}
       />
 
       {/* Estado de Sincronización con Shopify */}
