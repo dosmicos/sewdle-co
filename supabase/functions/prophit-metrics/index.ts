@@ -9,7 +9,7 @@
 //
 // This function ports the logic of the following React hooks:
 //   - useStoreMetrics        → shopify_orders + shopify_order_line_items
-//   - useAdMetrics           → ad_metrics_daily (Meta + Google)
+//   - useAdMetrics           → ad_metrics_daily (Meta + Google + TikTok)
 //   - useFinanceSettings     → finance_settings
 //   - useMonthlyTargets      → monthly_targets
 //   - useProductCosts        → product_costs  (for per-product COGS override)
@@ -124,6 +124,7 @@ interface AdMetricsInternal {
   purchases: number;
   metaSpend: number;
   googleSpend: number;
+  tiktokSpend: number;
   dailyData: Array<{ date: string; spend: number; purchases: number }>;
 }
 
@@ -160,6 +161,7 @@ interface ProphitMetrics {
   adSpend: number;
   metaSpend: number;
   googleSpend: number;
+  tiktokSpend: number;
 
   // Results
   contributionMargin: number;
@@ -399,18 +401,23 @@ async function fetchAdMetricsByPlatform(
   startDate: string,
   endDate: string
 ): Promise<AdMetricsInternal> {
+  // Include TikTok alongside Meta and Google. Previously the platform IN-list
+  // omitted "tiktok_ads", so TikTok spend was excluded from total adSpend and
+  // therefore from Contribution Margin — dashboard's AD SPEND row in the CM
+  // breakdown was lower than the Channel Metrics total by exactly TikTok's
+  // spend. Now all three platforms feed both the total and the breakdown.
   const { data, error } = await sb
     .from("ad_metrics_daily")
     .select("spend, impressions, clicks, conversions, conversion_value, purchases, platform, date")
     .eq("organization_id", orgId)
-    .in("platform", ["meta", "google_ads"])
+    .in("platform", ["meta", "google_ads", "tiktok_ads"])
     .gte("date", startDate)
     .lte("date", endDate)
     .order("date", { ascending: true });
   if (error) throw new Error(`ad_metrics_daily: ${error.message}`);
 
   let spend = 0, impressions = 0, clicks = 0, conversions = 0, conversionValue = 0, purchases = 0;
-  let metaSpend = 0, googleSpend = 0;
+  let metaSpend = 0, googleSpend = 0, tiktokSpend = 0;
   const dailyMap = new Map<string, { spend: number; purchases: number }>();
 
   for (const row of data || []) {
@@ -429,6 +436,7 @@ async function fetchAdMetricsByPlatform(
     purchases += rPurch;
     if (row.platform === "meta") metaSpend += rSpend;
     else if (row.platform === "google_ads") googleSpend += rSpend;
+    else if (row.platform === "tiktok_ads") tiktokSpend += rSpend;
 
     const existing = dailyMap.get(row.date) ?? { spend: 0, purchases: 0 };
     existing.spend += rSpend;
@@ -442,7 +450,7 @@ async function fetchAdMetricsByPlatform(
 
   return {
     spend, impressions, clicks, conversions, conversionValue, purchases,
-    metaSpend, googleSpend, dailyData,
+    metaSpend, googleSpend, tiktokSpend, dailyData,
   };
 }
 
@@ -1021,6 +1029,7 @@ function computeProphitMetrics(
     adSpend,
     metaSpend: ad.metaSpend,
     googleSpend: ad.googleSpend,
+    tiktokSpend: ad.tiktokSpend,
     contributionMargin,
     cmPercent,
     costOfDelivery,
