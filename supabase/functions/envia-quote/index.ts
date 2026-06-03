@@ -416,12 +416,14 @@ serve(async (req) => {
     // Build rate request following Envia.com API docs
     const rateRequest = {
       origin: {
+        name: "Sewdle",      // Coordinadora's WS rejects the quote if origin.name is missing
         country: "CO",
         state: "DC",
         city: "11001000",      // Bogotá DANE code
         postalCode: "11001000" // Same DANE code
       },
       destination: {
+        name: "Cliente",     // Placeholder for quoting; real name is set when creating the label
         country: "CO",
         state: stateCode,
         city: destinationDaneCode,
@@ -485,8 +487,8 @@ serve(async (req) => {
             }
 
             if (data.meta === 'error') {
-              console.log(`⚠️ ${carrier} (${shipmentType.label}) error:`, data.error?.message || 'Unknown error');
-              return { carrier, deliveryType: shipmentType.label, success: false, error: data.error?.message };
+              console.log(`⚠️ ${carrier} (${shipmentType.label}) error:`, JSON.stringify(data.error) || 'Unknown error');
+              return { carrier, deliveryType: shipmentType.label, success: false, error: data.error?.message, rawError: data.error };
             }
 
             console.log(`✅ Got ${shipmentType.label} quote from ${carrier}`);
@@ -571,6 +573,26 @@ serve(async (req) => {
 
     console.log(`✅ Got ${quotes.length} total ground quotes (${domicilioQuotes.length} domicilio, ${oficinaQuotes.length} oficina)`);
 
+    // Optional per-carrier diagnostics (pass { debug: true } in the request body).
+    // Surfaces why a carrier (e.g. Coordinadora) is missing from the quotes:
+    // API error, no ground service, or filtered-out service name.
+    const carrierDebug = (body as any).debug
+      ? results.map((r) => ({
+          carrier: r.carrier,
+          deliveryType: r.deliveryType,
+          success: r.success,
+          error: r.error || null,
+          rawError: (r as any).rawError || null,
+          rawServices: r.success && Array.isArray(r.data?.data)
+            ? r.data.data.map((x: any) => ({
+                carrier: x.carrier,
+                service: x.service,
+                price: x.totalPrice || x.price,
+              }))
+            : null,
+        }))
+      : undefined;
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -583,7 +605,8 @@ serve(async (req) => {
           state_code: stateCode,
           dane_code: destinationDaneCode
         },
-        matchInfo
+        matchInfo,
+        ...(carrierDebug ? { debug: carrierDebug } : {})
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
