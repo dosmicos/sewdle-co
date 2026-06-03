@@ -27,6 +27,13 @@ export const useMessagingMessages = (conversationId: string | null) => {
     // Si ya hay datos en cache (ej: optimistic insert), mostrarlos primero
     // y hacer refetch en background sin borrar los datos existentes
     placeholderData: (previousData) => previousData,
+    // Poll corto SOLO para el hilo abierto. El realtime de messaging_messages
+    // (RLS anidada) no se entrega de forma confiable y el poll central es de 30s,
+    // lo que dejaba el panel derecho hasta ~1min atrás del izquierdo. Esto acota
+    // el peor caso a unos segundos sin costo de DB notable (1 conversación, 1 usuario).
+    // refetchIntervalInBackground es false por defecto: no consume recursos con la
+    // pestaña oculta o sin foco.
+    refetchInterval: conversationId ? 5000 : false,
   });
 
   // Realtime is now handled by useMessagingRealtime hook in MessagingAIPage
