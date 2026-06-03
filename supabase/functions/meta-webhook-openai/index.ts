@@ -1161,6 +1161,14 @@ serve(async (req) => {
                 .eq('external_user_id', senderPhone)
                 .single();
 
+              // Para conversaciones existentes diferimos la actualización del preview
+              // (last_message_at / last_message_preview / unread_count) hasta DESPUÉS de
+              // insertar la fila del mensaje. El UPDATE de la conversación dispara el evento
+              // realtime que el panel izquierdo recibe de inmediato; si ocurriera antes del
+              // INSERT del mensaje, el panel derecho refetchearía con la fila todavía ausente
+              // y quedaría esperando al poll (hasta ~1min de retraso).
+              const conversationExisted = !!conversation;
+
               if (!conversation) {
                 // Get contact name from webhook if available
                 const contactName = change.value.contacts?.[0]?.profile?.name || senderPhone;
@@ -1190,25 +1198,9 @@ serve(async (req) => {
                 
                 conversation = newConversation;
                 console.log('Created new conversation:', conversation.id);
-              } else {
-                // Update existing conversation
-                await supabase
-                  .from('messaging_conversations')
-                  .update({
-                    last_message_at: timestamp.toISOString(),
-                    last_message_preview: mediaId
-                      ? (messageType === 'image' ? '📷 Imagen'
-                        : messageType === 'audio' ? '🎵 Audio'
-                        : messageType === 'video' ? '🎬 Video'
-                        : messageType === 'document' ? '📄 Documento'
-                        : messageType === 'sticker' ? '🎭 Sticker'
-                        : content.substring(0, 100))
-                      : content.substring(0, 100),
-                    unread_count: (conversation.unread_count || 0) + 1,
-                    status: 'active',
-                  })
-                  .eq('id', conversation.id);
               }
+              // NOTA: el UPDATE de conversaciones existentes se hace más abajo,
+              // después de insertar la fila del mensaje (ver conversationExisted).
 
               // If message includes media_id, download and cache it now (so UI + AI can use permanent URL)
               if (mediaId && conversation?.id) {
@@ -1266,6 +1258,29 @@ serve(async (req) => {
                 console.error('Error saving message:', msgError);
               } else {
                 console.log('Message saved to database');
+              }
+
+              // Actualizar el preview de la conversación DESPUÉS de insertar el mensaje.
+              // Así, cuando el panel izquierdo recibe el evento realtime de la conversación
+              // y refetchea los mensajes, la fila ya existe y el panel derecho se actualiza
+              // junto con el izquierdo (en vez de esperar al poll).
+              if (conversationExisted) {
+                await supabase
+                  .from('messaging_conversations')
+                  .update({
+                    last_message_at: timestamp.toISOString(),
+                    last_message_preview: mediaId
+                      ? (messageType === 'image' ? '📷 Imagen'
+                        : messageType === 'audio' ? '🎵 Audio'
+                        : messageType === 'video' ? '🎬 Video'
+                        : messageType === 'document' ? '📄 Documento'
+                        : messageType === 'sticker' ? '🎭 Sticker'
+                        : content.substring(0, 100))
+                      : content.substring(0, 100),
+                    unread_count: (conversation.unread_count || 0) + 1,
+                    status: 'active',
+                  })
+                  .eq('id', conversation.id);
               }
 
               // Generate and send AI response if enabled (check both channel and conversation level)
