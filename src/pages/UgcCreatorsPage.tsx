@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, LayoutGrid, Table as TableIcon, Trophy, RotateCcw, ExternalLink, Lightbulb } from 'lucide-react';
+import { Plus, LayoutGrid, Table as TableIcon, Trophy, RotateCcw, ExternalLink, Lightbulb, Images } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { supabase as supabaseClient } from '@/integrations/supabase/client';
@@ -19,6 +19,7 @@ import { UgcCreatorForm } from '@/components/ugc/UgcCreatorForm';
 import { UgcCampaignForm } from '@/components/ugc/UgcCampaignForm';
 import { UgcVideoForm } from '@/components/ugc/UgcVideoForm';
 import { UgcCreatorDetailModal } from '@/components/ugc/UgcCreatorDetailModal';
+import UgcContentCatalog from '@/components/ugc/UgcContentCatalog';
 import { UgcNotificationCenter } from '@/components/ugc/UgcNotificationCenter';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
 import { supabase } from '@/integrations/supabase/client';
@@ -32,7 +33,7 @@ const UgcCreatorsPage: React.FC = () => {
   const { currentOrganization } = useOrganization();
   const [rankingStartedAt, setRankingStartedAt] = useState<string | null>(null);
   const [resettingRanking, setResettingRanking] = useState(false);
-  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('table');
+  const [viewMode, setViewMode] = useState<'kanban' | 'table' | 'catalog'>('table');
   const [kanbanTab, setKanbanTab] = useState<'prospectos' | 'campanas'>('prospectos');
   const [ideaFilter, setIdeaFilter] = useState<CreatorIdeaFilter>('all');
   const [creatorFormOpen, setCreatorFormOpen] = useState(false);
@@ -298,6 +299,9 @@ const UgcCreatorsPage: React.FC = () => {
             <Button variant={viewMode === 'kanban' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('kanban')} className="h-8">
               <LayoutGrid className="h-4 w-4 mr-1" /> Kanban
             </Button>
+            <Button variant={viewMode === 'catalog' ? 'default' : 'ghost'} size="sm" onClick={() => setViewMode('catalog')} className="h-8">
+              <Images className="h-4 w-4 mr-1" /> Catálogo
+            </Button>
           </div>
           <UgcNotificationCenter onNotificationClick={handleNotificationClick} />
           <Button onClick={() => { setEditingCreator(null); setCreatorFormOpen(true); }}>
@@ -401,6 +405,8 @@ const UgcCreatorsPage: React.FC = () => {
             />
           </TabsContent>
         </Tabs>
+      ) : viewMode === 'catalog' ? (
+        <UgcContentCatalog videos={videos} creators={creators} />
       ) : (
         <UgcTableView
           creators={filteredCreatorsByIdea}
