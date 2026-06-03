@@ -32,26 +32,6 @@ interface CatalogItem {
   isVideo: boolean;
 }
 
-// Responsive column count, kept in sync with the Tailwind breakpoints used
-// below so the JS row-major distribution matches what the user sees.
-function useColumnCount(): number {
-  const get = () => {
-    if (typeof window === 'undefined') return 5;
-    const w = window.innerWidth;
-    if (w >= 1280) return 5; // xl
-    if (w >= 768) return 4;  // md
-    if (w >= 640) return 3;  // sm
-    return 2;                // base
-  };
-  const [cols, setCols] = useState<number>(get);
-  useEffect(() => {
-    const onResize = () => setCols(get());
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-  return cols;
-}
-
 const UgcContentCatalog: React.FC<UgcContentCatalogProps> = ({ videos, creators }) => {
   const creatorById = useMemo(() => {
     const map = new Map<string, UgcCreator>();
@@ -71,20 +51,6 @@ const UgcContentCatalog: React.FC<UgcContentCatalogProps> = ({ videos, creators 
         isVideo: isVideoUrl(v.video_url),
       }));
   }, [videos, creatorById]);
-
-  const columnCount = useColumnCount();
-
-  // Distribute items round-robin into columns so reading order is ROW-MAJOR
-  // (left → right, then next row). Item i goes to column i % columnCount, so
-  // the top row is items 0,1,2,… (newest first) read horizontally — while
-  // keeping variable heights for the Pinterest masonry look.
-  const columns = useMemo(() => {
-    const cols: { item: CatalogItem; index: number }[][] = Array.from({ length: columnCount }, () => []);
-    items.forEach((item, index) => {
-      cols[index % columnCount].push({ item, index });
-    });
-    return cols;
-  }, [items, columnCount]);
 
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
@@ -161,49 +127,47 @@ const UgcContentCatalog: React.FC<UgcContentCatalogProps> = ({ videos, creators 
         </p>
       </div>
 
-      {/* Masonry grid — row-major order (newest top-left, reads left → right) */}
-      <div className="flex gap-3 items-start">
-        {columns.map((col, colIdx) => (
-          <div key={colIdx} className="flex-1 flex flex-col gap-3 min-w-0">
-            {col.map(({ item, index }) => (
-              <button
-                key={item.video.id}
-                onClick={() => setLightboxIndex(index)}
-                className="block w-full overflow-hidden rounded-xl border border-border bg-muted/30 group relative focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                {item.isVideo ? (
-                  <div className="relative">
-                    <video
-                      src={item.video.video_url || undefined}
-                      preload="metadata"
-                      muted
-                      playsInline
-                      className="w-full h-auto object-cover block"
-                    />
-                    <span className="absolute inset-0 flex items-center justify-center">
-                      <span className="rounded-full bg-black/45 p-3 backdrop-blur-sm transition group-hover:bg-black/60">
-                        <Play className="h-5 w-5 text-white fill-white" />
-                      </span>
-                    </span>
-                  </div>
-                ) : (
-                  <img
-                    src={item.video.video_url || undefined}
-                    loading="lazy"
-                    className="w-full h-auto object-cover block"
-                    alt={`Contenido de ${creatorLabel(item.creator)}`}
-                  />
-                )}
-                {/* Hover overlay: creator + date */}
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
-                  <p className="text-[11px] font-medium text-white truncate">{creatorLabel(item.creator)}</p>
-                  <p className="text-[10px] text-white/70">
-                    {format(new Date(item.video.created_at), "d MMM yyyy", { locale: es })}
-                  </p>
-                </div>
-              </button>
-            ))}
-          </div>
+      {/* Uniform grid — true rows, newest first, reads left → right then down.
+          Tiles share a fixed aspect ratio (object-cover) so every row aligns;
+          the full uncropped media opens in the lightbox on click. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+        {items.map((item, index) => (
+          <button
+            key={item.video.id}
+            onClick={() => setLightboxIndex(index)}
+            className="relative block w-full aspect-[4/5] overflow-hidden rounded-xl border border-border bg-muted/30 group focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            {item.isVideo ? (
+              <>
+                <video
+                  src={item.video.video_url || undefined}
+                  preload="metadata"
+                  muted
+                  playsInline
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="rounded-full bg-black/45 p-3 backdrop-blur-sm transition group-hover:bg-black/60">
+                    <Play className="h-5 w-5 text-white fill-white" />
+                  </span>
+                </span>
+              </>
+            ) : (
+              <img
+                src={item.video.video_url || undefined}
+                loading="lazy"
+                className="absolute inset-0 h-full w-full object-cover"
+                alt={`Contenido de ${creatorLabel(item.creator)}`}
+              />
+            )}
+            {/* Hover overlay: creator + date */}
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
+              <p className="text-[11px] font-medium text-white truncate">{creatorLabel(item.creator)}</p>
+              <p className="text-[10px] text-white/70">
+                {format(new Date(item.video.created_at), "d MMM yyyy", { locale: es })}
+              </p>
+            </div>
+          </button>
         ))}
       </div>
 
