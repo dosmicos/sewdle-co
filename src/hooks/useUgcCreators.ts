@@ -1,23 +1,30 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useStoreContext } from '@/contexts/StoreContext';
 import { toast } from 'sonner';
 import type { UgcCreator, UgcCreatorFormData, UgcCreatorChild } from '@/types/ugc';
 
 export const useUgcCreators = () => {
   const { currentOrganization } = useOrganization();
+  const { activeStoreId } = useStoreContext();
   const queryClient = useQueryClient();
   const orgId = currentOrganization?.id;
 
   const { data: creators = [], isLoading } = useQuery({
-    queryKey: ['ugc-creators', orgId],
+    queryKey: ['ugc-creators', orgId, activeStoreId],
     queryFn: async () => {
       if (!orgId) return [];
-      const { data, error } = await supabase
+      let query = supabase
         .from('ugc_creators')
         .select('*')
-        .eq('organization_id', orgId)
-        .order('created_at', { ascending: false });
+        .eq('organization_id', orgId);
+      // Scope to the active store (country) when one is selected in the top-bar
+      // StoreSwitcher. "Todas las tiendas" (activeStoreId null) shows all creators.
+      if (activeStoreId) {
+        query = query.eq('store_id', activeStoreId);
+      }
+      const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
       return data as UgcCreator[];
     },
@@ -34,6 +41,9 @@ export const useUgcCreators = () => {
         .from('ugc_creators')
         .insert({
           organization_id: orgId,
+          // Tag new creators with the active store so they show up under the
+          // right country. Created from "Todas las tiendas" → null (visible in all).
+          store_id: activeStoreId ?? null,
           name: formData.name,
           instagram_handle: formData.instagram_handle || null,
           instagram_followers: formData.instagram_followers || 0,
