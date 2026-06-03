@@ -1693,7 +1693,34 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
           <Truck className="h-3 w-3" />
           Transportadora
         </label>
-        
+
+        {/* Warning: recommended carrier (e.g. Coordinadora for Bogotá) not present in quotes.
+            We auto-selected another carrier as fallback — make that explicit so the operator
+            doesn't ship via the cheapest option by mistake. */}
+        {quoteState.status === 'success' && quotes.length > 0 && (() => {
+          const baseRecommended = recommendedCarrier.replace('_domicilio', '');
+          const isRecommendedAvailable = quotes.some(
+            q => q.carrier.toLowerCase() === baseRecommended.toLowerCase()
+          );
+          if (isRecommendedAvailable) return null;
+          const recommendedName =
+            CARRIER_NAMES[recommendedCarrier as CarrierCode] ||
+            CARRIER_NAMES[baseRecommended as CarrierCode] ||
+            baseRecommended;
+          return (
+            <Alert className="py-2.5 border-amber-300 bg-amber-50">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertTitle className="text-amber-800 text-sm">
+                {recommendedName} no disponible
+              </AlertTitle>
+              <AlertDescription className="text-xs text-amber-700">
+                Para este destino se recomienda <strong>{recommendedName}</strong>, pero no aparece
+                en las cotizaciones. Se preseleccionó otra transportadora — verifícala antes de crear la guía.
+              </AlertDescription>
+            </Alert>
+          );
+        })()}
+
         {/* State: LOADING */}
         {(quoteState.status === 'loading' || isLoadingQuotes) && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground p-3 border rounded-md bg-muted/50">
