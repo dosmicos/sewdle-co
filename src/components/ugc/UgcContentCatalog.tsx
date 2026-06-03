@@ -39,12 +39,23 @@ const UgcContentCatalog: React.FC<UgcContentCatalogProps> = ({ videos, creators 
     return map;
   }, [creators]);
 
+  // Robust timestamp parse. Postgres/PostgREST can hand back
+  // "2026-06-01 21:34:01.62+00" (space, not 'T'), which some browsers parse
+  // as Invalid Date → NaN → the sort silently no-ops and the grid shows the
+  // wrong order. Normalize to ISO before parsing.
+  const ts = (s: string | null | undefined): number => {
+    if (!s) return 0;
+    let t = new Date(s).getTime();
+    if (isNaN(t)) t = new Date(s.replace(' ', 'T')).getTime();
+    return isNaN(t) ? 0 : t;
+  };
+
   // Only assets with a real uploaded file, newest first by upload (created_at) date.
   const items = useMemo<CatalogItem[]>(() => {
     return videos
       .filter((v) => !!v.video_url && v.video_url.trim().length > 0)
       .slice()
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .sort((a, b) => ts(b.created_at) - ts(a.created_at))
       .map((v) => ({
         video: v,
         creator: creatorById.get(v.creator_id),
@@ -127,34 +138,36 @@ const UgcContentCatalog: React.FC<UgcContentCatalogProps> = ({ videos, creators 
         </p>
       </div>
 
-      {/* Masonry grid (Pinterest-style) */}
-      <div className="columns-2 sm:columns-3 md:columns-4 xl:columns-5 gap-3 [column-fill:_balance]">
-        {items.map((item, idx) => (
+      {/* Uniform grid — true rows, newest first, reads left → right then down.
+          Tiles share a fixed aspect ratio (object-cover) so every row aligns;
+          the full uncropped media opens in the lightbox on click. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3">
+        {items.map((item, index) => (
           <button
             key={item.video.id}
-            onClick={() => setLightboxIndex(idx)}
-            className="mb-3 block w-full break-inside-avoid overflow-hidden rounded-xl border border-border bg-muted/30 group relative focus:outline-none focus:ring-2 focus:ring-primary"
+            onClick={() => setLightboxIndex(index)}
+            className="relative block w-full aspect-[4/5] overflow-hidden rounded-xl border border-border bg-muted/30 group focus:outline-none focus:ring-2 focus:ring-primary"
           >
             {item.isVideo ? (
-              <div className="relative">
+              <>
                 <video
                   src={item.video.video_url || undefined}
                   preload="metadata"
                   muted
                   playsInline
-                  className="w-full h-auto object-cover block"
+                  className="absolute inset-0 h-full w-full object-cover"
                 />
                 <span className="absolute inset-0 flex items-center justify-center">
                   <span className="rounded-full bg-black/45 p-3 backdrop-blur-sm transition group-hover:bg-black/60">
                     <Play className="h-5 w-5 text-white fill-white" />
                   </span>
                 </span>
-              </div>
+              </>
             ) : (
               <img
                 src={item.video.video_url || undefined}
                 loading="lazy"
-                className="w-full h-auto object-cover block"
+                className="absolute inset-0 h-full w-full object-cover"
                 alt={`Contenido de ${creatorLabel(item.creator)}`}
               />
             )}
