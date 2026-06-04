@@ -48,6 +48,15 @@ const getInitialOperationalStatus = (order: ShopifyOrderForPicking): Operational
   return 'pending';
 };
 
+const getOperationalStatusFromShopifyOrder = (
+  shopifyOrder: ShopifyOrderForPicking | null | undefined,
+  currentStatus: OperationalStatus
+): OperationalStatus => {
+  if (shopifyOrder?.fulfillment_status === 'fulfilled') return 'shipped';
+
+  return getOperationalStatusFromTags(shopifyOrder?.tags ?? undefined, currentStatus);
+};
+
 export interface PickingOrder {
   id: string;
   shopify_order_id: number;
@@ -115,7 +124,7 @@ export const usePickingOrders = () => {
       // Solo verificar las últimas 500 órdenes de Shopify (las más recientes)
       const { data: recentShopify, error: shopifyError } = await supabase
         .from('shopify_orders')
-        .select('shopify_order_id, order_number')
+        .select('shopify_order_id, order_number, fulfillment_status, cancelled_at, tags')
         .eq('organization_id', currentOrganization.id)
         .order('created_at_shopify', { ascending: false })
         .limit(500);
@@ -145,7 +154,7 @@ export const usePickingOrders = () => {
         .map(s => ({
           shopify_order_id: s.shopify_order_id,
           organization_id: currentOrganization.id,
-          operational_status: 'pending' as OperationalStatus,
+          operational_status: getInitialOperationalStatus(s as ShopifyOrderForPicking),
           order_number: s.order_number
         })) || [];
 
@@ -197,7 +206,7 @@ export const usePickingOrders = () => {
       return;
     }
 
-    const existingByShopifyId = new Map(
+    const existingByShopifyId = new Map<number, { shopify_order_id: number; order_number: string }>(
       (existingPicking || []).map(order => [order.shopify_order_id, order])
     );
 
@@ -356,10 +365,10 @@ export const usePickingOrders = () => {
         return;
       }
 
-      // Map orders and apply tag-based status mapping
+      // Map orders and apply Shopify fulfillment/tag-based status mapping
       let ordersData = data.map((order: any) => {
-        const mappedStatus = getOperationalStatusFromTags(
-          order.shopify_order?.tags,
+        const mappedStatus = getOperationalStatusFromShopifyOrder(
+          order.shopify_order,
           order.operational_status
         );
         

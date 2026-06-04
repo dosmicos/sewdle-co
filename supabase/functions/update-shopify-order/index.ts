@@ -180,8 +180,8 @@ serve(async (req) => {
         console.log(`🔄 SYNC_FROM_SHOPIFY for order ${orderId} (optimized)`);
         const syncStartTime = Date.now();
         
-        // Request only the fields we need: note, tags, updated_at
-        const syncResponse = await fetch(`${shopifyApiUrl}.json?fields=id,note,tags,updated_at`, {
+        // Request only the fields we need: note, tags, fulfillment_status, updated_at
+        const syncResponse = await fetch(`${shopifyApiUrl}.json?fields=id,note,tags,fulfillment_status,updated_at`, {
           method: 'GET',
           headers: {
             'X-Shopify-Access-Token': shopifyAccessToken,
@@ -199,6 +199,7 @@ serve(async (req) => {
         
         console.log(`   Shopify note: "${order.note || '(empty)'}" (length: ${(order.note || '').length})`);
         console.log(`   Shopify tags: "${order.tags || '(empty)'}"`);
+        console.log(`   Shopify fulfillment_status: "${order.fulfillment_status || '(empty)'}"`);
         console.log(`   Fetch time: ${Date.now() - syncStartTime}ms`);
         
         // Update local database with Shopify data - skip raw_data for speed
@@ -215,10 +216,13 @@ serve(async (req) => {
           .single();
 
         const isProtected = pickingOrder?.operational_status === 'ready_to_ship'
-          || pickingOrder?.operational_status === 'awaiting_pickup';
+          || pickingOrder?.operational_status === 'awaiting_pickup'
+          || pickingOrder?.operational_status === 'shipped';
+        const isFulfilledInShopify = order.fulfillment_status === 'fulfilled';
 
         const updateData: any = {
           note: order.note || null,
+          fulfillment_status: order.fulfillment_status || null,
           updated_at_shopify: order.updated_at
           // NOTE: raw_data is NOT updated here for performance
         };
@@ -239,6 +243,22 @@ serve(async (req) => {
           throw new Error(`Failed to update local database: ${dbError.message}`);
         }
 
+        if (isFulfilledInShopify) {
+          const { error: pickingError } = await supabaseClient
+            .from('picking_packing_orders')
+            .update({
+              operational_status: 'shipped',
+              shipped_at: new Date().toISOString()
+            })
+            .eq('shopify_order_id', orderId)
+            .neq('operational_status', 'shipped');
+
+          if (pickingError) {
+            console.error('❌ Error updating picking status from Shopify fulfillment:', pickingError);
+            throw new Error(`Failed to update picking status: ${pickingError.message}`);
+          }
+        }
+
         console.log(`✅ Local database synced with Shopify data (total: ${Date.now() - syncStartTime}ms)`);
         
         return new Response(
@@ -246,7 +266,9 @@ serve(async (req) => {
             success: true, 
             message: 'Order synced from Shopify',
             note: order.note,
-            tags: order.tags
+            tags: order.tags,
+            fulfillment_status: order.fulfillment_status,
+            operational_status: isFulfilledInShopify ? 'shipped' : pickingOrder?.operational_status ?? null
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -298,10 +320,11 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Error updating Shopify order:', error)
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message 
+        error: errorMessage 
       }),
       { 
         status: 400,
