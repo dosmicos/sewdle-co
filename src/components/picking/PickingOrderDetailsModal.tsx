@@ -480,6 +480,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
 
         const syncedNote = data?.note || '';
         const syncedTags = data?.tags ?? null;
+        const syncedFulfillmentStatus = data?.fulfillment_status ?? null;
+        const syncedOperationalStatus = data?.operational_status ?? null;
 
         // PROTECT: Don't overwrite tags if order is already packed/shipped locally
         // This prevents stale Shopify data from reverting the EMPACADO tag
@@ -505,9 +507,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           prev && prev.id === orderId
             ? {
                 ...prev,
+                ...(syncedOperationalStatus === 'shipped' ? { operational_status: 'shipped' as OperationalStatus } : {}),
                 shopify_order: {
                   ...(prev.shopify_order ?? {}),
                   note: syncedNote,
+                  ...(syncedFulfillmentStatus ? { fulfillment_status: syncedFulfillmentStatus } : {}),
                   ...(safeTags ? { tags: safeTags } : {}),
                 } as any,
               }
@@ -518,9 +522,11 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           if (!prev || prev.id !== orderId) return prev;
           return {
             ...prev,
+            ...(syncedOperationalStatus === 'shipped' ? { operational_status: 'shipped' as OperationalStatus } : {}),
             shopify_order: {
               ...(prev.shopify_order ?? {}),
               note: syncedNote,
+              ...(syncedFulfillmentStatus ? { fulfillment_status: syncedFulfillmentStatus } : {}),
               ...(safeTags ? { tags: safeTags } : {}),
             } as any,
           } as PickingOrder;
