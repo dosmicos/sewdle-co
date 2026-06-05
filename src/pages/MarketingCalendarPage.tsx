@@ -1478,6 +1478,40 @@ const MarketingCalendarPage: React.FC = () => {
                 />
               </div>
 
+              {/* Tipo de actividad — define el color del evento en el calendario.
+                  El creador elige el tipo y el punto/color en el calendario lo sigue. */}
+              <div className="space-y-1.5">
+                <Label className="text-[13px] font-medium text-slate-700">
+                  Tipo de actividad
+                  <span className="ml-1.5 font-normal text-slate-400">· define el color en el calendario</span>
+                </Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {EVENT_TYPE_OPTIONS.map((opt) => {
+                    const cfg = EVENT_TYPE_CONFIG[opt.value];
+                    const selected = form.event_type === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => updateForm('event_type', opt.value)}
+                        aria-pressed={selected}
+                        title={opt.label}
+                        className={cn(
+                          'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all duration-150 cursor-pointer',
+                          selected
+                            ? cn(cfg.color, 'shadow-sm')
+                            : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700'
+                        )}
+                        style={{ WebkitTapHighlightColor: 'transparent' }}
+                      >
+                        <span className={cn('h-2 w-2 rounded-full shrink-0', cfg.dot)} />
+                        {cfg.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-[13px] font-medium text-slate-700">Tipo de pieza</Label>
