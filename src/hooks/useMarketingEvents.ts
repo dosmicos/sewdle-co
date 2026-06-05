@@ -41,7 +41,9 @@ export interface MarketingEvent {
   id: string;
   organization_id: string;
   event_date: string;
-  event_type: EventType;
+  // Activity-type key — built-in (EventType union) OR a custom org-defined key
+  // from marketing_event_categories. Kept as a wide string for custom types.
+  event_type: string;
   title: string;
   description: string | null;
   expected_impact: ImpactLevel;
@@ -77,7 +79,7 @@ export interface MarketingEvent {
 
 export type MarketingEventInput = {
   event_date: string;
-  event_type: EventType;
+  event_type: string;
   title: string;
   description?: string | null;
   expected_impact: ImpactLevel;

@@ -79,6 +79,10 @@ interface MarketingCalendarViewProps {
   onDoubleClickDate: (date: Date) => void;
   onEventClick?: (event: MarketingEvent) => void;
   onSuggestionClick?: (suggestion: HolidaySuggestion) => void;
+  // Org-customizable activity types: resolve a key → label + hex color, and the
+  // active set to render in the legend.
+  resolveCategory: (key: string | null | undefined) => { label: string; color: string };
+  legendCategories: { key: string; label: string; color: string }[];
 }
 
 const DAY_NAMES = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
@@ -93,6 +97,8 @@ const MarketingCalendarView: React.FC<MarketingCalendarViewProps> = ({
   onDoubleClickDate,
   onEventClick,
   onSuggestionClick,
+  resolveCategory,
+  legendCategories,
 }) => {
   // Calendar grid days
   const calendarDays = useMemo(() => {
@@ -241,10 +247,8 @@ const MarketingCalendarView: React.FC<MarketingCalendarViewProps> = ({
                       title={`Click para ver/editar: ${ev.title}`}
                     >
                       <span
-                        className={cn(
-                          'w-1.5 h-1.5 rounded-full flex-shrink-0',
-                          EVENT_DOT_COLOR[ev.event_type],
-                        )}
+                        className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: resolveCategory(ev.event_type).color }}
                       />
                       <span className="truncate">{ev.title}</span>
                     </div>
@@ -294,12 +298,10 @@ const MarketingCalendarView: React.FC<MarketingCalendarViewProps> = ({
 
         {/* Legend */}
         <div className="px-5 py-3 border-t bg-gray-50/50 flex flex-wrap gap-x-4 gap-y-1">
-          {Object.entries(EVENT_DOT_COLOR).map(([key, dotColor]) => (
-            <div key={key} className="flex items-center gap-1">
-              <span className={cn('w-2 h-2 rounded-full', dotColor)} />
-              <span className="text-[10px] text-gray-500">
-                {EVENT_TYPE_LABEL[key as EventType]}
-              </span>
+          {legendCategories.map((cat) => (
+            <div key={cat.key} className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+              <span className="text-[10px] text-gray-500">{cat.label}</span>
             </div>
           ))}
           <div className="flex items-center gap-1">

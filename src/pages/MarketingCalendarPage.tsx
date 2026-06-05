@@ -79,6 +79,9 @@ import HolidaySuggestionPanel from '@/components/marketing-calendar/HolidaySugge
 import ContentIdeasPanel from '@/components/marketing-calendar/ContentIdeasPanel';
 import { useContentIdeas } from '@/hooks/useContentIdeas';
 import { useTeamMembers } from '@/hooks/useTeamMembers';
+import { useMarketingEventCategories } from '@/hooks/useMarketingEventCategories';
+import { buildCategoryResolver, hexToRgba } from '@/lib/marketingEventCategories';
+import EventCategoryManager from '@/components/marketing-calendar/EventCategoryManager';
 
 // ─── Event type configuration ─────────────────────────────
 const EVENT_TYPE_CONFIG: Record<
@@ -505,6 +508,14 @@ const MarketingCalendarPage: React.FC = () => {
   const { activeFormats, addFormat } = useContentFormats();
   const { newCount: pendingIdeas } = useContentIdeas();
   const { teamMembers } = useTeamMembers();
+  const { categories: eventCategories, activeCategories } = useMarketingEventCategories();
+  // Resolve label + hex color for any event_type key (built-in or custom),
+  // falling back to the built-in defaults when the list hasn't loaded yet.
+  const resolveCategory = useMemo(
+    () => buildCategoryResolver(eventCategories),
+    [eventCategories]
+  );
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
 
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [weekRef, setWeekRef] = useState(new Date());
@@ -837,6 +848,8 @@ const MarketingCalendarPage: React.FC = () => {
                   { duration: 5000 }
                 );
               }}
+              resolveCategory={resolveCategory}
+              legendCategories={activeCategories}
             />
 
         {/* ─── KPI SUMMARY ROW ──────────────────────────── */}
@@ -913,7 +926,7 @@ const MarketingCalendarPage: React.FC = () => {
               </div>
               <div className="space-y-2">
                 {selectedDateEvents.map((ev) => {
-                  const cfg = EVENT_TYPE_CONFIG[ev.event_type];
+                  const cfg = resolveCategory(ev.event_type);
                   const isExpanded = expandedEventId === ev.id;
                   const eventDate = new Date(ev.event_date + 'T12:00:00');
                   const isEventPast = isPast(addDays(eventDate, ev.attribution_window_days || 7));
@@ -930,12 +943,13 @@ const MarketingCalendarPage: React.FC = () => {
                         }
                       >
                         <div
-                          className={cn(
-                            'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
-                            cfg.color
-                          )}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ backgroundColor: hexToRgba(cfg.color, 0.15) }}
                         >
-                          {cfg.icon}
+                          <span
+                            className="w-2.5 h-2.5 rounded-full"
+                            style={{ backgroundColor: cfg.color }}
+                          />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5">
@@ -1330,7 +1344,7 @@ const MarketingCalendarPage: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {monthEvents.map((ev) => {
-                      const cfg = EVENT_TYPE_CONFIG[ev.event_type];
+                      const cfg = resolveCategory(ev.event_type);
                       return (
                         <tr key={ev.id} className="hover:bg-gray-50">
                           <td className="px-3 py-2 text-gray-500 text-xs">
@@ -1342,12 +1356,17 @@ const MarketingCalendarPage: React.FC = () => {
                           </td>
                           <td className="px-3 py-2">
                             <div
-                              className={cn(
-                                'inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border',
-                                cfg.color
-                              )}
+                              className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded border"
+                              style={{
+                                backgroundColor: hexToRgba(cfg.color, 0.12),
+                                color: cfg.color,
+                                borderColor: hexToRgba(cfg.color, 0.35),
+                              }}
                             >
-                              {cfg.icon}
+                              <span
+                                className="w-1.5 h-1.5 rounded-full"
+                                style={{ backgroundColor: cfg.color }}
+                              />
                               {cfg.label}
                             </div>
                             {ev.is_peak && (
@@ -1479,33 +1498,53 @@ const MarketingCalendarPage: React.FC = () => {
               </div>
 
               {/* Tipo de actividad — define el color del evento en el calendario.
-                  El creador elige el tipo y el punto/color en el calendario lo sigue. */}
+                  Los tipos (etiqueta + color) son personalizables por la org. */}
               <div className="space-y-1.5">
-                <Label className="text-[13px] font-medium text-slate-700">
-                  Tipo de actividad
-                  <span className="ml-1.5 font-normal text-slate-400">· define el color en el calendario</span>
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-[13px] font-medium text-slate-700">
+                    Tipo de actividad
+                    <span className="ml-1.5 font-normal text-slate-400">· define el color en el calendario</span>
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryManagerOpen(true)}
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 transition-colors cursor-pointer"
+                  >
+                    <Palette className="h-3 w-3" />
+                    Gestionar tipos
+                  </button>
+                </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {EVENT_TYPE_OPTIONS.map((opt) => {
-                    const cfg = EVENT_TYPE_CONFIG[opt.value];
-                    const selected = form.event_type === opt.value;
+                  {activeCategories.map((cat) => {
+                    const selected = form.event_type === cat.key;
                     return (
                       <button
-                        key={opt.value}
+                        key={cat.id}
                         type="button"
-                        onClick={() => updateForm('event_type', opt.value)}
+                        onClick={() => updateForm('event_type', cat.key)}
                         aria-pressed={selected}
-                        title={opt.label}
+                        title={cat.label}
                         className={cn(
                           'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all duration-150 cursor-pointer',
-                          selected
-                            ? cn(cfg.color, 'shadow-sm')
-                            : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700'
+                          !selected &&
+                            'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700'
                         )}
-                        style={{ WebkitTapHighlightColor: 'transparent' }}
+                        style={
+                          selected
+                            ? {
+                                backgroundColor: hexToRgba(cat.color, 0.12),
+                                color: cat.color,
+                                borderColor: hexToRgba(cat.color, 0.4),
+                                WebkitTapHighlightColor: 'transparent',
+                              }
+                            : { WebkitTapHighlightColor: 'transparent' }
+                        }
                       >
-                        <span className={cn('h-2 w-2 rounded-full shrink-0', cfg.dot)} />
-                        {cfg.label}
+                        <span
+                          className="h-2 w-2 rounded-full shrink-0"
+                          style={{ backgroundColor: cat.color }}
+                        />
+                        {cat.label}
                       </button>
                     );
                   })}
@@ -1885,6 +1924,12 @@ const MarketingCalendarPage: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Manage activity types (label + free color) */}
+      <EventCategoryManager
+        open={categoryManagerOpen}
+        onOpenChange={setCategoryManagerOpen}
+      />
     </FinanceDashboardLayout>
   );
 };
