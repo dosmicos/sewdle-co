@@ -99,39 +99,86 @@ async function applyAutoTagsToShopify(
     return;
   }
   
-  // Combine existing tags with new tags
-  const currentTags = existingTags ? existingTags.split(',').map(t => t.trim()).filter(Boolean) : [];
-  
-  // Check if tags already exist to avoid unnecessary operations
-  const newTagsToAdd = tagsToAdd.filter(tag => 
-    !currentTags.some(existing => existing.toLowerCase() === tag.toLowerCase())
-  );
-  
-  if (newTagsToAdd.length === 0) {
-    console.log('🏷️ Todos los tags automáticos ya existen, no es necesario actualizar');
+  // Union with the CURRENT LOCAL DB tags — NOT just the webhook payload tags,
+  // which can be stale. A delayed orders/create webhook would otherwise recompute
+  // tags from the creation-time payload and clobber operational tags applied
+  // concurrently — e.g. "Confirmado" from a fast COD confirmation (customer
+  // replies SI within seconds of creation) or "EMPACADO" from picking. That race
+  // was dropping the Confirmado tag on the orders confirmed within ~1 min.
+  let localDbTags: string[] = [];
+  try {
+    const { data: localRow } = await supabase
+      .from('shopify_orders')
+      .select('tags')
+      .eq('shopify_order_id', orderId)
+      .maybeSingle();
+    localDbTags = localRow?.tags
+      ? String(localRow.tags).split(',').map((t: string) => t.trim()).filter(Boolean)
+      : [];
+  } catch (e) {
+    console.error('⚠️ No se pudieron leer tags locales (se usa solo el payload):', e);
+  }
+
+  // Source of truth for COD: if the order is already confirmed, "Confirmado"
+  // must survive regardless of payload/local timing. Closes the residual race
+  // between this webhook's local read and the confirmation's local write.
+  try {
+    const { data: oc } = await supabase
+      .from('order_confirmations')
+      .select('status')
+      .eq('shopify_order_id', orderId)
+      .maybeSingle();
+    if (oc?.status === 'confirmed') localDbTags.push('Confirmado');
+  } catch (_) { /* best-effort */ }
+
+  const payloadTags = existingTags ? existingTags.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+  // Case-insensitive union preserving first-seen casing.
+  const unionTags = (...lists: string[][]): string[] => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const t of lists.flat()) {
+      const k = t.toLowerCase();
+      if (t && !seen.has(k)) { seen.add(k); out.push(t); }
+    }
+    return out;
+  };
+  const sameSet = (a: string[], b: string[]): boolean =>
+    a.length === b.length && a.every(t => b.some(x => x.toLowerCase() === t.toLowerCase()));
+
+  const currentTags = unionTags(localDbTags, payloadTags);
+  const allTags = unionTags(currentTags, tagsToAdd);
+  const tagsString = allTags.join(', ');
+
+  const localInSync = sameSet(allTags, localDbTags);
+  const shopifyInSync = sameSet(allTags, payloadTags);
+
+  // Nothing missing in either place → no-op.
+  if (localInSync && shopifyInSync) {
+    console.log('🏷️ Tags ya consistentes en DB local y Shopify, nada que actualizar');
     return;
   }
-  
-  const allTags = [...new Set([...currentTags, ...newTagsToAdd])];
-  const tagsString = allTags.join(', ');
-  
-  console.log('🏷️ Aplicando tags automáticos:');
-  console.log('  - Tags actuales:', existingTags || 'ninguno');
-  console.log('  - Tags a agregar:', newTagsToAdd);
-  console.log('  - Tags finales:', tagsString);
-  
-  // ✅ PRIMERO: Guardar en base de datos local (independiente de Shopify)
-  console.log('💾 Guardando tags en base de datos local PRIMERO...');
-  const { error: dbError } = await supabase
-    .from('shopify_orders')
-    .update({ tags: tagsString })
-    .eq('shopify_order_id', orderId);
 
-  if (dbError) {
-    console.error('❌ Error guardando tags en DB local:', dbError);
-    // Continuamos para intentar Shopify de todas formas
-  } else {
-    console.log('✅ Tags guardados en base de datos local exitosamente');
+  console.log('🏷️ Tags finales (union local+payload+auto):', tagsString);
+
+  // ✅ PRIMERO: Guardar en base de datos local (preserva tags operacionales locales)
+  if (!localInSync) {
+    console.log('💾 Guardando tags en base de datos local PRIMERO...');
+    const { error: dbError } = await supabase
+      .from('shopify_orders')
+      .update({ tags: tagsString })
+      .eq('shopify_order_id', orderId);
+    if (dbError) {
+      console.error('❌ Error guardando tags en DB local:', dbError);
+      // Continuamos para intentar Shopify de todas formas
+    } else {
+      console.log('✅ Tags guardados en base de datos local exitosamente');
+    }
+  }
+
+  // Si Shopify ya tiene todos los tags, no hace falta el PUT (evita re-empujar).
+  if (shopifyInSync) {
+    return;
   }
   
   // ✅ DESPUÉS: Enviar a Shopify (opcional, si falla los tags ya están en DB local)
