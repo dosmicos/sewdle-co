@@ -4,6 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   buildKpi,
+  normalizePercentMetric,
   resolveBogotaWeek,
   summarizeStaticCreatives,
   toBogotaIsoWindow,
@@ -277,7 +278,7 @@ serve(async (req) => {
     const orders = maybeNum(current.orders);
     const aov = maybeNum(current.aov);
     const ncpa = adSpend !== null && newCustomers !== null && newCustomers > 0 ? adSpend / newCustomers : null;
-    const ncRevenuePercent = maybeNum(current.newCustomerRevenuePct);
+    const ncRevenuePercent = normalizePercentMetric(maybeNum(current.newCustomerRevenuePct));
 
     const staticCreatives = summarizeStaticCreatives(
       (assetsRes.data ?? []) as StaticDriveAssetRow[],

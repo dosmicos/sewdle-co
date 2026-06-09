@@ -110,6 +110,14 @@ export function buildKpi(actual: number | null | undefined, target: number | nul
   };
 }
 
+export function normalizePercentMetric(value: number | null | undefined): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  // Some finance endpoints expose percentages as ratios (0.76 = 76%), while
+  // the Team Scorecard stores/display thresholds as percentage points (76).
+  // Normalize ratio-shaped values before applying traffic-light thresholds.
+  return Math.abs(value) <= 1 ? value * 100 : value;
+}
+
 export function attributeDrivePerson(input: DriveAttributionInput, maps: DriveIdentityMapRow[]) {
   const normalizedMaps = [...maps]
     .filter((m) => m.person_key && m.person_label)

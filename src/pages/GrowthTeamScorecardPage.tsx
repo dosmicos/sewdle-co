@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, Gauge, Loader2, RefreshCw, Users } from 'lucide-react';
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, Gauge, Info, Loader2, RefreshCw, Users } from 'lucide-react';
 import { addDays, format, parseISO, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useGrowthTeamScorecard, type GrowthKpi, type GrowthRiskMatrixRow, type KpiStatus, type OwnerScorecard } from '@/hooks/useGrowthTeamScorecard';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -63,6 +64,255 @@ const kpiLabels: Record<string, string> = {
   firstFrames: 'First frames',
 };
 
+type MetricDefinition = {
+  title: string;
+  description: string;
+  formula?: string;
+  health?: string;
+  source?: string;
+};
+
+const metricDefinitions: Record<string, MetricDefinition> = {
+  revenue: {
+    title: 'Ventas netas del periodo',
+    description: 'Ingreso Shopify válido en la semana seleccionada, alineado a Bogotá.',
+    formula: 'Revenue = netSales del periodo',
+    health: 'Verde si alcanza ≥95% del milestone semanal.',
+    source: 'prophit-metrics / Shopify orders',
+  },
+  adSpend: {
+    title: 'Inversión publicitaria',
+    description: 'Gasto pagado total de la semana para evaluar pacing contra presupuesto.',
+    formula: 'Spend = Meta + Google + TikTok/otros canales conectados',
+    health: 'Verde si está ≥95% del presupuesto semanal aprobado.',
+    source: 'prophit-metrics / ad_metrics_daily',
+  },
+  spend: {
+    title: 'Inversión publicitaria',
+    description: 'Mismo Spend de compañía, mostrado dentro del owner Julian.',
+    formula: 'Spend = Meta + Google + TikTok/otros canales conectados',
+    health: 'Debe pacear contra el contrato semanal sin romper MER/CM.',
+    source: 'prophit-metrics / ad_metrics_daily',
+  },
+  mer: {
+    title: 'Marketing Efficiency Ratio',
+    description: 'Eficiencia total del gasto publicitario sobre ventas.',
+    formula: 'MER = Revenue / Ad Spend',
+    health: 'Rojo si cae >10% debajo del target semanal.',
+    source: 'prophit-metrics',
+  },
+  cmPercent: {
+    title: 'Contribution Margin post-tax',
+    description: 'Margen después de costos variables, impuestos y pauta; antes de OpEx.',
+    formula: 'CM% = (Net Sales − COGS − Shipping − Handling − Gateways − Taxes − Ad Spend) / Net Sales × 100',
+    health: 'Verde ≥ target; amarillo ≥22%; rojo <22%.',
+    source: 'prophit-metrics / finance settings',
+  },
+  newCustomers: {
+    title: 'Clientes nuevos únicos',
+    description: 'Clientes únicos del periodo que no tenían compra válida anterior.',
+    formula: 'New customers = unique customer_id/email nuevos en la ventana',
+    health: 'Verde si cumple ≥95% del target semanal.',
+    source: 'Shopify orders / Customer Health logic',
+  },
+  aov: {
+    title: 'Average Order Value',
+    description: 'Ticket promedio de órdenes del periodo.',
+    formula: 'AOV = Revenue / Orders',
+    health: 'Meta operativa actual: COP 150.000.',
+    source: 'prophit-metrics / Shopify orders',
+  },
+  ncpa: {
+    title: 'New Customer Purchase Acquisition Cost',
+    description: 'Costo de adquirir un cliente nuevo único.',
+    formula: 'NCPA = Ad Spend / New customers',
+    health: 'Verde si está en o por debajo del target COP 41.700.',
+    source: 'ad spend + new customer count',
+  },
+  ncRevenuePercent: {
+    title: 'Share de revenue de clientes nuevos',
+    description: 'Qué porcentaje de las ventas viene de clientes nuevos vs recurrentes. Debe coincidir con Customer Health.',
+    formula: 'NC-Rev% = NC Revenue / Total Revenue × 100',
+    health: 'Guardrail actual: verde ≥10%, amarillo ≥5%, rojo <5%.',
+    source: 'prophit-metrics normalizado a puntos porcentuales',
+  },
+  mutations: {
+    title: 'Mutaciones de campañas',
+    description: 'Cambios aprobados y ejecutados en campañas/adsets/ads.',
+    formula: 'Mutaciones = conteo de cambios aprobados en el ledger Meta',
+    health: 'Pendiente hasta conectar ledger Meta.',
+    source: 'No disponible todavía',
+  },
+  graduatedAds: {
+    title: 'Ads graduados',
+    description: 'Creativos que pasan de Testing a Scaling/Opportunity según reglas.',
+    formula: 'Graduados = ads movidos T→S→O con performance aprobada',
+    health: 'Target operativo visible: 3/semana cuando aplique.',
+    source: 'Pendiente ledger Meta',
+  },
+  testingWaste: {
+    title: 'Waste de Testing',
+    description: 'Porcentaje de spend de testing que no produce señal útil o ganadora.',
+    formula: 'Waste = spend desperdiciado / spend de testing × 100',
+    health: 'Verde ≤30%; rojo >40%.',
+    source: 'Pendiente ledger Meta',
+  },
+  ugcPieces: {
+    title: 'Piezas UGC',
+    description: 'Volumen semanal de piezas UGC entregadas para desbloquear testing.',
+    formula: 'UGC piezas = conteo de entregables UGC del periodo',
+    health: 'Target semanal: 40; rojo si <32.',
+    source: 'ugc_*',
+  },
+  activeCreators: {
+    title: 'Creadoras activas',
+    description: 'Creadoras UGC con actividad/link vigente.',
+    formula: 'Active creators = creadoras activas únicas',
+    health: 'Se compara contra target semanal del scorecard.',
+    source: 'ugc_*',
+  },
+  activeLinks: {
+    title: 'CMD links activos',
+    description: 'Links/códigos CMD activos que pueden generar pedidos.',
+    formula: 'Active links = links CMD activos',
+    health: 'Meta operativa actual: 120 activos.',
+    source: 'ugc_links / CMD',
+  },
+  cmdRevenue: {
+    title: 'Revenue CMD',
+    description: 'Ventas atribuidas a links/códigos CMD.',
+    formula: 'CMD revenue = suma de órdenes atribuidas a CMD',
+    health: 'Sin target fijo; lectura operativa.',
+    source: 'ugc/CMD attribution',
+  },
+  cmdOrders: {
+    title: 'Órdenes CMD',
+    description: 'Pedidos atribuidos a links/códigos CMD.',
+    formula: 'CMD orders = conteo de órdenes CMD',
+    health: 'Sin target fijo; lectura operativa.',
+    source: 'ugc/CMD attribution',
+  },
+  googleQueryMix: {
+    title: 'Mix de queries Google',
+    description: 'Separación entre brand/non-brand para detectar canibalización.',
+    formula: 'Query mix = share brand vs non-brand de búsqueda',
+    health: 'Pendiente instrumentación.',
+    source: 'No disponible todavía',
+  },
+  pixelNcRevDeepDive: {
+    title: 'Deep-dive Pixel / NC-Rev',
+    description: 'Auditoría para explicar si la adquisición real viene de clientes nuevos o retorno.',
+    formula: 'Reconciliación = NC-Rev% + pixel/events + mix de canales',
+    health: 'Debe usarse cuando NC-Rev% o tracking se vea raro.',
+    source: 'No disponible todavía',
+  },
+  staticsProduced: {
+    title: 'Estáticos producidos',
+    description: 'Imágenes/carouseles/product cards nuevos en carpetas estáticas autorizadas.',
+    formula: 'Statics = imágenes Drive creadas en la ventana, excluyendo carpetas UGC',
+    health: 'Target: 30/semana; rojo si <24.',
+    source: 'Google Drive static assets',
+  },
+  angieStatics: {
+    title: 'Estáticos de Angie',
+    description: 'Piezas estáticas atribuidas a Angie por metadata/mapping Drive.',
+    formula: 'Angie statics = assets con persona angie',
+    health: 'Meta aproximada: 15/semana.',
+    source: 'Google Drive identity map',
+  },
+  anaMariaStatics: {
+    title: 'Estáticos de Ana María',
+    description: 'Piezas estáticas atribuidas a Ana María por metadata/mapping Drive.',
+    formula: 'Ana María statics = assets con persona ana_maria',
+    health: 'Meta aproximada: 15/semana.',
+    source: 'Google Drive identity map',
+  },
+  staticsPublished: {
+    title: 'Estáticos publicados/testeados',
+    description: 'Piezas producidas que sí llegaron a publicación o testing.',
+    formula: 'Published/tested = assets publicados o usados en ads de testing',
+    health: 'Target semanal: 24.',
+    source: 'Pendiente ledger Meta/Drive',
+  },
+  needsReviewBacklog: {
+    title: 'Backlog needs_review',
+    description: 'Creativos pendientes de revisión/aprobación.',
+    formula: 'Backlog = piezas con estado needs_review',
+    health: 'Lower is better; pendiente fuente estructurada.',
+    source: 'No disponible todavía',
+  },
+  trackerCompleteness: {
+    title: 'Tracker completo',
+    description: 'Qué tan completo está el tracker de producción/publicación.',
+    formula: 'Completeness = campos requeridos completos / total requeridos',
+    health: 'Higher is better; pendiente fuente estructurada.',
+    source: 'No disponible todavía',
+  },
+  salesAngleReport: {
+    title: 'Sales-angle report',
+    description: 'Reporte semanal de Kira con ángulos de venta ganadores/perdedores.',
+    formula: 'Disponible = reporte entregado para la semana',
+    health: 'Debe existir cada lunes.',
+    source: 'Pendiente Brain/ledger',
+  },
+  topAnglesRanked: {
+    title: 'Top ángulos rankeados',
+    description: 'Ranking de ángulos creativos priorizados por performance.',
+    formula: 'Ranked = top ángulos con evidencia y prioridad',
+    health: 'Debe alimentar la producción semanal.',
+    source: 'Pendiente Brain/ledger',
+  },
+  focusDefined: {
+    title: 'Foco semanal definido',
+    description: 'Brief/foco creativo que guía producción y testing de la semana.',
+    formula: 'Foco definido = sí/no con brief vigente',
+    health: 'No tenerlo bloquea producción clara.',
+    source: 'Pendiente Brain/ledger',
+  },
+  anglesAtRisk: {
+    title: 'Ángulos en riesgo',
+    description: 'Ángulos creativos fatigados, perdedores o sin evidencia suficiente.',
+    formula: 'At risk = ángulos marcados por señales de performance/feedback',
+    health: 'Lower is better.',
+    source: 'Pendiente Brain/ledger',
+  },
+  publishedToTesting: {
+    title: 'Publicados a Testing ABO',
+    description: 'Creativos que Hermes publicó a campañas de testing.',
+    formula: 'Published to testing = ads nuevos publicados en Testing ABO',
+    health: 'Debe desbloquear el ritmo de graduaciones.',
+    source: 'Pendiente ledger Meta',
+  },
+  metaWrapperStatus: {
+    title: 'Estado wrapper Meta',
+    description: 'Salud del sistema que ejecuta operaciones Meta con guardrails.',
+    formula: 'Wrapper status = disponibilidad + permisos + última ejecución válida',
+    health: 'Debe estar disponible antes de mutaciones/pausas/escalados.',
+    source: 'Pendiente Meta wrapper/cron',
+  },
+  driveAttributedStatics: {
+    title: 'Estáticos atribuidos',
+    description: 'Assets Drive asignados a una persona conocida.',
+    formula: 'Attributed statics = assets con identity map resuelto',
+    health: 'Los sin asignar quedan visibles, no ocultos.',
+    source: 'Google Drive identity map',
+  },
+  briefs: {
+    title: 'Briefs',
+    description: 'Briefs creativos creados para guiar producción.',
+    formula: 'Briefs = conteo de briefs vigentes del periodo',
+    health: 'Debe alimentar producción y testing.',
+    source: 'Pendiente fuente estructurada',
+  },
+  firstFrames: {
+    title: 'First frames',
+    description: 'Primeros frames/hooks visuales listos para creativos.',
+    formula: 'First frames = conteo de hooks/frame concepts producidos',
+    health: 'Debe alimentar rotación creativa.',
+    source: 'Pendiente fuente estructurada',
+  },
+};
+
 function formatCOP(value: number | null) {
   if (value === null || !Number.isFinite(value)) return 'No disponible';
   return `COP ${new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(Math.round(value))}`;
@@ -98,10 +348,35 @@ const StatusBadge: React.FC<{ status: KpiStatus; className?: string }> = ({ stat
   </Badge>
 );
 
+const MetricInfo: React.FC<{ metricKey: string; side?: 'top' | 'right' | 'bottom' | 'left' }> = ({ metricKey, side = 'bottom' }) => {
+  const definition = metricDefinitions[metricKey];
+  if (!definition) return null;
+
+  return (
+    <TooltipProvider delayDuration={120}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Info className="h-3.5 w-3.5 shrink-0 cursor-help text-slate-300 hover:text-slate-500" aria-label={`Cómo se calcula ${kpiLabels[metricKey] ?? metricKey}`} />
+        </TooltipTrigger>
+        <TooltipContent side={side} className="max-w-[300px] text-xs leading-relaxed">
+          <p className="mb-1 font-medium text-slate-900">{definition.title}</p>
+          <p>{definition.description}</p>
+          {definition.formula && <p className="mt-1 text-slate-600">{definition.formula}</p>}
+          {definition.health && <p className="mt-1 text-slate-400">Salud: {definition.health}</p>}
+          {definition.source && <p className="mt-1 text-slate-400">Fuente: {definition.source}</p>}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+};
+
 const KpiPill: React.FC<{ label: string; kpi: GrowthKpi; metricKey: string }> = ({ label, kpi, metricKey }) => (
   <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
     <div className="flex items-center justify-between gap-2">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</span>
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+        {label}
+        <MetricInfo metricKey={metricKey} />
+      </span>
       <StatusBadge status={kpi.status} />
     </div>
     <div className="mt-2 text-sm font-semibold text-slate-900">
@@ -129,7 +404,10 @@ const OwnerCard: React.FC<{ owner: OwnerScorecard }> = ({ owner }) => (
       <div className="grid grid-cols-1 gap-2">
         {Object.entries(owner.kpis).map(([key, kpi]) => (
           <div key={key} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 px-2.5 py-2 text-xs">
-            <span className="font-medium text-slate-600">{kpiLabels[key] ?? key}</span>
+            <span className="inline-flex min-w-0 items-center gap-1 font-medium text-slate-600">
+              <span className="truncate">{kpiLabels[key] ?? key}</span>
+              <MetricInfo metricKey={key} side="right" />
+            </span>
             <span className="text-right text-slate-900">
               {formatKpiValue(key, kpi.actual)}
               {kpi.target !== null && <span className="text-slate-400"> / {formatKpiValue(key, kpi.target)}</span>}
@@ -334,7 +612,12 @@ const GrowthTeamScorecardPage: React.FC = () => {
                   <TableBody>
                     {riskRows.map((row) => (
                       <TableRow key={row.key}>
-                        <TableCell className="font-medium">{row.label}</TableCell>
+                        <TableCell className="font-medium">
+                          <span className="inline-flex items-center gap-1">
+                            {row.label}
+                            <MetricInfo metricKey={row.key} side="right" />
+                          </span>
+                        </TableCell>
                         <TableCell className="text-xs text-slate-600">{row.owner}</TableCell>
                         <TableCell className="whitespace-nowrap text-right text-xs">
                           {formatRiskValue(row, row.actual)}

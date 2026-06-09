@@ -5,6 +5,7 @@ import { assert } from "https://deno.land/std@0.224.0/assert/assert.ts";
 import {
   attributeDrivePerson,
   buildKpi,
+  normalizePercentMetric,
   resolveBogotaWeek,
   summarizeStaticCreatives,
   toBogotaIsoWindow,
@@ -62,6 +63,12 @@ Deno.test("buildKpi sets traffic-light status from target progress", () => {
   assertEquals(buildKpi(70, 100, "higher_better").status, "red");
   assertEquals(buildKpi(2.99, 3.5, "higher_better").status, "yellow");
   assertEquals(buildKpi(null, 25, "higher_better").status, "missing");
+});
+
+Deno.test("normalizePercentMetric converts ratio-shaped values to percentage points", () => {
+  assertEquals(normalizePercentMetric(0.762), 76.2);
+  assertEquals(normalizePercentMetric(76.2), 76.2);
+  assertEquals(normalizePercentMetric(null), null);
 });
 
 Deno.test("resolveBogotaWeek returns approved non-linear June milestone window", () => {
