@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
@@ -104,6 +104,9 @@ export function useGrowthTeamScorecard(options: UseGrowthTeamScorecardOptions = 
     enabled: !!orgId,
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
+    // Keep the previous week's data on screen while a newly-selected week loads,
+    // so navigating weeks doesn't blank the whole dashboard.
+    placeholderData: keepPreviousData,
   });
 
   const syncDriveStatics = useMutation<unknown, Error, number | undefined>({
