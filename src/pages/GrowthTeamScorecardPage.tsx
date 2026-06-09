@@ -1,5 +1,7 @@
-import React from 'react';
-import { AlertTriangle, CheckCircle2, ExternalLink, Gauge, Loader2, RefreshCw, Users } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ExternalLink, Gauge, Loader2, RefreshCw, Users } from 'lucide-react';
+import { addDays, format, parseISO, startOfWeek } from 'date-fns';
+import { es } from 'date-fns/locale';
 import FinanceDashboardLayout from '@/components/finance-dashboard/FinanceDashboardLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -145,7 +147,27 @@ const OwnerCard: React.FC<{ owner: OwnerScorecard }> = ({ owner }) => (
 );
 
 const GrowthTeamScorecardPage: React.FC = () => {
-  const scorecard = useGrowthTeamScorecard();
+  // Weekly milestones run Monday→Sunday; the backend treats period_end as
+  // exclusive (Monday + 7). Default to the current week's Monday.
+  const currentWeekStart = useMemo(
+    () => format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd'),
+    []
+  );
+  const [weekStart, setWeekStart] = useState(currentWeekStart);
+  const weekEnd = useMemo(() => format(addDays(parseISO(weekStart), 7), 'yyyy-MM-dd'), [weekStart]);
+  const isCurrentWeek = weekStart === currentWeekStart;
+  const canGoNext = weekStart < currentWeekStart; // never navigate into future weeks
+  const weekRangeLabel = useMemo(() => {
+    const s = parseISO(weekStart);
+    const e = addDays(s, 6); // inclusive Sunday
+    return `${format(s, 'd MMM', { locale: es })} – ${format(e, 'd MMM', { locale: es })}`;
+  }, [weekStart]);
+
+  const goPrevWeek = () => setWeekStart((w) => format(addDays(parseISO(w), -7), 'yyyy-MM-dd'));
+  const goNextWeek = () => setWeekStart((w) => (w < currentWeekStart ? format(addDays(parseISO(w), 7), 'yyyy-MM-dd') : w));
+  const goCurrentWeek = () => setWeekStart(currentWeekStart);
+
+  const scorecard = useGrowthTeamScorecard({ periodStart: weekStart, periodEnd: weekEnd });
   const data = scorecard.data;
 
   const handleSyncDrive = async () => {
@@ -209,6 +231,41 @@ const GrowthTeamScorecardPage: React.FC = () => {
             <p className="text-sm text-slate-500">{data.period.label} · {data.period.start} → {periodEndLabel}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {/* Week selector — Mon→Sun weeks, capped at the current week */}
+            <div className="flex items-center rounded-lg border border-slate-200 bg-white">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-slate-600 hover:text-slate-900"
+                onClick={goPrevWeek}
+                aria-label="Semana anterior"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex min-w-[110px] items-center justify-center gap-1.5 px-1 text-xs font-medium text-slate-700">
+                {scorecard.isFetching ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
+                ) : (
+                  <CalendarDays className="h-3.5 w-3.5 text-slate-400" />
+                )}
+                <span className="whitespace-nowrap capitalize">{weekRangeLabel}</span>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-slate-600 hover:text-slate-900 disabled:opacity-30"
+                onClick={goNextWeek}
+                disabled={!canGoNext}
+                aria-label="Semana siguiente"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            {!isCurrentWeek && (
+              <Button variant="outline" size="sm" onClick={goCurrentWeek}>
+                Semana actual
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => scorecard.refetch()} disabled={scorecard.isFetching}>
               {scorecard.isFetching ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
               Refrescar
