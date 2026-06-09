@@ -671,9 +671,7 @@ serve(async (req) => {
         activeLinks: buildKpi(ugc.activeLinks, 120, "higher_better"),
         cmdRevenue: buildKpi(ugc.cmdRevenue, null, "higher_better"),
         cmdOrders: buildKpi(ugc.cmdOrders, null, "higher_better"),
-        googleQueryMix: buildKpi(null, null, "higher_better"),
-        pixelNcRevDeepDive: buildKpi(null, null, "higher_better"),
-      }, ["No es owner de Google ads/pixel/costos; se ve aquí como unblocker/status operativo."]),
+      }),
       creativeProduction: owner("Angie + Ana María", "Producción creativa 50/50", {
         staticsProduced: staticsProducedKpi,
         angieStatics: buildKpi(staticCreatives.byPerson.angie ?? 0, 15, "higher_better"),

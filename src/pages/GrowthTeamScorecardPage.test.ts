@@ -34,4 +34,10 @@ Deno.test("Growth Team Scorecard renders June 600M owner contract", async () => 
   assert(edge.includes("fetchKiraCreativeDirection"), "edge must connect Kira to structured AngleOS data");
   assert(edge.includes('"ad_tags AngleOS"'), "edge metadata must expose Kira/AngleOS source");
   assert(!edge.includes("Conectar sales-angle report/foco semanal como dato estructurado"), "Kira must no longer be hard-coded as pending connection");
+
+  const sebastianBlock = edge.match(/sebastian: owner\("Sebastián"[\s\S]*?\n      \}\),/)?.[0] ?? "";
+  assert(sebastianBlock, "edge must include Sebastián owner block");
+  assert(!sebastianBlock.includes("googleQueryMix"), "Sebastián must not include Google query mix");
+  assert(!sebastianBlock.includes("pixelNcRevDeepDive"), "Sebastián must not include pixel / NC-Rev deep-dive");
+  assert(!sebastianBlock.includes("Google"), "Sebastián card notes must not mention Google");
 });
