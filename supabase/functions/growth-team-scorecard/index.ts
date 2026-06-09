@@ -6,6 +6,8 @@ import {
   buildKpi,
   normalizePercentMetric,
   resolveBogotaWeek,
+  scorecardCustomerKey,
+  summarizeCustomerAcquisition,
   summarizeStaticCreatives,
   toBogotaIsoWindow,
   worstStatus,
@@ -228,6 +230,98 @@ async function fetchUgcMetrics(sb: SupabaseAny, organizationId: string, periodSt
   };
 }
 
+type AcquisitionOrderRow = {
+  customer_id?: string | number | null;
+  customer_email?: string | null;
+  current_total_price?: string | number | null;
+  total_price?: string | number | null;
+};
+
+async function fetchAcquisitionOrders(sb: SupabaseAny, organizationId: string, startIso: string, endIso: string): Promise<AcquisitionOrderRow[]> {
+  const pageSize = 1000;
+  const rows: AcquisitionOrderRow[] = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await sb
+      .from("shopify_orders")
+      .select("customer_id, customer_email, current_total_price:raw_data->current_total_price, total_price, financial_status, cancelled_at, created_at_shopify")
+      .eq("organization_id", organizationId)
+      .gte("created_at_shopify", startIso)
+      .lte("created_at_shopify", endIso)
+      .not("financial_status", "eq", "voided")
+      .is("cancelled_at", null)
+      .order("created_at_shopify", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) throw error;
+    const batch = data ?? [];
+    rows.push(...batch.filter((row: { financial_status?: string | null }) => row.financial_status !== "refunded"));
+    if (batch.length < pageSize) break;
+  }
+  return rows;
+}
+
+async function fetchPriorReturningKeys(sb: SupabaseAny, organizationId: string, orders: AcquisitionOrderRow[], startIso: string): Promise<Set<string>> {
+  const periodCustomerIds = new Set<string | number>();
+  const periodEmailsOnly = new Set<string>();
+
+  for (const order of orders) {
+    if (order.customer_id != null) {
+      periodCustomerIds.add(order.customer_id);
+    } else if (order.customer_email) {
+      periodEmailsOnly.add(order.customer_email.trim().toLowerCase());
+    }
+  }
+
+  const returningKeys = new Set<string>();
+  const idArray = Array.from(periodCustomerIds);
+  for (let i = 0; i < idArray.length; i += 200) {
+    const batch = idArray.slice(i, i + 200);
+    const { data, error } = await sb
+      .from("shopify_orders")
+      .select("customer_id")
+      .eq("organization_id", organizationId)
+      .lt("created_at_shopify", startIso)
+      .in("customer_id", batch)
+      .is("cancelled_at", null)
+      .not("financial_status", "eq", "voided")
+      .limit(50000);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      const key = scorecardCustomerKey(row);
+      if (key) returningKeys.add(key);
+    }
+  }
+
+  const emailArray = Array.from(periodEmailsOnly);
+  for (let i = 0; i < emailArray.length; i += 200) {
+    const batch = emailArray.slice(i, i + 200);
+    const { data, error } = await sb
+      .from("shopify_orders")
+      .select("customer_email")
+      .eq("organization_id", organizationId)
+      .lt("created_at_shopify", startIso)
+      .in("customer_email", batch)
+      .is("customer_id", null)
+      .is("cancelled_at", null)
+      .not("financial_status", "eq", "voided")
+      .limit(50000);
+    if (error) throw error;
+    for (const row of data ?? []) {
+      const key = scorecardCustomerKey(row);
+      if (key) returningKeys.add(key);
+    }
+  }
+
+  return returningKeys;
+}
+
+async function fetchCustomerAcquisitionMetrics(sb: SupabaseAny, organizationId: string, periodStart: string, periodEnd: string) {
+  const range = toBogotaIsoWindow(periodStart, periodEnd);
+  const orders = await fetchAcquisitionOrders(sb, organizationId, range.start, range.end);
+  const priorReturningKeys = await fetchPriorReturningKeys(sb, organizationId, orders, range.start);
+  return summarizeCustomerAcquisition(orders, priorReturningKeys);
+}
+
 function owner(label: string, role: string, kpis: Record<string, Kpi>, notes: string[] = []): OwnerScorecard {
   return { label, role, kpis, notes, status: worstStatus(Object.values(kpis).map((kpi) => kpi.status)) };
 }
@@ -258,9 +352,10 @@ serve(async (req) => {
 
     const sb = createClient(supabaseUrl, serviceRoleKey, { global: { headers: { Authorization: authHeader } } });
 
-    const [target, prophit, ugc, foldersRes, assetsRes] = await Promise.all([
+    const [target, prophit, customerAcquisition, ugc, foldersRes, assetsRes] = await Promise.all([
       fetchCurrentTarget(sb, organizationId, week.start, week.end),
       fetchProphitMetrics(authHeader, organizationId, week.start, week.end),
+      fetchCustomerAcquisitionMetrics(sb, organizationId, week.start, week.end),
       fetchUgcMetrics(sb, organizationId, week.start, week.end),
       sb.from("growth_static_drive_folders").select("product_key, product_name, drive_folder_id").eq("organization_id", organizationId).eq("active", true).order("product_key"),
       sb.from("growth_static_drive_assets").select("drive_file_id, product_key, product_name, source_folder_id, file_name, created_time, attributed_person_key, attributed_person_label, web_view_link").eq("organization_id", organizationId).gte("created_time", `${week.start}T00:00:00.000Z`).lt("created_time", `${week.end}T00:00:00.000Z`).eq("trashed", false).order("created_time", { ascending: false }),
@@ -274,11 +369,18 @@ serve(async (req) => {
     const adSpend = maybeNum(current.adSpend);
     const mer = maybeNum(current.mer);
     const cmPercent = maybeNum(current.cmPercent);
-    const newCustomers = maybeNum(current.newCustomerCount ?? current.newCustomers);
+    const computedNewCustomers = customerAcquisition.newCustomerCount;
+    const newCustomersFromProphit = maybeNum(current.newCustomerCount ?? current.newCustomers);
+    const newCustomers = computedNewCustomers > 0 || newCustomersFromProphit === null
+      ? computedNewCustomers
+      : newCustomersFromProphit;
     const orders = maybeNum(current.orders);
     const aov = maybeNum(current.aov);
     const ncpa = adSpend !== null && newCustomers !== null && newCustomers > 0 ? adSpend / newCustomers : null;
-    const ncRevenuePercent = normalizePercentMetric(maybeNum(current.newCustomerRevenuePct));
+    const computedNcRevenuePercent = revenue !== null && revenue > 0
+      ? (customerAcquisition.newCustomerRevenue / revenue) * 100
+      : null;
+    const ncRevenuePercent = computedNcRevenuePercent ?? normalizePercentMetric(maybeNum(current.newCustomerRevenuePct));
 
     const staticCreatives = summarizeStaticCreatives(
       (assetsRes.data ?? []) as StaticDriveAssetRow[],
@@ -382,7 +484,7 @@ serve(async (req) => {
       blockers,
       metadata: {
         computedAt: new Date().toISOString(),
-        sources: ["prophit-metrics", "ad_metrics_daily", "ugc_*", "growth_weekly_targets", "growth_static_drive_assets"],
+        sources: ["prophit-metrics", "shopify_orders customer acquisition", "ad_metrics_daily", "ugc_*", "growth_weekly_targets", "growth_static_drive_assets"],
         missingMetrics: ["mutations", "graduated_ads", "testing_waste", "frequency_winners", "stock_active_sku", "statics_published", "needs_review_backlog", "tracker_completeness", "kira_sales_angle_report", "kira_focus", "hermes_meta_wrapper_status", "google_query_mix", "pixel_nc_rev_deep_dive"],
         notes: [
           "June 600M dashboard uses non-linear weekly milestones from the 2026-06-01 operating anexo.",
@@ -390,6 +492,7 @@ serve(async (req) => {
           "info@dosmicos.co is mapped as shared/unassigned by default.",
         ],
         orders,
+        customerAcquisition,
       },
     };
 

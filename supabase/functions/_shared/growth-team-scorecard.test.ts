@@ -7,6 +7,7 @@ import {
   buildKpi,
   normalizePercentMetric,
   resolveBogotaWeek,
+  summarizeCustomerAcquisition,
   summarizeStaticCreatives,
   toBogotaIsoWindow,
 } from "./growth-team-scorecard.ts";
@@ -69,6 +70,22 @@ Deno.test("normalizePercentMetric converts ratio-shaped values to percentage poi
   assertEquals(normalizePercentMetric(0.762), 76.2);
   assertEquals(normalizePercentMetric(76.2), 76.2);
   assertEquals(normalizePercentMetric(null), null);
+});
+
+Deno.test("summarizeCustomerAcquisition matches Customer Health unique-customer rules", () => {
+  const metrics = summarizeCustomerAcquisition([
+    { customer_id: 1, customer_email: "new@example.com", current_total_price: "100000" },
+    { customer_id: 2, customer_email: "returning@example.com", current_total_price: "50000" },
+    { customer_id: 3, customer_email: "repeat@example.com", current_total_price: "40000" },
+    { customer_id: 3, customer_email: "repeat@example.com", current_total_price: "30000" },
+  ], new Set(["id:2"]));
+
+  assertEquals(metrics.newCustomerCount, 1);
+  assertEquals(metrics.returningCustomerCount, 2);
+  assertEquals(metrics.newCustomerOrders, 1);
+  assertEquals(metrics.returningCustomerOrders, 3);
+  assertEquals(metrics.newCustomerRevenue, 100000);
+  assertEquals(metrics.returningCustomerRevenue, 120000);
 });
 
 Deno.test("resolveBogotaWeek returns approved non-linear June milestone window", () => {

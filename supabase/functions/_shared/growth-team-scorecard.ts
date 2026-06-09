@@ -118,6 +118,72 @@ export function normalizePercentMetric(value: number | null | undefined): number
   return Math.abs(value) <= 1 ? value * 100 : value;
 }
 
+type CustomerAcquisitionOrder = {
+  customer_id?: string | number | null;
+  customer_email?: string | null;
+  current_total_price?: string | number | null;
+  total_price?: string | number | null;
+};
+
+export function scorecardCustomerKey(order: Pick<CustomerAcquisitionOrder, "customer_id" | "customer_email">): string | null {
+  if (order.customer_id != null) return `id:${order.customer_id}`;
+  const email = order.customer_email?.trim().toLowerCase();
+  return email ? `email:${email}` : null;
+}
+
+export function scorecardOrderNetPrice(order: Pick<CustomerAcquisitionOrder, "current_total_price" | "total_price">): number {
+  const raw = order.current_total_price ?? order.total_price ?? 0;
+  const parsed = typeof raw === "string" ? Number.parseFloat(raw) : raw;
+  return typeof parsed === "number" && Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function summarizeCustomerAcquisition(orders: CustomerAcquisitionOrder[], priorReturningKeys: Set<string>) {
+  const returningKeys = new Set(priorReturningKeys);
+  const periodOrderCountByCustomer = new Map<string, number>();
+
+  for (const order of orders) {
+    const key = scorecardCustomerKey(order);
+    if (key) periodOrderCountByCustomer.set(key, (periodOrderCountByCustomer.get(key) ?? 0) + 1);
+  }
+
+  // Match Shopify Customer Health semantics: if a customer places 2+ orders in
+  // the selected period, the customer belongs to the returning bucket even when
+  // their first lifetime purchase happened inside that same period.
+  for (const [key, count] of periodOrderCountByCustomer) {
+    if (count >= 2) returningKeys.add(key);
+  }
+
+  const newOrders = orders.filter((order) => {
+    const key = scorecardCustomerKey(order);
+    return !key || !returningKeys.has(key);
+  });
+  const returningOrders = orders.filter((order) => {
+    const key = scorecardCustomerKey(order);
+    return key != null && returningKeys.has(key);
+  });
+
+  const newCustomerKeys = new Set<string>();
+  for (const order of newOrders) {
+    const key = scorecardCustomerKey(order);
+    if (key) newCustomerKeys.add(key);
+  }
+
+  const returningCustomerKeys = new Set<string>();
+  for (const order of returningOrders) {
+    const key = scorecardCustomerKey(order);
+    if (key) returningCustomerKeys.add(key);
+  }
+
+  return {
+    newCustomerCount: newCustomerKeys.size,
+    returningCustomerCount: returningCustomerKeys.size,
+    newCustomerOrders: newOrders.length,
+    returningCustomerOrders: returningOrders.length,
+    newCustomerRevenue: newOrders.reduce((sum, order) => sum + scorecardOrderNetPrice(order), 0),
+    returningCustomerRevenue: returningOrders.reduce((sum, order) => sum + scorecardOrderNetPrice(order), 0),
+  };
+}
+
 export function attributeDrivePerson(input: DriveAttributionInput, maps: DriveIdentityMapRow[]) {
   const normalizedMaps = [...maps]
     .filter((m) => m.person_key && m.person_label)

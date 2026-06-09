@@ -389,40 +389,58 @@ const KpiPill: React.FC<{ label: string; kpi: GrowthKpi; metricKey: string }> = 
   </div>
 );
 
-const OwnerCard: React.FC<{ owner: OwnerScorecard }> = ({ owner }) => (
-  <Card className="shadow-sm">
-    <CardHeader className="p-4 pb-2">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <CardTitle className="text-sm font-semibold text-slate-900">{owner.label}</CardTitle>
-          <p className="text-xs text-slate-500">{owner.role}</p>
-        </div>
-        <StatusBadge status={owner.status} />
-      </div>
-    </CardHeader>
-    <CardContent className="space-y-3 p-4 pt-2">
-      <div className="grid grid-cols-1 gap-2">
-        {Object.entries(owner.kpis).map(([key, kpi]) => (
-          <div key={key} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 px-2.5 py-2 text-xs">
-            <span className="inline-flex min-w-0 items-center gap-1 font-medium text-slate-600">
-              <span className="truncate">{kpiLabels[key] ?? key}</span>
-              <MetricInfo metricKey={key} side="right" />
-            </span>
-            <span className="text-right text-slate-900">
-              {formatKpiValue(key, kpi.actual)}
-              {kpi.target !== null && <span className="text-slate-400"> / {formatKpiValue(key, kpi.target)}</span>}
-            </span>
+const OwnerCard: React.FC<{ owner: OwnerScorecard }> = ({ owner }) => {
+  const entries = Object.entries(owner.kpis);
+  const instrumentationPending = entries.length > 0 && entries.every(([, kpi]) => kpi.actual === null && kpi.target === null);
+
+  return (
+    <Card className="shadow-sm">
+      <CardHeader className="p-4 pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle className="text-sm font-semibold text-slate-900">{owner.label}</CardTitle>
+            <p className="text-xs text-slate-500">{owner.role}</p>
           </div>
-        ))}
-      </div>
-      {owner.notes.length > 0 && (
-        <ul className="list-disc space-y-1 pl-4 text-[11px] text-slate-500">
-          {owner.notes.map((note) => <li key={note}>{note}</li>)}
-        </ul>
-      )}
-    </CardContent>
-  </Card>
-);
+          {instrumentationPending ? (
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[11px] px-2 py-0.5">
+              Pendiente conexión
+            </Badge>
+          ) : (
+            <StatusBadge status={owner.status} />
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 p-4 pt-2">
+        {instrumentationPending ? (
+          <div className="rounded-lg border border-dashed border-blue-200 bg-blue-50/60 p-3 text-xs text-blue-800">
+            <p className="font-medium">Fuente aún no conectada al scorecard.</p>
+            <p className="mt-1 text-blue-700">No es una métrica en cero; queda como action item de instrumentación.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-2">
+            {entries.map(([key, kpi]) => (
+              <div key={key} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 px-2.5 py-2 text-xs">
+                <span className="inline-flex min-w-0 items-center gap-1 font-medium text-slate-600">
+                  <span className="truncate">{kpiLabels[key] ?? key}</span>
+                  <MetricInfo metricKey={key} side="right" />
+                </span>
+                <span className="text-right text-slate-900">
+                  {formatKpiValue(key, kpi.actual)}
+                  {kpi.target !== null && <span className="text-slate-400"> / {formatKpiValue(key, kpi.target)}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {owner.notes.length > 0 && (
+          <ul className="list-disc space-y-1 pl-4 text-[11px] text-slate-500">
+            {owner.notes.map((note) => <li key={note}>{note}</li>)}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
 
 const GrowthTeamScorecardPage: React.FC = () => {
   // Weekly milestones run Monday→Sunday; the backend treats period_end as
