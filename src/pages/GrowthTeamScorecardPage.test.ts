@@ -26,4 +26,7 @@ Deno.test("Growth Team Scorecard renders June 600M owner contract", async () => 
   assert(edge.includes("static_creatives_target: 30"), "edge fallback must use 30 statics/week");
   assert(edge.includes("static_published_target: 24"), "edge fallback must use 24 published/tested statics/week");
   assert(edge.includes("riskMatrix"), "edge response must include riskMatrix");
+  assert(edge.includes("fetchKiraCreativeDirection"), "edge must connect Kira to structured AngleOS data");
+  assert(edge.includes('"ad_tags AngleOS"'), "edge metadata must expose Kira/AngleOS source");
+  assert(!edge.includes("Conectar sales-angle report/foco semanal como dato estructurado"), "Kira must no longer be hard-coded as pending connection");
 });

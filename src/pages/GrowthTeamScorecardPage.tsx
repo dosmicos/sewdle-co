@@ -251,30 +251,30 @@ const metricDefinitions: Record<string, MetricDefinition> = {
   salesAngleReport: {
     title: 'Sales-angle report',
     description: 'Reporte semanal de Kira con ángulos de venta ganadores/perdedores.',
-    formula: 'Disponible = reporte entregado para la semana',
+    formula: 'Disponible = AngleOS tiene ángulos estructurados para la semana',
     health: 'Debe existir cada lunes.',
-    source: 'Pendiente Brain/ledger',
+    source: 'ad_tags AngleOS + ad_performance_daily',
   },
   topAnglesRanked: {
     title: 'Top ángulos rankeados',
     description: 'Ranking de ángulos creativos priorizados por performance.',
-    formula: 'Ranked = top ángulos con evidencia y prioridad',
+    formula: 'Ranked = ángulos con specific_angle + performance en la ventana',
     health: 'Debe alimentar la producción semanal.',
-    source: 'Pendiente Brain/ledger',
+    source: 'ad_tags AngleOS + ad_performance_daily',
   },
   focusDefined: {
     title: 'Foco semanal definido',
     description: 'Brief/foco creativo que guía producción y testing de la semana.',
-    formula: 'Foco definido = sí/no con brief vigente',
+    formula: 'Foco definido = al menos un winner/promising de AngleOS',
     health: 'No tenerlo bloquea producción clara.',
-    source: 'Pendiente Brain/ledger',
+    source: 'ad_tags AngleOS + ad_performance_daily',
   },
   anglesAtRisk: {
     title: 'Ángulos en riesgo',
     description: 'Ángulos creativos fatigados, perdedores o sin evidencia suficiente.',
-    formula: 'At risk = ángulos marcados por señales de performance/feedback',
-    health: 'Lower is better.',
-    source: 'Pendiente Brain/ledger',
+    formula: 'At risk = ángulos clasificados como loser por performance',
+    health: 'Verde en 0; amarillo 1–2; rojo >2.',
+    source: 'ad_tags AngleOS + ad_performance_daily',
   },
   publishedToTesting: {
     title: 'Publicados a Testing ABO',
@@ -324,6 +324,10 @@ function formatNumber(value: number | null, suffix = '') {
 }
 
 function formatKpiValue(key: string, value: number | null) {
+  if (['salesAngleReport', 'focusDefined'].includes(key)) {
+    if (value === null || !Number.isFinite(value)) return 'No disponible';
+    return value >= 1 ? 'Sí' : 'No';
+  }
   if (['revenue', 'adSpend', 'spend', 'cmdRevenue', 'aov', 'ncpa'].includes(key)) return formatCOP(value);
   if (['mer'].includes(key)) return formatNumber(value, 'x');
   if (['cmPercent', 'ncRevenuePercent', 'testingWaste'].includes(key)) return formatNumber(value, '%');

@@ -60,6 +60,76 @@ type RiskMatrixRow = {
   valueType: "cop" | "number" | "percent" | "mer";
 };
 
+type AdPerformanceRow = {
+  ad_id?: string | null;
+  spend?: number | string | null;
+  revenue?: number | string | null;
+  purchases?: number | string | null;
+  clicks?: number | string | null;
+  impressions?: number | string | null;
+  add_to_cart?: number | string | null;
+  landing_page_views?: number | string | null;
+};
+
+type AdTagRow = {
+  ad_id?: string | null;
+  product?: string | null;
+  product_name?: string | null;
+  creative_type?: string | null;
+  hook_description?: string | null;
+  specific_angle?: string | null;
+  hook_pattern?: string | null;
+  ugc_creator_handle?: string | null;
+};
+
+type KiraAngleStatus = "winner" | "promising" | "loser" | "needs_data";
+
+type KiraAngleSummary = {
+  specific_angle: string;
+  label: string;
+  product: string | null;
+  creative_type: string | null;
+  hook_pattern: string | null;
+  best_hook: string | null;
+  total_spend: number;
+  total_revenue: number;
+  total_purchases: number;
+  roas: number;
+  cpa: number;
+  ctr: number;
+  ad_count: number;
+  status: KiraAngleStatus;
+};
+
+type KiraCreativeDirectionSummary = {
+  reportAvailable: boolean;
+  rankedAngles: KiraAngleSummary[];
+  winnerCount: number;
+  promisingCount: number;
+  loserCount: number;
+  focusAngles: string[];
+  totalTaggedAds: number;
+  totalSpend: number;
+};
+
+const SPECIFIC_ANGLE_LABELS: Record<string, string> = {
+  sleeping_se_destapa_sin_cobijas: "Sleeping — se destapa / sin cobijas",
+  sleeping_rutina_noche_tranquila: "Sleeping — rutina de noche tranquila",
+  sleeping_tog_clima_correcto: "Sleeping — TOG / clima correcto",
+  sleeping_bebe_abrigado_sin_sobrecalentar: "Sleeping — bebé abrigado sin sobrecalentar",
+  ruana_facil_de_poner: "Ruana — fácil de poner",
+  ruana_cobijita_puesta: "Ruana — cobijita puesta",
+  ruana_animalitos_ninos_la_aman: "Ruana — animalitos que los niños aman",
+  ruana_regalo_util: "Ruana — regalo útil",
+  ruana_casa_carro_jardin: "Ruana — casa / carro / jardín",
+  parka_tierra_fria: "Parka — tierra fría",
+  parka_frio_lluvia_salidas: "Parka — frío / lluvia / salidas",
+  parka_viaje_clima_frio: "Parka — viaje a clima frío",
+  parka_abrigo_sin_peso: "Parka — abrigo sin peso",
+  generic_product_benefit: "Beneficio de producto genérico",
+  unknown: "Sin ángulo claro",
+};
+
 function num(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -117,6 +187,16 @@ function stockKpi(actual: number | null): Kpi {
   if (actual === null) return buildKpi(actual, 30, "higher_better");
   const status: KpiStatus = actual >= 30 ? "green" : actual >= 15 ? "yellow" : "red";
   return kpiWithStatus(actual, 30, "higher_better", status);
+}
+
+function maxZeroKpi(actual: number | null): Kpi {
+  if (actual === null) return buildKpi(actual, 0, "lower_better");
+  const status: KpiStatus = actual === 0 ? "green" : actual <= 2 ? "yellow" : "red";
+  return kpiWithStatus(actual, 0, "lower_better", status);
+}
+
+function binaryAvailabilityKpi(available: boolean): Kpi {
+  return buildKpi(available ? 1 : 0, 1, "higher_better");
 }
 
 function creativeSupplyKpi(actual: number | null, target: number): Kpi {
@@ -227,6 +307,159 @@ async function fetchUgcMetrics(sb: SupabaseAny, organizationId: string, periodSt
     activeLinks: (linksRes.data ?? []).length,
     cmdOrders: (ordersRes.data ?? []).length,
     cmdRevenue,
+  };
+}
+
+function angleLabel(angle?: string | null): string {
+  if (!angle) return SPECIFIC_ANGLE_LABELS.unknown;
+  return SPECIFIC_ANGLE_LABELS[angle] ?? angle.replace(/_/g, " ");
+}
+
+function angleDecisionStatus(input: { spend: number; purchases: number; roas: number; cpa: number; adCount: number }): KiraAngleStatus {
+  const { spend, purchases, roas, cpa, adCount } = input;
+  if (spend >= 150000 && purchases >= 3 && roas >= 1.8 && (adCount >= 2 || spend >= 250000)) return "winner";
+  if (spend >= 120000 && (purchases === 0 || (cpa > 0 && cpa >= 120000 && roas < 1.2))) return "loser";
+  if ((purchases >= 1 && roas >= 1.5) || (spend >= 80000 && roas >= 1.5)) return "promising";
+  return "needs_data";
+}
+
+function topByValue(map: Map<string, number>): string | null {
+  const [top] = Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  return top?.[0] ?? null;
+}
+
+async function fetchKiraCreativeDirection(sb: SupabaseAny, organizationId: string, periodStart: string, periodEnd: string): Promise<KiraCreativeDirectionSummary> {
+  const { data: perfData, error } = await sb
+    .from("ad_performance_daily")
+    .select("ad_id, spend, revenue, purchases, clicks, impressions, add_to_cart, landing_page_views")
+    .eq("organization_id", organizationId)
+    .gte("date", periodStart)
+    .lt("date", periodEnd);
+
+  if (error) throw error;
+
+  const rows = ((perfData ?? []) as AdPerformanceRow[]).filter((row) => row.ad_id);
+  const adIds = Array.from(new Set(rows.map((row) => row.ad_id).filter(Boolean))) as string[];
+  if (adIds.length === 0) {
+    return { reportAvailable: false, rankedAngles: [], winnerCount: 0, promisingCount: 0, loserCount: 0, focusAngles: [], totalTaggedAds: 0, totalSpend: 0 };
+  }
+
+  const tagsMap = new Map<string, AdTagRow>();
+  for (let i = 0; i < adIds.length; i += 500) {
+    const batch = adIds.slice(i, i + 500);
+    const { data: tagsData, error: tagsError } = await sb
+      .from("ad_tags")
+      .select("ad_id, product, product_name, creative_type, hook_description, specific_angle, hook_pattern, ugc_creator_handle")
+      .eq("organization_id", organizationId)
+      .in("ad_id", batch);
+    if (tagsError) throw tagsError;
+    for (const tag of (tagsData ?? []) as AdTagRow[]) {
+      if (tag.ad_id) tagsMap.set(tag.ad_id, tag);
+    }
+  }
+
+  const groups = new Map<string, {
+    adIds: Set<string>;
+    spend: number;
+    revenue: number;
+    purchases: number;
+    clicks: number;
+    impressions: number;
+    productCounts: Map<string, number>;
+    creativeCounts: Map<string, number>;
+    hookPatternCounts: Map<string, number>;
+    hookRevenue: Map<string, number>;
+  }>();
+
+  const addCount = (map: Map<string, number>, key: string | null | undefined, increment = 1) => {
+    if (!key) return;
+    map.set(key, (map.get(key) ?? 0) + increment);
+  };
+
+  let totalTaggedAds = 0;
+  for (const row of rows) {
+    const adId = row.ad_id!;
+    const tag = tagsMap.get(adId);
+    const angle = tag?.specific_angle;
+    if (!angle || angle === "unknown") continue;
+    totalTaggedAds += 1;
+
+    if (!groups.has(angle)) {
+      groups.set(angle, {
+        adIds: new Set(),
+        spend: 0,
+        revenue: 0,
+        purchases: 0,
+        clicks: 0,
+        impressions: 0,
+        productCounts: new Map(),
+        creativeCounts: new Map(),
+        hookPatternCounts: new Map(),
+        hookRevenue: new Map(),
+      });
+    }
+
+    const group = groups.get(angle)!;
+    const spend = num(row.spend);
+    const revenue = num(row.revenue);
+    group.adIds.add(adId);
+    group.spend += spend;
+    group.revenue += revenue;
+    group.purchases += num(row.purchases);
+    group.clicks += num(row.clicks);
+    group.impressions += num(row.impressions);
+    addCount(group.productCounts, tag?.product_name || tag?.product);
+    addCount(group.creativeCounts, tag?.creative_type);
+    addCount(group.hookPatternCounts, tag?.hook_pattern);
+    addCount(group.hookRevenue, tag?.hook_description, revenue);
+  }
+
+  const rankedAngles = Array.from(groups.entries()).map(([angle, group]) => {
+    const roas = group.spend > 0 ? group.revenue / group.spend : 0;
+    const cpa = group.purchases > 0 ? group.spend / group.purchases : 0;
+    const ctr = group.impressions > 0 ? (group.clicks / group.impressions) * 100 : 0;
+    const status = angleDecisionStatus({ spend: group.spend, purchases: group.purchases, roas, cpa, adCount: group.adIds.size });
+    return {
+      specific_angle: angle,
+      label: angleLabel(angle),
+      product: topByValue(group.productCounts),
+      creative_type: topByValue(group.creativeCounts),
+      hook_pattern: topByValue(group.hookPatternCounts),
+      best_hook: topByValue(group.hookRevenue),
+      total_spend: group.spend,
+      total_revenue: group.revenue,
+      total_purchases: group.purchases,
+      roas,
+      cpa,
+      ctr,
+      ad_count: group.adIds.size,
+      status,
+    };
+  }).sort((a, b) => {
+    const rank: Record<KiraAngleStatus, number> = { winner: 0, promising: 1, needs_data: 2, loser: 3 };
+    const statusDiff = rank[a.status] - rank[b.status];
+    if (statusDiff !== 0) return statusDiff;
+    if (b.total_purchases !== a.total_purchases) return b.total_purchases - a.total_purchases;
+    return b.roas - a.roas;
+  });
+
+  const winnerCount = rankedAngles.filter((angle) => angle.status === "winner").length;
+  const promisingCount = rankedAngles.filter((angle) => angle.status === "promising").length;
+  const loserCount = rankedAngles.filter((angle) => angle.status === "loser").length;
+  const focusAngles = rankedAngles
+    .filter((angle) => angle.status === "winner" || angle.status === "promising")
+    .slice(0, 3)
+    .map((angle) => angle.label);
+
+  return {
+    reportAvailable: rankedAngles.length > 0,
+    rankedAngles,
+    winnerCount,
+    promisingCount,
+    loserCount,
+    focusAngles,
+    totalTaggedAds,
+    totalSpend: rankedAngles.reduce((sum, angle) => sum + angle.total_spend, 0),
   };
 }
 
@@ -352,11 +585,12 @@ serve(async (req) => {
 
     const sb = createClient(supabaseUrl, serviceRoleKey, { global: { headers: { Authorization: authHeader } } });
 
-    const [target, prophit, customerAcquisition, ugc, foldersRes, assetsRes] = await Promise.all([
+    const [target, prophit, customerAcquisition, ugc, kiraCreativeDirection, foldersRes, assetsRes] = await Promise.all([
       fetchCurrentTarget(sb, organizationId, week.start, week.end),
       fetchProphitMetrics(authHeader, organizationId, week.start, week.end),
       fetchCustomerAcquisitionMetrics(sb, organizationId, week.start, week.end),
       fetchUgcMetrics(sb, organizationId, week.start, week.end),
+      fetchKiraCreativeDirection(sb, organizationId, week.start, week.end),
       sb.from("growth_static_drive_folders").select("product_key, product_name, drive_folder_id").eq("organization_id", organizationId).eq("active", true).order("product_key"),
       sb.from("growth_static_drive_assets").select("drive_file_id, product_key, product_name, source_folder_id, file_name, created_time, attributed_person_key, attributed_person_label, web_view_link").eq("organization_id", organizationId).gte("created_time", `${week.start}T00:00:00.000Z`).lt("created_time", `${week.end}T00:00:00.000Z`).eq("trashed", false).order("created_time", { ascending: false }),
     ]);
@@ -397,6 +631,16 @@ serve(async (req) => {
     const ncRevenuePercentKpi = ncRevenueKpi(ncRevenuePercent, 10);
     const ugcPiecesKpi = creativeSupplyKpi(ugc.contentPieces, num(target.ugc_content_target));
     const staticsProducedKpi = creativeSupplyKpi(staticCreatives.total, num(target.static_creatives_target));
+    const kiraSalesAngleReportKpi = binaryAvailabilityKpi(kiraCreativeDirection.reportAvailable);
+    const kiraTopAnglesKpi = buildKpi(kiraCreativeDirection.rankedAngles.length, 3, "higher_better");
+    const kiraFocusDefinedKpi = binaryAvailabilityKpi(kiraCreativeDirection.focusAngles.length > 0);
+    const kiraAnglesAtRiskKpi = maxZeroKpi(kiraCreativeDirection.loserCount);
+    const kiraFocusNote = kiraCreativeDirection.focusAngles.length > 0
+      ? `Foco semanal sugerido desde AngleOS: ${kiraCreativeDirection.focusAngles.join(" · ")}.`
+      : "AngleOS no encontró winners/promising suficientes para definir foco semanal automático.";
+    const kiraSourceNote = kiraCreativeDirection.reportAvailable
+      ? `Conectado a ad_tags + ad_performance_daily: ${kiraCreativeDirection.rankedAngles.length} ángulos rankeados, ${kiraCreativeDirection.winnerCount} winners, ${kiraCreativeDirection.promisingCount} promising y ${kiraCreativeDirection.loserCount} en riesgo.`
+      : "Sin ángulos estructurados en ad_tags/ad_performance_daily para la semana seleccionada; revisar sync/tagging AngleOS.";
     const wasteKpi = wasteRateKpi(null);
     const frequencyWinnersKpi = frequencyKpi(null);
     const stockActiveSkuKpi = stockKpi(null);
@@ -439,11 +683,11 @@ serve(async (req) => {
         trackerCompleteness: buildKpi(null, null, "higher_better"),
       }, ["Meta semanal: 30 piezas producidas entre las dos (~15 c/u) y 24 publicadas/testeadas. info@dosmicos.co sigue Shared/Sin asignar."]),
       kira: owner("Kira", "Dirección creativa IA", {
-        salesAngleReport: buildKpi(null, null, "higher_better"),
-        topAnglesRanked: buildKpi(null, null, "higher_better"),
-        focusDefined: buildKpi(null, null, "higher_better"),
-        anglesAtRisk: buildKpi(null, null, "lower_better"),
-      }, ["Debe entregar sales-angle report del lunes y foco creativo de la semana; pendiente conectar Brain/ledger como fuente estructurada."]),
+        salesAngleReport: kiraSalesAngleReportKpi,
+        topAnglesRanked: kiraTopAnglesKpi,
+        focusDefined: kiraFocusDefinedKpi,
+        anglesAtRisk: kiraAnglesAtRiskKpi,
+      }, [kiraSourceNote, kiraFocusNote, "Fuente estructurada: AngleOS/ad_tags + ad_performance_daily; no toca el perfil/proceso de Kira."]),
       hermes: owner("Hermes", "Ops & publicación IA", {
         publishedToTesting: buildKpi(null, null, "higher_better"),
         graduatedAds: buildKpi(null, 3, "higher_better"),
@@ -471,8 +715,13 @@ serve(async (req) => {
     if (company.ncRevenuePercent.status === "red" || company.ncRevenuePercent.status === "missing") blockers.push({ severity: company.ncRevenuePercent.status === "missing" ? "yellow" : "red", owner: "Julian/Hermes", message: "NC-Rev% no está verde o no disponible: revisar acquisition mix/pixel antes de escalar paid." });
     if (owners.sebastian.kpis.ugcPieces.status === "red") blockers.push({ severity: "red", owner: "Sebastián", message: "UGC piezas <32/40: bloqueo de supply creativo semanal." });
     if (staticCreatives.total < num(target.static_creatives_target)) blockers.push({ severity: staticCreatives.total < 24 ? "red" : "yellow", owner: "Angie + Ana María", message: `Static creatives ${staticCreatives.total}/${target.static_creatives_target}; objetivo 50/50 y UGC folders excluidos.` });
-    blockers.push({ severity: "yellow", owner: "Kira", message: "Conectar sales-angle report/foco semanal como dato estructurado del dashboard." });
+    if (!kiraCreativeDirection.reportAvailable) blockers.push({ severity: "yellow", owner: "Kira", message: "AngleOS no tiene sales-angle report/foco semanal estructurado para la semana seleccionada." });
+    else if (kiraCreativeDirection.focusAngles.length === 0) blockers.push({ severity: "yellow", owner: "Kira", message: "Hay ángulos rankeados, pero ningún winner/promising para foco semanal automático." });
+    if (kiraCreativeDirection.loserCount > 2) blockers.push({ severity: "yellow", owner: "Kira", message: `${kiraCreativeDirection.loserCount} ángulos en riesgo/loser: revisar antes de pedir más producción.` });
     blockers.push({ severity: "yellow", owner: "Hermes", message: "Conectar ledger Meta para published, graduations, waste, wrapper status y mutations." });
+
+    const missingMetrics = ["mutations", "graduated_ads", "testing_waste", "frequency_winners", "stock_active_sku", "statics_published", "needs_review_backlog", "tracker_completeness", "hermes_meta_wrapper_status", "google_query_mix", "pixel_nc_rev_deep_dive"];
+    if (!kiraCreativeDirection.reportAvailable) missingMetrics.push("kira_sales_angle_report", "kira_focus");
 
     const response = {
       period: { label: target.label || week.label, start: week.start, end: week.end },
@@ -484,8 +733,8 @@ serve(async (req) => {
       blockers,
       metadata: {
         computedAt: new Date().toISOString(),
-        sources: ["prophit-metrics", "shopify_orders customer acquisition", "ad_metrics_daily", "ugc_*", "growth_weekly_targets", "growth_static_drive_assets"],
-        missingMetrics: ["mutations", "graduated_ads", "testing_waste", "frequency_winners", "stock_active_sku", "statics_published", "needs_review_backlog", "tracker_completeness", "kira_sales_angle_report", "kira_focus", "hermes_meta_wrapper_status", "google_query_mix", "pixel_nc_rev_deep_dive"],
+        sources: ["prophit-metrics", "shopify_orders customer acquisition", "ad_metrics_daily", "ugc_*", "growth_weekly_targets", "growth_static_drive_assets", "ad_tags AngleOS", "ad_performance_daily AngleOS"],
+        missingMetrics,
         notes: [
           "June 600M dashboard uses non-linear weekly milestones from the 2026-06-01 operating anexo.",
           "Angie + Ana María are both producers 50/50; Kira owns creative direction; Hermes owns publication/scaling ops.",
@@ -493,6 +742,7 @@ serve(async (req) => {
         ],
         orders,
         customerAcquisition,
+        kiraCreativeDirection,
       },
     };
 
