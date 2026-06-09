@@ -112,6 +112,9 @@ type KiraCreativeDirectionSummary = {
   totalSpend: number;
 };
 
+const NC_REVENUE_PERCENT_TARGET = 75;
+const NC_REVENUE_PERCENT_YELLOW_FLOOR = 65;
+
 const SPECIFIC_ANGLE_LABELS: Record<string, string> = {
   sleeping_se_destapa_sin_cobijas: "Sleeping — se destapa / sin cobijas",
   sleeping_rutina_noche_tranquila: "Sleeping — rutina de noche tranquila",
@@ -165,9 +168,9 @@ function cmKpi(actual: number | null, target = 25): Kpi {
   return kpiWithStatus(actual, target, "higher_better", status);
 }
 
-function ncRevenueKpi(actual: number | null, target = 10): Kpi {
+function ncRevenueKpi(actual: number | null, target = NC_REVENUE_PERCENT_TARGET): Kpi {
   if (actual === null) return buildKpi(actual, target, "higher_better");
-  const status: KpiStatus = actual >= target ? "green" : actual >= 5 ? "yellow" : "red";
+  const status: KpiStatus = actual >= target ? "green" : actual >= NC_REVENUE_PERCENT_YELLOW_FLOOR ? "yellow" : "red";
   return kpiWithStatus(actual, target, "higher_better", status);
 }
 
@@ -628,7 +631,7 @@ serve(async (req) => {
     const adSpendKpi = buildKpi(adSpend, num(target.ad_spend_budget), "higher_better");
     const merKpi = strictMerKpi(mer, num(target.mer_target));
     const cmPercentKpi = cmKpi(cmPercent, num(target.cm_percent_target));
-    const ncRevenuePercentKpi = ncRevenueKpi(ncRevenuePercent, 10);
+    const ncRevenuePercentKpi = ncRevenueKpi(ncRevenuePercent);
     const ugcPiecesKpi = creativeSupplyKpi(ugc.contentPieces, num(target.ugc_content_target));
     const staticsProducedKpi = creativeSupplyKpi(staticCreatives.total, num(target.static_creatives_target));
     const kiraSalesAngleReportKpi = binaryAvailabilityKpi(kiraCreativeDirection.reportAvailable);
@@ -698,7 +701,7 @@ serve(async (req) => {
       riskRow("revenue", "Revenue 7d vs milestone", "Company/Julian", company.revenue, "Rojo <85% → emergency CEO review 24h.", "cop"),
       riskRow("mer", "MER 7d", "Julian", company.mer, "Rojo >10% debajo del target → no escalar sin excepción.", "mer"),
       riskRow("cmPercent", "CM% post-tax 7d", "Julian", company.cmPercent, "Rojo <22% → audit variable expenses/impuestos/canal.", "percent"),
-      riskRow("ncRevenuePercent", "NC-Rev% 7d", "Julian/Hermes", company.ncRevenuePercent, "Rojo <5% → no escalar paid; revisar acquisition mix/pixel.", "percent"),
+      riskRow("ncRevenuePercent", "NC-Rev% 7d", "Julian/Hermes", company.ncRevenuePercent, "Rojo <65% → no escalar paid; revisar acquisition mix/pixel.", "percent"),
       riskRow("testingWaste", "Waste rate Testing", "Hermes", wasteKpi, "Rojo >40% → pausa batch obligatoria bajo reglas aprobadas.", "percent"),
       riskRow("frequencyWinners", "Frequency winners", "Hermes", frequencyWinnersKpi, "Rojo >3.0 → rotar creative o expandir audiencia/lane.", "number"),
       riskRow("stockActiveSku", "Stock SKU activo", "Julian/Ops", stockActiveSkuKpi, "Rojo <15 unidades → limitar/pausar ads del SKU.", "number"),

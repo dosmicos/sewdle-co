@@ -133,8 +133,8 @@ const metricDefinitions: Record<string, MetricDefinition> = {
     title: 'Share de revenue de clientes nuevos',
     description: 'Qué porcentaje de las ventas viene de clientes nuevos vs recurrentes. Debe coincidir con Customer Health.',
     formula: 'NC-Rev% = NC Revenue / Total Revenue × 100',
-    health: 'Guardrail actual: verde ≥10%, amarillo ≥5%, rojo <5%.',
-    source: 'prophit-metrics normalizado a puntos porcentuales',
+    health: 'Target operativo: verde ≥75%, amarillo ≥65%, rojo <65%. Basado en Customer Health mayo (~73%) y Junio 600M.',
+    source: 'Customer Health logic / Shopify orders; fallback prophit-metrics normalizado a puntos porcentuales',
   },
   mutations: {
     title: 'Mutaciones de campañas',
