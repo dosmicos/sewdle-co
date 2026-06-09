@@ -330,7 +330,10 @@ function percentOfTarget(kpi: GrowthKpi) {
   return (kpi.actual / kpi.target) * 100;
 }
 
-function formatPercentOfTarget(value: number | null) {
+const hideTargetPercentForMetrics = new Set(['mer', 'cmPercent', 'aov', 'ncpa', 'ncRevenuePercent']);
+
+function formatPercentOfTarget(metricKey: string, value: number | null) {
+  if (hideTargetPercentForMetrics.has(metricKey)) return null;
   if (value === null || !Number.isFinite(value)) return null;
   return `${new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1 }).format(value)}% meta`;
 }
@@ -387,7 +390,7 @@ const MetricInfo: React.FC<{ metricKey: string; side?: 'top' | 'right' | 'bottom
 };
 
 const KpiPill: React.FC<{ label: string; kpi: GrowthKpi; metricKey: string }> = ({ label, kpi, metricKey }) => {
-  const targetPercent = formatPercentOfTarget(percentOfTarget(kpi));
+  const targetPercent = formatPercentOfTarget(metricKey, percentOfTarget(kpi));
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
