@@ -323,6 +323,18 @@ function formatNumber(value: number | null, suffix = '') {
   return `${new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1 }).format(value)}${suffix}`;
 }
 
+function percentOfTarget(kpi: GrowthKpi) {
+  if (kpi.actual === null || kpi.target === null || !Number.isFinite(kpi.actual) || !Number.isFinite(kpi.target) || kpi.target === 0) {
+    return null;
+  }
+  return (kpi.actual / kpi.target) * 100;
+}
+
+function formatPercentOfTarget(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return null;
+  return `${new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1 }).format(value)}% meta`;
+}
+
 function formatKpiValue(key: string, value: number | null) {
   if (['salesAngleReport', 'focusDefined'].includes(key)) {
     if (value === null || !Number.isFinite(value)) return 'No disponible';
@@ -374,24 +386,35 @@ const MetricInfo: React.FC<{ metricKey: string; side?: 'top' | 'right' | 'bottom
   );
 };
 
-const KpiPill: React.FC<{ label: string; kpi: GrowthKpi; metricKey: string }> = ({ label, kpi, metricKey }) => (
-  <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-    <div className="flex items-center justify-between gap-2">
-      <span className="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
-        {label}
-        <MetricInfo metricKey={metricKey} />
-      </span>
-      <StatusBadge status={kpi.status} />
+const KpiPill: React.FC<{ label: string; kpi: GrowthKpi; metricKey: string }> = ({ label, kpi, metricKey }) => {
+  const targetPercent = formatPercentOfTarget(percentOfTarget(kpi));
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+          {label}
+          <MetricInfo metricKey={metricKey} />
+        </span>
+        <StatusBadge status={kpi.status} />
+      </div>
+      <div className="mt-2 flex items-baseline justify-between gap-2">
+        <span className="min-w-0 text-sm font-semibold text-slate-900">
+          {formatKpiValue(metricKey, kpi.actual)}
+        </span>
+        {targetPercent && (
+          <Badge variant="outline" className="shrink-0 border-blue-100 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+            {targetPercent}
+          </Badge>
+        )}
+      </div>
+      <div className="mt-1 text-[11px] text-slate-500">
+        Target: {formatKpiValue(metricKey, kpi.target)}
+      </div>
+      <Progress value={kpiProgress(kpi)} className="mt-2 h-1.5" />
     </div>
-    <div className="mt-2 text-sm font-semibold text-slate-900">
-      {formatKpiValue(metricKey, kpi.actual)}
-    </div>
-    <div className="mt-1 text-[11px] text-slate-500">
-      Target: {formatKpiValue(metricKey, kpi.target)}
-    </div>
-    <Progress value={kpiProgress(kpi)} className="mt-2 h-1.5" />
-  </div>
-);
+  );
+};
 
 const OwnerCard: React.FC<{ owner: OwnerScorecard }> = ({ owner }) => {
   const entries = Object.entries(owner.kpis);

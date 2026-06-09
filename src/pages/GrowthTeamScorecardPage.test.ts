@@ -23,6 +23,7 @@ Deno.test("Growth Team Scorecard renders June 600M owner contract", async () => 
   assert(page.includes("Kira") && page.includes("dirección creativa IA"), "page must show Kira as AI creative direction");
   assert(page.includes("Angie + Ana María") && page.includes("productoras 50/50"), "page must show Angie + Ana María as 50/50 production");
   assert(page.includes("Data no disponible = action item"), "missing metrics must be explicit action items");
+  assert(page.includes("% meta"), "KPI cards must show percent of target progress");
   assert(edge.includes("static_creatives_target: 30"), "edge fallback must use 30 statics/week");
   assert(edge.includes("static_published_target: 24"), "edge fallback must use 24 published/tested statics/week");
   assert(edge.includes("riskMatrix"), "edge response must include riskMatrix");
