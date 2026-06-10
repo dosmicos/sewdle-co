@@ -639,6 +639,14 @@ const COLOMBIA_CARRIERS: Record<string, { carrier: string; service: string }> = 
   'tcc': { carrier: 'tcc', service: 'ground' }
 };
 
+// Carrier rejects home delivery in restricted zones and instructs office claim
+function isDifficultAccessText(msg: string): boolean {
+  return msg.includes('difícil acceso') ||
+    msg.includes('dificil acceso') ||
+    msg.includes('zonas de dificil') ||
+    msg.includes('reclamo en oficina');
+}
+
 // Main cities for Deprisa (paid orders only)
 const MAIN_CITIES = [
   'cali', 'barranquilla', 'cartagena', 'bucaramanga', 'cucuta', 'cúcuta',
@@ -993,7 +1001,7 @@ serve(async (req) => {
     console.log('📤 Request payload:', JSON.stringify(enviaRequest, null, 2));
 
     // Call Envia.com API - Production URL
-    const enviaResponse = await fetch('https://api.envia.com/ship/generate/', {
+    let enviaResponse = await fetch('https://api.envia.com/ship/generate/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1002,9 +1010,28 @@ serve(async (req) => {
       body: JSON.stringify(enviaRequest)
     });
 
-    const enviaData = await enviaResponse.json();
+    let enviaData = await enviaResponse.json();
     console.log('📥 Envia.com response status:', enviaResponse.status);
     console.log('📥 Envia.com response:', JSON.stringify(enviaData, null, 2));
+
+    // Difficult-access zones reject home delivery; the carrier itself instructs
+    // "enviar con reclamo en oficina". Retry once as office claim (type 2)
+    // instead of failing the order — same action the operator takes manually.
+    const firstErrorText = String(enviaData?.error?.message || enviaData?.message || '').toLowerCase();
+    if (enviaRequest.shipment.type === 1 && isDifficultAccessText(firstErrorText)) {
+      console.log('🏤 Difficult access zone — retrying as office claim (type 2)');
+      enviaRequest.shipment.type = 2;
+      enviaResponse = await fetch('https://api.envia.com/ship/generate/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${ENVIA_API_KEY}`
+        },
+        body: JSON.stringify(enviaRequest)
+      });
+      enviaData = await enviaResponse.json();
+      console.log('📥 Office-claim retry response:', JSON.stringify(enviaData, null, 2));
+    }
 
     // Handle different error scenarios
     if (!enviaResponse.ok) {
@@ -1056,13 +1083,9 @@ serve(async (req) => {
       const errorMsg = enviaData.error?.message || enviaData.message || 'Error al generar guía';
       console.error('❌ Envia.com returned error:', errorMsg);
       
-      // Detectar errores de zonas de difícil acceso
+      // Detectar errores de zonas de difícil acceso (persisten si incluso el reintento a oficina falló)
       const errorMsgLower = errorMsg.toLowerCase();
-      const isDifficultAccessError =
-        errorMsgLower.includes('difícil acceso') ||
-        errorMsgLower.includes('dificil acceso') ||
-        errorMsgLower.includes('zonas de dificil') ||
-        errorMsgLower.includes('reclamo en oficina');
+      const isDifficultAccessError = isDifficultAccessText(errorMsgLower);
 
       // Envia 1125: el par carrier/servicio no existe para esta ruta — NO es difícil acceso
       const isServiceUnavailable = !isDifficultAccessError && (
@@ -1312,7 +1335,8 @@ serve(async (req) => {
         label: savedLabel || labelRecord,
         tracking_number: shipmentData.trackingNumber,
         label_url: shipmentData.label,
-        carrier: shipmentData.carrier || carrierConfig.carrier
+        carrier: shipmentData.carrier || carrierConfig.carrier,
+        delivery_type: enviaRequest.shipment.type === 2 ? 'oficina' : 'domicilio'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
