@@ -79,11 +79,15 @@ export const useBulkLabelGeneration = () => {
 
       if (response?.success) {
         const label = response.label;
+        const baseCarrier = response.carrier || label?.carrier;
+        const officeNote = (response as { delivery_type?: string }).delivery_type === 'oficina'
+          ? ' · reclamo en oficina'
+          : '';
         updateItem(orderId, {
           status: response.message === 'Label already exists' ? 'already_had_label' : 'success',
           trackingNumber: response.tracking_number || label?.tracking_number || undefined,
           labelUrl: response.label_url || label?.label_url || undefined,
-          carrier: response.carrier || label?.carrier || undefined,
+          carrier: baseCarrier ? `${baseCarrier}${officeNote}` : undefined,
         });
       } else {
         updateItem(orderId, {
