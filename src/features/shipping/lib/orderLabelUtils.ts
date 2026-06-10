@@ -161,6 +161,20 @@ export function getLabelEligibility(order: PickingOrder): LabelEligibility {
   return { eligible: true };
 }
 
+// Mensajes operativos para errores del edge function create-envia-label
+export function friendlyLabelError(errorCode?: string, fallback?: string): string {
+  switch (errorCode) {
+    case 'DANE_NOT_FOUND':
+      return 'Ciudad no reconocida en cobertura';
+    case 'DIFFICULT_ACCESS_ZONE':
+      return 'Zona de difícil acceso: enviar con reclamo en oficina';
+    case 'SERVICE_NOT_AVAILABLE':
+      return 'Transportadora sin servicio para esta ruta — generar manual con otra transportadora';
+    default:
+      return fallback || 'Error generando la guía';
+  }
+}
+
 // Espejo del request individual (EnviaShippingButton handleQuoteAndCreateLabel)
 // sin preferred_carrier: la edge function selecciona transportadora por reglas.
 export function buildCreateLabelRequest(

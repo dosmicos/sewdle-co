@@ -13,7 +13,18 @@ import { usePickingLineItems } from '@/hooks/usePickingLineItems';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { EnviaShippingButton, ShippingLabel, CARRIER_NAMES, CarrierCode } from '@/features/shipping';
+import {
+  EnviaShippingButton,
+  ShippingLabel,
+  CARRIER_NAMES,
+  CarrierCode,
+  useAutoLabelGeneration,
+  startAutoLabelGeneration,
+  consumeAutoPrint,
+  printLabelInline,
+  printLabelInWindow,
+  getShippingMethodType,
+} from '@/features/shipping';
 import type { EnviaShippingButtonRef } from '@/features/shipping';
 import { invokeEdgeFunction } from '@/features/shipping/lib/invokeEdgeFunction';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -154,6 +165,46 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   // True only when localOrder is fully synced for the current orderId.
   // Used as an auto-pack effect dep so a retry can fire once localOrder loads.
   const localOrderReady = localOrder?.id === orderId;
+
+  // === Guía automática en background (se dispara al completar el empaque) ===
+  const autoLabel = useAutoLabelGeneration(effectiveOrder?.shopify_order?.shopify_order_id);
+
+  // Espejo de shippingLabel para leerlo desde closures sin agregarlo a deps
+  const shippingLabelRef = useRef<ShippingLabel | null>(null);
+  useEffect(() => {
+    shippingLabelRef.current = shippingLabel;
+  }, [shippingLabel]);
+
+  // Reacción a la guía auto-generada: hidrata la UI y auto-imprime UNA sola vez
+  const autoLabelErrorNotifiedRef = useRef<number | null>(null);
+  useEffect(() => {
+    const shopifyOrderId = effectiveOrder?.shopify_order?.shopify_order_id;
+    if (!shopifyOrderId) return;
+
+    if (autoLabel.state.status === 'ready') {
+      autoLabelErrorNotifiedRef.current = null;
+      const { label, source, readyAt, trackingNumber, carrier } = autoLabel.state;
+      if (label) setShippingLabel(label);
+      void shippingButtonRef.current?.refreshLabel();
+
+      // Auto-imprimir solo guías recién creadas en esta sesión (no al revisitar
+      // un pedido minutos después). consumeAutoPrint es atómico (StrictMode-safe).
+      const fresh = readyAt !== undefined && Date.now() - readyAt < 30_000;
+      if (source === 'created' && label?.label_url && fresh && consumeAutoPrint(shopifyOrderId)) {
+        toast.success(`Guía lista: ${trackingNumber || ''}${carrier ? ` (${carrier})` : ''}`);
+        void printLabelInline(label.label_url);
+      } else {
+        consumeAutoPrint(shopifyOrderId);
+      }
+    } else if (autoLabel.state.status === 'error') {
+      if (autoLabelErrorNotifiedRef.current !== shopifyOrderId) {
+        autoLabelErrorNotifiedRef.current = shopifyOrderId;
+        toast.error(autoLabel.state.errorMessage || 'Error generando la guía');
+      }
+    } else {
+      autoLabelErrorNotifiedRef.current = null;
+    }
+  }, [autoLabel.state, effectiveOrder?.shopify_order?.shopify_order_id]);
 
   // Use React Query for line items - completely independent of shipping
   const rawLineItems = useMemo(() => 
@@ -1018,6 +1069,22 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     window.open(`/picking-packing/print/${localOrder.shopify_order_id}`, '_blank');
   }, [localOrder?.shopify_order_id, localOrder?.shopify_order?.order_number]);
 
+  // Dispara la generación de guía en background tras el empaque exitoso.
+  // Solo envío estándar (Express/Recoger no llevan guía Envia) y sin guía previa.
+  // El edge function es idempotente ("Label already exists") como último backstop.
+  const maybeStartAutoLabel = useCallback((order: PickingOrder) => {
+    const shopifyOrder = order.shopify_order;
+    if (!shopifyOrder?.shopify_order_id) return;
+    if (getShippingMethodType(shopifyOrder.raw_data) !== 'Standard') return;
+    if (shopifyOrder.cancelled_at) return;
+    if (shopifyOrder.fulfillment_status === 'fulfilled') return;
+    const existing = shippingLabelRef.current;
+    if (existing && existing.status !== 'cancelled' && existing.status !== 'error') return;
+    if (shippingButtonRef.current?.hasExistingLabel) return;
+    if (shippingButtonRef.current?.isCreatingLabel) return;
+    startAutoLabelGeneration(order, order.organization_id);
+  }, []);
+
   const handleMarkAsPackedAndPrint = useCallback(async () => {
     // Guard: prevent duplicate execution
     if (packInFlightRef.current) {
@@ -1111,8 +1178,15 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       }
     }
 
+    if (!lastError) {
+      // Empaque confirmado: generar la guía en background mientras el
+      // empacador sella la caja (independiente de printWindow, que puede
+      // ser null en re-ejecuciones del mismo pedido).
+      maybeStartAutoLabel(localOrder);
+    }
+
     packInFlightRef.current = false;
-  }, [orderId, localOrder, handlePrint, handleStatusChange, isExpressShipping]);
+  }, [orderId, localOrder, handlePrint, handleStatusChange, isExpressShipping, maybeStartAutoLabel]);
 
   // Handler for Express orders - fulfill with delivery code
   const handleMarkAsPackedExpress = useCallback(async (deliveryCode?: string) => {
@@ -2278,38 +2352,118 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           </div>
         )}
 
-        {/* Sticky Floating Action Button - "Crear Guía" (shipping orders after packing) */}
-        {!effectiveOrder.shopify_order?.cancelled_at && 
-         effectiveOrder.operational_status === 'ready_to_ship' && 
+        {/* Sticky Floating Action Button - guía de envío (shipping orders after packing).
+            Estados: generando (auto) → imprimir (verde) / error (rojo) / crear manual (azul). */}
+        {!effectiveOrder.shopify_order?.cancelled_at &&
+         effectiveOrder.operational_status === 'ready_to_ship' &&
          shippingType?.label !== 'Recoger' &&
          shippingType?.label !== 'Express' &&
-         (!shippingLabel || shippingLabel.status === 'cancelled' || shippingLabel.status === 'error') && (
-          <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none">
-            <Button
-              variant="info"
-              onClick={async () => {
-                setIsCreatingShippingLabel(true);
-                try {
-                  await shippingButtonRef.current?.createLabelWithDefaults();
-                } finally {
-                  setIsCreatingShippingLabel(false);
-                }
-              }}
-              disabled={isCreatingShippingLabel}
-              className="h-11 md:h-14 px-4 md:px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 font-semibold text-sm md:text-base gap-1.5 md:gap-2 pointer-events-auto"
-            >
-              {isCreatingShippingLabel ? (
-                <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
-              ) : (
-                <>
-                  <Truck className="w-4 h-4 md:w-5 md:h-5" />
-                  <span className="hidden sm:inline">Crear</span> Guía
-                  {selectedCarrierName && <span className="text-xs opacity-90">({selectedCarrierName})</span>}
-                </>
+         (() => {
+          const hasActiveLabel = !!shippingLabel &&
+            shippingLabel.status !== 'cancelled' && shippingLabel.status !== 'error';
+          const mode = autoLabel.state.status === 'generating' ? 'generating'
+            : autoLabel.state.status === 'ready' && autoLabel.state.label?.label_url ? 'ready'
+            : autoLabel.state.status === 'error' && !hasActiveLabel ? 'error'
+            : !hasActiveLabel ? 'create'
+            : null;
+          if (!mode) return null;
+
+          const isRetryableError = mode === 'error' &&
+            (autoLabel.state.errorCode === 'TIMEOUT' || !autoLabel.state.errorCode);
+          const buttonClass = "h-11 md:h-14 px-4 md:px-6 rounded-full shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 font-semibold text-sm md:text-base gap-1.5 md:gap-2 pointer-events-auto";
+
+          return (
+            <div className="absolute bottom-3 md:bottom-4 right-3 md:right-4 z-10 pointer-events-none flex flex-col items-end gap-1.5">
+              {mode === 'error' && autoLabel.state.errorMessage && (
+                <div className="max-w-[280px] text-xs text-red-700 bg-white/95 rounded-md shadow px-2.5 py-1.5 pointer-events-auto">
+                  {autoLabel.state.errorMessage}
+                </div>
               )}
-            </Button>
-          </div>
-        )}
+              {mode === 'generating' && (
+                <Button variant="info" disabled className={buttonClass}>
+                  <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
+                  Generando guía…
+                </Button>
+              )}
+              {mode === 'ready' && (
+                <Button
+                  className={`${buttonClass} bg-green-600 hover:bg-green-700 text-white`}
+                  onClick={() => {
+                    // window.open síncrono dentro del gesto del click (sin popup blocker)
+                    if (autoLabel.state.label?.label_url) {
+                      printLabelInWindow(autoLabel.state.label.label_url);
+                    }
+                  }}
+                >
+                  <Printer className="w-4 h-4 md:w-5 md:h-5" />
+                  <span className="hidden sm:inline">Imprimir</span> Guía
+                  {autoLabel.state.carrier && (
+                    <span className="text-xs opacity-90">({autoLabel.state.carrier})</span>
+                  )}
+                </Button>
+              )}
+              {mode === 'error' && isRetryableError && (
+                <Button
+                  variant="destructive"
+                  className={buttonClass}
+                  onClick={() => autoLabel.retry(effectiveOrder, effectiveOrder.organization_id)}
+                >
+                  <RefreshCw className="w-4 h-4 md:w-5 md:h-5" />
+                  Reintentar guía
+                </Button>
+              )}
+              {mode === 'error' && !isRetryableError && (
+                <Button
+                  variant="destructive"
+                  className={buttonClass}
+                  onClick={async () => {
+                    setIsCreatingShippingLabel(true);
+                    try {
+                      await shippingButtonRef.current?.createLabelWithDefaults();
+                    } finally {
+                      setIsCreatingShippingLabel(false);
+                    }
+                  }}
+                  disabled={isCreatingShippingLabel}
+                >
+                  {isCreatingShippingLabel ? (
+                    <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Truck className="w-4 h-4 md:w-5 md:h-5" />
+                      Crear guía manual
+                    </>
+                  )}
+                </Button>
+              )}
+              {mode === 'create' && (
+                <Button
+                  variant="info"
+                  onClick={async () => {
+                    setIsCreatingShippingLabel(true);
+                    try {
+                      await shippingButtonRef.current?.createLabelWithDefaults();
+                    } finally {
+                      setIsCreatingShippingLabel(false);
+                    }
+                  }}
+                  disabled={isCreatingShippingLabel}
+                  className={buttonClass}
+                >
+                  {isCreatingShippingLabel ? (
+                    <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Truck className="w-4 h-4 md:w-5 md:h-5" />
+                      <span className="hidden sm:inline">Crear</span> Guía
+                      {selectedCarrierName && <span className="text-xs opacity-90">({selectedCarrierName})</span>}
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          );
+        })()}
       </DialogContent>
     </Dialog>
 

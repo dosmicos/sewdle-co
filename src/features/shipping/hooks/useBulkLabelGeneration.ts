@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { PickingOrder } from '@/hooks/usePickingOrders';
 import type { CreateLabelRequest, CreateLabelResponse } from '../types/envia';
 import { invokeEdgeFunction } from '../lib/invokeEdgeFunction';
-import { buildCreateLabelRequest } from '../lib/orderLabelUtils';
+import { buildCreateLabelRequest, friendlyLabelError } from '../lib/orderLabelUtils';
 
 export type BulkItemStatus =
   | 'pending'
@@ -37,19 +37,6 @@ const LABEL_TIMEOUT_MS = 45_000;
 
 // Tope por tanda: protege la cuota de Envia y mantiene el batch manejable.
 export const MAX_BULK_LABELS = 100;
-
-const friendlyError = (errorCode?: string, fallback?: string): string => {
-  switch (errorCode) {
-    case 'DANE_NOT_FOUND':
-      return 'Ciudad no reconocida en cobertura';
-    case 'DIFFICULT_ACCESS_ZONE':
-      return 'Zona de difícil acceso: enviar con reclamo en oficina';
-    case 'SERVICE_NOT_AVAILABLE':
-      return 'Transportadora sin servicio para esta ruta — generar manual con otra transportadora';
-    default:
-      return fallback || 'Error generando la guía';
-  }
-};
 
 export const useBulkLabelGeneration = () => {
   const [items, setItems] = useState<BulkLabelItem[]>([]);
@@ -93,7 +80,7 @@ export const useBulkLabelGeneration = () => {
         updateItem(orderId, {
           status: 'error',
           errorCode: response?.errorCode,
-          errorMessage: friendlyError(response?.errorCode, response?.error),
+          errorMessage: friendlyLabelError(response?.errorCode, response?.error),
         });
       }
     } catch (error: any) {

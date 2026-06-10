@@ -9,6 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { BulkLabelGenerationModal } from '@/features/shipping/components/BulkLabelGenerationModal';
 import { MAX_BULK_LABELS } from '@/features/shipping/hooks/useBulkLabelGeneration';
 import { getLabelEligibility } from '@/features/shipping/lib/orderLabelUtils';
+import { useShippingLabelPresence, SHIPPING_LABEL_PRESENCE_KEY } from '@/features/shipping/hooks/useShippingLabelPresence';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
@@ -529,6 +531,17 @@ const [showItemsModal, setShowItemsModal] = useState(false);
     [filteredOrdersByTeam]
   );
 
+  // Guías existentes de los pedidos Empacados visibles → badge "Guía ✓"
+  const packedShopifyIds = useMemo(
+    () => filteredOrdersByTeam
+      .filter(order => order.operational_status === 'ready_to_ship')
+      .map(order => order.shopify_order?.shopify_order_id)
+      .filter((id): id is number => typeof id === 'number'),
+    [filteredOrdersByTeam]
+  );
+  const labelPresence = useShippingLabelPresence(packedShopifyIds, currentOrganization?.id);
+  const queryClient = useQueryClient();
+
   const selectedOrders = useMemo(
     () => filteredOrdersByTeam.filter(order => selectedIds.has(order.id)),
     [filteredOrdersByTeam, selectedIds]
@@ -1014,18 +1027,26 @@ const [showItemsModal, setShowItemsModal] = useState(false);
                   
                   {/* Row 3: Status Badges */}
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <Badge 
+                    <Badge
                       variant="secondary"
                       className={`text-[10px] px-1.5 py-0.5 ${statusColors[order.operational_status]}`}
                     >
                       {statusLabels[order.operational_status]}
                     </Badge>
-                    <Badge 
+                    <Badge
                       variant="secondary"
                       className={`text-[10px] px-1.5 py-0.5 ${paymentStatusColors[order.shopify_order?.financial_status as keyof typeof paymentStatusColors] || ''}`}
                     >
                       {paymentStatusLabels[order.shopify_order?.financial_status as keyof typeof paymentStatusLabels] || order.shopify_order?.financial_status}
                     </Badge>
+                    {order.operational_status === 'ready_to_ship' &&
+                     order.shopify_order?.shopify_order_id &&
+                     labelPresence.has(order.shopify_order.shopify_order_id) && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-800">
+                        <Truck className="w-2.5 h-2.5 mr-0.5" />
+                        Guía
+                      </Badge>
+                    )}
                   </div>
                   
                   {/* Row 4: Shipping Method */}
@@ -1109,12 +1130,22 @@ const [showItemsModal, setShowItemsModal] = useState(false);
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={statusColors[order.operational_status]}
-                      >
-                        {statusLabels[order.operational_status]}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge
+                          variant="secondary"
+                          className={statusColors[order.operational_status]}
+                        >
+                          {statusLabels[order.operational_status]}
+                        </Badge>
+                        {order.operational_status === 'ready_to_ship' &&
+                         order.shopify_order?.shopify_order_id &&
+                         labelPresence.has(order.shopify_order.shopify_order_id) && (
+                          <Badge variant="secondary" className="bg-emerald-100 text-emerald-800">
+                            <Truck className="w-3 h-3 mr-1" />
+                            Guía
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                   );
@@ -1317,7 +1348,11 @@ const [showItemsModal, setShowItemsModal] = useState(false);
       {selectedOrderId && (
         <PickingOrderDetailsModal
           orderId={selectedOrderId}
-          onClose={() => setSelectedOrderId(null)}
+          onClose={() => {
+            setSelectedOrderId(null);
+            // Refrescar badges "Guía ✓": pudo generarse una guía en el modal
+            queryClient.invalidateQueries({ queryKey: [SHIPPING_LABEL_PRESENCE_KEY] });
+          }}
           allOrderIds={filteredOrdersByTeam.map(o => o.id)}
           onNavigate={(newOrderId) => setSelectedOrderId(newOrderId)}
         />
