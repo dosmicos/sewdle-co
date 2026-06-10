@@ -4,7 +4,10 @@ import { PickingPackingLayout } from '@/components/picking/PickingPackingLayout'
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X, Users, ListChecks, ClipboardList } from 'lucide-react';
+import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X, Users, ListChecks, ClipboardList, Truck } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { BulkLabelGenerationModal } from '@/features/shipping/components/BulkLabelGenerationModal';
+import { getLabelEligibility } from '@/features/shipping/lib/orderLabelUtils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { usePickingOrders, OperationalStatus } from '@/hooks/usePickingOrders';
@@ -164,6 +167,15 @@ const PickingPackingPage = () => {
 const [showItemsModal, setShowItemsModal] = useState(false);
   const [showManifestsPanel, setShowManifestsPanel] = useState(false);
 
+  // Selección múltiple para generación masiva de guías
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  // Ref para que el callback de Realtime (closure stale) lea el valor actual
+  const showBulkModalRef = useRef(showBulkModal);
+  useEffect(() => {
+    showBulkModalRef.current = showBulkModal;
+  }, [showBulkModal]);
+
   // Read filters from URL - must be declared before handleRefreshList
   const searchTerm = searchParams.get('search') || '';
   const operationalStatuses = searchParams.get('operational_status')?.split(',').filter(Boolean) || [];
@@ -221,8 +233,8 @@ const [showItemsModal, setShowItemsModal] = useState(false);
         (payload) => {
           console.log('🔔 Webhook update received:', payload.eventType);
           setLastWebhookUpdate(new Date());
-          // Solo auto-refresh si NO hay modal abierto
-          if (!selectedOrderId) {
+          // Solo auto-refresh si NO hay modal abierto (detalle o generación masiva)
+          if (!selectedOrderId && !showBulkModalRef.current) {
             handleRefreshListRef.current();
           } else {
             // Marcar que hay updates pendientes para cuando se cierre el modal
@@ -509,6 +521,46 @@ const [showItemsModal, setShowItemsModal] = useState(false);
       return (orderNum % totalTeams) === (teamNumber - 1);
     });
   }, [orders, teamNumber, totalTeams]);
+
+  // Pedidos elegibles para guía masiva (Empacado + envío estándar + dirección)
+  const eligibleOrders = useMemo(
+    () => filteredOrdersByTeam.filter(order => getLabelEligibility(order).eligible),
+    [filteredOrdersByTeam]
+  );
+
+  const selectedOrders = useMemo(
+    () => filteredOrdersByTeam.filter(order => selectedIds.has(order.id)),
+    [filteredOrdersByTeam, selectedIds]
+  );
+
+  // Podar la selección cuando cambia la lista (refetch, cambio de página/filtros)
+  useEffect(() => {
+    setSelectedIds(prev => {
+      if (prev.size === 0) return prev;
+      const eligibleIdSet = new Set(eligibleOrders.map(order => order.id));
+      const next = new Set([...prev].filter(id => eligibleIdSet.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [eligibleOrders]);
+
+  const toggleOrderSelection = (orderId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
+  const allEligibleSelected =
+    eligibleOrders.length > 0 && eligibleOrders.every(order => selectedIds.has(order.id));
+
+  const toggleSelectAllEligible = () => {
+    setSelectedIds(allEligibleSelected ? new Set() : new Set(eligibleOrders.map(order => order.id)));
+  };
 
   // Team management functions
   const updateTeamParams = (team: number, total: number) => {
@@ -898,15 +950,28 @@ const [showItemsModal, setShowItemsModal] = useState(false);
                 ? formatCurrency(Number(order.shopify_order.total_price))
                 : '$0';
 
+              const eligibility = getLabelEligibility(order);
+
               return (
                 <div
                   key={order.id}
                   className="border rounded-lg p-3 bg-card cursor-pointer hover:bg-muted/50 active:bg-muted"
                   onClick={() => setSelectedOrderId(order.id)}
                 >
-                  {/* Row 1: Order Number + Price */}
+                  {/* Row 1: Checkbox + Order Number + Price */}
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-bold text-sm">#{order.shopify_order?.order_number}</span>
+                    <div className="flex items-center gap-2">
+                      {eligibility.eligible && (
+                        <span onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedIds.has(order.id)}
+                            onCheckedChange={() => toggleOrderSelection(order.id)}
+                            aria-label={`Seleccionar pedido ${order.shopify_order?.order_number}`}
+                          />
+                        </span>
+                      )}
+                      <span className="font-bold text-sm">#{order.shopify_order?.order_number}</span>
+                    </div>
                     <span className="font-semibold text-sm">{totalPrice}</span>
                   </div>
                   
@@ -950,6 +1015,14 @@ const [showItemsModal, setShowItemsModal] = useState(false);
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allEligibleSelected ? true : selectedIds.size > 0 ? 'indeterminate' : false}
+                    onCheckedChange={toggleSelectAllEligible}
+                    disabled={eligibleOrders.length === 0}
+                    aria-label="Seleccionar todos los pedidos empacados"
+                  />
+                </TableHead>
                 <TableHead>Pedido</TableHead>
                 <TableHead>Fecha</TableHead>
                 <TableHead>Cliente</TableHead>
@@ -960,17 +1033,29 @@ const [showItemsModal, setShowItemsModal] = useState(false);
             <TableBody>
               {filteredOrdersByTeam.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
                     {teamNumber > 0 ? `No hay órdenes para el equipo ${teamNumber}` : 'No se encontraron órdenes'}
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredOrdersByTeam.map((order) => (
-                  <TableRow 
+                filteredOrdersByTeam.map((order) => {
+                  const eligibility = getLabelEligibility(order);
+                  return (
+                  <TableRow
                     key={order.id}
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => setSelectedOrderId(order.id)}
                   >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <span title={eligibility.eligible ? undefined : eligibility.label}>
+                        <Checkbox
+                          checked={selectedIds.has(order.id)}
+                          onCheckedChange={() => toggleOrderSelection(order.id)}
+                          disabled={!eligibility.eligible}
+                          aria-label={`Seleccionar pedido ${order.shopify_order?.order_number}`}
+                        />
+                      </span>
+                    </TableCell>
                     <TableCell className="font-medium">
                       #{order.shopify_order?.order_number}
                     </TableCell>
@@ -994,7 +1079,7 @@ const [showItemsModal, setShowItemsModal] = useState(false);
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge 
+                      <Badge
                         variant="secondary"
                         className={statusColors[order.operational_status]}
                       >
@@ -1002,7 +1087,8 @@ const [showItemsModal, setShowItemsModal] = useState(false);
                       </Badge>
                     </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>
@@ -1153,6 +1239,49 @@ const [showItemsModal, setShowItemsModal] = useState(false);
           </div>
         )}
       </div>
+
+      {/* Barra de acciones para generación masiva de guías */}
+      {(selectedIds.size > 0 || eligibleOrders.length > 0) && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-2 bg-card border rounded-lg shadow-lg px-4 py-2.5 max-w-[95vw]">
+          <span className="text-sm font-medium whitespace-nowrap">
+            {selectedIds.size} seleccionado{selectedIds.size === 1 ? '' : 's'}
+          </span>
+          {!allEligibleSelected && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedIds(new Set(eligibleOrders.map(order => order.id)))}
+            >
+              Seleccionar todos los Empacados ({eligibleOrders.length})
+            </Button>
+          )}
+          {selectedIds.size > 0 && (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                Limpiar
+              </Button>
+              <Button size="sm" onClick={() => setShowBulkModal(true)}>
+                <Truck className="w-4 h-4 mr-1.5" />
+                Generar guías ({selectedIds.size})
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Modal de generación masiva de guías */}
+      {currentOrganization?.id && (
+        <BulkLabelGenerationModal
+          open={showBulkModal}
+          onOpenChange={setShowBulkModal}
+          orders={selectedOrders}
+          organizationId={currentOrganization.id}
+          onCompleted={() => {
+            setSelectedIds(new Set());
+            handleRefreshList();
+          }}
+        />
+      )}
 
       {/* Order Details Modal */}
       {selectedOrderId && (
