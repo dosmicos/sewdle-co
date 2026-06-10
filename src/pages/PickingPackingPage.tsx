@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X, Users, ListChecks, ClipboardList, Truck } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BulkLabelGenerationModal } from '@/features/shipping/components/BulkLabelGenerationModal';
+import { MAX_BULK_LABELS } from '@/features/shipping/hooks/useBulkLabelGeneration';
 import { getLabelEligibility } from '@/features/shipping/lib/orderLabelUtils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -549,17 +550,46 @@ const [showItemsModal, setShowItemsModal] = useState(false);
       if (next.has(orderId)) {
         next.delete(orderId);
       } else {
+        if (next.size >= MAX_BULK_LABELS) {
+          toast({
+            title: `Máximo ${MAX_BULK_LABELS} guías por tanda`,
+            description: 'Genera esta tanda y luego selecciona los pedidos restantes.',
+            variant: 'destructive',
+          });
+          return prev;
+        }
         next.add(orderId);
       }
       return next;
     });
   };
 
+  // Selección masiva acotada al tope por tanda
+  const selectableEligibleOrders = useMemo(
+    () => eligibleOrders.slice(0, MAX_BULK_LABELS),
+    [eligibleOrders]
+  );
+
   const allEligibleSelected =
-    eligibleOrders.length > 0 && eligibleOrders.every(order => selectedIds.has(order.id));
+    selectableEligibleOrders.length > 0 &&
+    selectableEligibleOrders.every(order => selectedIds.has(order.id));
+
+  const selectAllEligible = () => {
+    setSelectedIds(new Set(selectableEligibleOrders.map(order => order.id)));
+    if (eligibleOrders.length > MAX_BULK_LABELS) {
+      toast({
+        title: `Se seleccionaron los primeros ${MAX_BULK_LABELS} pedidos`,
+        description: `Hay ${eligibleOrders.length} empacados; genera esta tanda y repite con el resto.`,
+      });
+    }
+  };
 
   const toggleSelectAllEligible = () => {
-    setSelectedIds(allEligibleSelected ? new Set() : new Set(eligibleOrders.map(order => order.id)));
+    if (allEligibleSelected) {
+      setSelectedIds(new Set());
+    } else {
+      selectAllEligible();
+    }
   };
 
   // Team management functions
@@ -1238,36 +1268,36 @@ const [showItemsModal, setShowItemsModal] = useState(false);
             </Pagination>
           </div>
         )}
-      </div>
 
-      {/* Barra de acciones para generación masiva de guías */}
-      {(selectedIds.size > 0 || eligibleOrders.length > 0) && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-2 bg-card border rounded-lg shadow-lg px-4 py-2.5 max-w-[95vw]">
-          <span className="text-sm font-medium whitespace-nowrap">
-            {selectedIds.size} seleccionado{selectedIds.size === 1 ? '' : 's'}
-          </span>
-          {!allEligibleSelected && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSelectedIds(new Set(eligibleOrders.map(order => order.id)))}
-            >
-              Seleccionar todos los Empacados ({eligibleOrders.length})
-            </Button>
-          )}
-          {selectedIds.size > 0 && (
-            <>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
-                Limpiar
+        {/* Barra de acciones para generación masiva de guías.
+            sticky en flujo: acompaña el scroll pegada abajo, pero al llegar al
+            final se asienta DEBAJO de la paginación — nunca la tapa. */}
+        {(selectedIds.size > 0 || eligibleOrders.length > 0) && (
+          <div className="sticky bottom-4 z-40 mx-auto w-fit flex flex-wrap items-center justify-center gap-2 bg-card border rounded-lg shadow-lg px-4 py-2.5 max-w-[95vw]">
+            <span className="text-sm font-medium whitespace-nowrap">
+              {selectedIds.size} seleccionado{selectedIds.size === 1 ? '' : 's'}
+            </span>
+            {!allEligibleSelected && (
+              <Button variant="outline" size="sm" onClick={selectAllEligible}>
+                {eligibleOrders.length > MAX_BULK_LABELS
+                  ? `Seleccionar primeros ${MAX_BULK_LABELS} Empacados (de ${eligibleOrders.length})`
+                  : `Seleccionar todos los Empacados (${eligibleOrders.length})`}
               </Button>
-              <Button size="sm" onClick={() => setShowBulkModal(true)}>
-                <Truck className="w-4 h-4 mr-1.5" />
-                Generar guías ({selectedIds.size})
-              </Button>
-            </>
-          )}
-        </div>
-      )}
+            )}
+            {selectedIds.size > 0 && (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                  Limpiar
+                </Button>
+                <Button size="sm" onClick={() => setShowBulkModal(true)}>
+                  <Truck className="w-4 h-4 mr-1.5" />
+                  Generar guías ({selectedIds.size})
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Modal de generación masiva de guías */}
       {currentOrganization?.id && (
