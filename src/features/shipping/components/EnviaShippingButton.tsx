@@ -23,6 +23,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import {
+  getProxyLabelUrl,
+  CUNDINAMARCA_COORDINADORA_CITIES,
+  VALLE_ABURRA_CITIES,
+  normalizeLocationText,
+  fuzzyMatchCity,
+  inferDepartmentFromCity,
+} from '../lib/orderLabelUtils';
 
 interface ShippingAddress {
   name?: string;
@@ -65,11 +73,6 @@ type QuoteLoadingState = {
   errorMessage?: string;
 };
 
-// Helper to get proxied label URL
-const getProxyLabelUrl = (labelUrl: string): string => {
-  return `https://ysdcsqsfnckeuafjyrbc.supabase.co/functions/v1/proxy-label?url=${encodeURIComponent(labelUrl)}`;
-};
-
 // Format date for display
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
@@ -81,105 +84,6 @@ const formatDate = (dateString: string) => {
     minute: '2-digit'
   });
 };
-
-// Municipios grandes de Cundinamarca donde Coordinadora es preferido
-const CUNDINAMARCA_COORDINADORA_CITIES = [
-  'bogota', 'soacha', 'chia', 'zipaquira', 'facatativa', 'subachoque',
-  'cajica', 'cota', 'funza', 'mosquera', 'madrid', 'tenjo', 'tabio',
-  'la calera', 'tocancipa', 'gachancipa', 'sibate', 'fusagasuga',
-  'girardot', 'villeta', 'choconta', 'suesca', 'guaduas'
-];
-
-// Municipios del Valle de Aburrá (Antioquia) donde Coordinadora es preferido
-const VALLE_ABURRA_CITIES = [
-  'medellin', 'bello', 'itagui', 'envigado', 'sabaneta',
-  'la estrella', 'caldas', 'copacabana', 'girardota', 'barbosa',
-  'rionegro'
-];
-
-// All cities referenced in carrier rules — used for fuzzy correction of typos
-const ALL_CARRIER_RULE_CITIES = [
-  ...CUNDINAMARCA_COORDINADORA_CITIES,
-  ...VALLE_ABURRA_CITIES,
-  'jamundi', 'cali', 'calima', 'darien',
-  'floridablanca', 'giron',
-  'tunja', 'labranzagrande',
-  'manizales',
-  'dosquebradas',
-  'la ceja',
-  'barranquilla', 'cartagena', 'bucaramanga', 'cucuta',
-  'pereira', 'villavicencio', 'pasto', 'santa marta', 'monteria',
-  'armenia', 'popayan', 'sincelejo', 'valledupar',
-  'florencia', 'riohacha'
-];
-
-function levenshteinDistance(a: string, b: string): number {
-  const m = a.length, n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
-    }
-  }
-  return dp[m][n];
-}
-
-function normalizeLocationText(text?: string | null): string {
-  return (text || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim();
-}
-
-function fuzzyMatchCity(input: string): string {
-  if (ALL_CARRIER_RULE_CITIES.includes(input)) return input;
-  let bestMatch = input;
-  let bestDist = Infinity;
-  for (const known of ALL_CARRIER_RULE_CITIES) {
-    const dist = levenshteinDistance(input, known);
-    // Max 2 edits, and the input must be at least 4 chars to avoid false positives
-    if (dist < bestDist && dist <= 2 && input.length >= 4) {
-      bestDist = dist;
-      bestMatch = known;
-    }
-  }
-  return bestMatch;
-}
-
-const CITY_DEPARTMENT_FALLBACKS: Record<string, string> = {
-  armenia: 'Quindío',
-  barranquilla: 'Atlántico',
-  bogota: 'Bogotá D.C.',
-  bucaramanga: 'Santander',
-  cali: 'Valle del Cauca',
-  cartagena: 'Bolívar',
-  cucuta: 'Norte de Santander',
-  florencia: 'Caquetá',
-  floridablanca: 'Santander',
-  giron: 'Santander',
-  manizales: 'Caldas',
-  medellin: 'Antioquia',
-  monteria: 'Córdoba',
-  pasto: 'Nariño',
-  pereira: 'Risaralda',
-  popayan: 'Cauca',
-  riohacha: 'La Guajira',
-  'santa marta': 'Magdalena',
-  sincelejo: 'Sucre',
-  tunja: 'Boyacá',
-  valledupar: 'Cesar',
-  villavicencio: 'Meta',
-};
-
-function inferDepartmentFromCity(city?: string | null): string | null {
-  const normalizedCity = fuzzyMatchCity(normalizeLocationText(city));
-  return CITY_DEPARTMENT_FALLBACKS[normalizedCity] || null;
-}
 
 export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
   shopifyOrderId,
