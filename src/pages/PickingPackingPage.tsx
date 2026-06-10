@@ -1268,34 +1268,36 @@ const [showItemsModal, setShowItemsModal] = useState(false);
             </Pagination>
           </div>
         )}
-      </div>
 
-      {/* Barra de acciones para generación masiva de guías */}
-      {(selectedIds.size > 0 || eligibleOrders.length > 0) && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-2 bg-card border rounded-lg shadow-lg px-4 py-2.5 max-w-[95vw]">
-          <span className="text-sm font-medium whitespace-nowrap">
-            {selectedIds.size} seleccionado{selectedIds.size === 1 ? '' : 's'}
-          </span>
-          {!allEligibleSelected && (
-            <Button variant="outline" size="sm" onClick={selectAllEligible}>
-              {eligibleOrders.length > MAX_BULK_LABELS
-                ? `Seleccionar primeros ${MAX_BULK_LABELS} Empacados (de ${eligibleOrders.length})`
-                : `Seleccionar todos los Empacados (${eligibleOrders.length})`}
-            </Button>
-          )}
-          {selectedIds.size > 0 && (
-            <>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
-                Limpiar
+        {/* Barra de acciones para generación masiva de guías.
+            sticky en flujo: acompaña el scroll pegada abajo, pero al llegar al
+            final se asienta DEBAJO de la paginación — nunca la tapa. */}
+        {(selectedIds.size > 0 || eligibleOrders.length > 0) && (
+          <div className="sticky bottom-4 z-40 mx-auto w-fit flex flex-wrap items-center justify-center gap-2 bg-card border rounded-lg shadow-lg px-4 py-2.5 max-w-[95vw]">
+            <span className="text-sm font-medium whitespace-nowrap">
+              {selectedIds.size} seleccionado{selectedIds.size === 1 ? '' : 's'}
+            </span>
+            {!allEligibleSelected && (
+              <Button variant="outline" size="sm" onClick={selectAllEligible}>
+                {eligibleOrders.length > MAX_BULK_LABELS
+                  ? `Seleccionar primeros ${MAX_BULK_LABELS} Empacados (de ${eligibleOrders.length})`
+                  : `Seleccionar todos los Empacados (${eligibleOrders.length})`}
               </Button>
-              <Button size="sm" onClick={() => setShowBulkModal(true)}>
-                <Truck className="w-4 h-4 mr-1.5" />
-                Generar guías ({selectedIds.size})
-              </Button>
-            </>
-          )}
-        </div>
-      )}
+            )}
+            {selectedIds.size > 0 && (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                  Limpiar
+                </Button>
+                <Button size="sm" onClick={() => setShowBulkModal(true)}>
+                  <Truck className="w-4 h-4 mr-1.5" />
+                  Generar guías ({selectedIds.size})
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Modal de generación masiva de guías */}
       {currentOrganization?.id && (
