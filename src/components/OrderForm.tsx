@@ -13,6 +13,7 @@ import OrderMaterialAlert from '@/components/OrderMaterialAlert';
 import MaterialDeliveryForm from '@/components/supplies/MaterialDeliveryForm';
 import { useWorkshops } from '@/hooks/useWorkshops';
 import { useOrders } from '@/hooks/useOrders';
+import { useStoreContext } from '@/contexts/StoreContext';
 import { useOrderMaterialValidation } from '@/hooks/useOrderMaterialValidation';
 import { useMaterialConsumption } from '@/hooks/useMaterialConsumption';
 
@@ -21,7 +22,10 @@ interface OrderFormProps {
 }
 
 const OrderForm = ({ onClose }: OrderFormProps) => {
+  const { stores, activeStoreId, loading: storesLoading } = useStoreContext();
   const [selectedWorkshop, setSelectedWorkshop] = useState('');
+  // Si hay tienda activa en el switcher se preselecciona; si no, el usuario debe elegirla.
+  const [selectedStore, setSelectedStore] = useState(activeStoreId || '');
   const [dueDate, setDueDate] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
   const [supplies, setSupplies] = useState<any[]>([]);
@@ -123,6 +127,11 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
       return;
     }
 
+    if (!selectedStore) {
+      alert('Por favor selecciona la tienda a la que pertenece la orden');
+      return;
+    }
+
     console.log('Products data before submit:', selectedProducts);
     console.log('Supplies data before submit:', supplies);
 
@@ -150,6 +159,7 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
     try {
       const orderData = {
         workshopId: selectedWorkshop,
+        storeId: selectedStore,
         dueDate: dueDate || undefined,
         products: validProducts.map(product => ({
           productId: product.productId,
@@ -216,6 +226,21 @@ const OrderForm = ({ onClose }: OrderFormProps) => {
               <Card className="p-6">
                 <h3 className="text-lg font-semibold mb-4 text-black">Información General</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="store">Tienda *</Label>
+                    <Select value={selectedStore} onValueChange={setSelectedStore} disabled={storesLoading}>
+                      <SelectTrigger id="store" className="w-full">
+                        <SelectValue placeholder={storesLoading ? "Cargando tiendas..." : "Seleccionar tienda..."} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stores.map((store) => (
+                          <SelectItem key={store.id} value={store.id}>
+                            {store.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="dueDate">Fecha de Entrega</Label>
                     <Input

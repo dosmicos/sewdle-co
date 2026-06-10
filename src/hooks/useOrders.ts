@@ -21,6 +21,7 @@ interface OrderSupply {
 
 interface CreateOrderData {
   workshopId: string;
+  storeId: string;
   dueDate?: string;
   products: OrderItem[];
   supplies: OrderSupply[];
@@ -82,6 +83,12 @@ export const useOrders = () => {
         throw new Error('Debe agregar al menos un producto o insumo a la orden');
       }
 
+      // Toda orden debe pertenecer a una tienda; sin esto queda invisible
+      // para los usuarios que filtran por tienda activa.
+      if (!orderData.storeId) {
+        throw new Error('Debe seleccionar la tienda a la que pertenece la orden');
+      }
+
       // Generar número de orden único
       const { data: orderNumber, error: orderNumberError } = await supabase
         .rpc('generate_order_number');
@@ -108,7 +115,7 @@ export const useOrders = () => {
             total_amount: totalAmount > 0 ? totalAmount : null,
             notes: orderData.notes || null,
             status: 'pending',
-            ...(activeStoreId ? { store_id: activeStoreId } : {}),
+            store_id: orderData.storeId,
           }
         ])
         .select()
