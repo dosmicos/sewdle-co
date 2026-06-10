@@ -632,7 +632,7 @@ const DEFAULT_PACKAGE = {
 // Available carriers for Colombia
 const COLOMBIA_CARRIERS: Record<string, { carrier: string; service: string }> = {
   'coordinadora': { carrier: 'coordinadora', service: 'ecommerce' },
-  'interrapidisimo': { carrier: 'interrapidisimo', service: 'ground' },
+  'interrapidisimo': { carrier: 'interrapidisimo', service: 'ground_small' },
   'servientrega': { carrier: 'servientrega', service: 'ground' },
   'deprisa': { carrier: 'deprisa', service: 'estandar' },
   'envia': { carrier: 'envia', service: 'ground' },
@@ -676,9 +676,10 @@ function selectCarrierByRules(city: string, department: string, isCOD: boolean):
     return 'coordinadora';
   }
 
-  // Rule 2: Medellín, Antioquia → Coordinadora (accepts both COD and paid)
-  if (normalizedDept.includes('antioquia') && normalizedCity.includes('medellin')) {
-    console.log('📍 Rule 2: Medellín, Antioquia → Coordinadora (acepta COD y pagado)');
+  // Rule 2: Valle de Aburrá (Medellín y área metropolitana), Antioquia → Coordinadora (accepts both COD and paid)
+  const ABURRA_METRO_CITIES = ['medellin', 'itagui', 'envigado', 'bello', 'sabaneta', 'la estrella', 'caldas', 'copacabana', 'girardota', 'barbosa'];
+  if (normalizedDept.includes('antioquia') && ABURRA_METRO_CITIES.some(c => normalizedCity.includes(c))) {
+    console.log(`📍 Rule 2: ${city} (Valle de Aburrá), Antioquia → Coordinadora (acepta COD y pagado)`);
     return 'coordinadora';
   }
 
@@ -1057,15 +1058,22 @@ serve(async (req) => {
       
       // Detectar errores de zonas de difícil acceso
       const errorMsgLower = errorMsg.toLowerCase();
-      const isDifficultAccessError = 
+      const isDifficultAccessError =
         errorMsgLower.includes('difícil acceso') ||
         errorMsgLower.includes('dificil acceso') ||
         errorMsgLower.includes('zonas de dificil') ||
-        errorMsgLower.includes('reclamo en oficina') ||
-        (errorMsgLower.includes('service provided not available') && errorMsgLower.includes('incorrect'));
-      
+        errorMsgLower.includes('reclamo en oficina');
+
+      // Envia 1125: el par carrier/servicio no existe para esta ruta — NO es difícil acceso
+      const isServiceUnavailable = !isDifficultAccessError && (
+        String(enviaData.error?.code ?? '') === '1125' ||
+        (errorMsgLower.includes('service provided not available') && errorMsgLower.includes('incorrect'))
+      );
+
       if (isDifficultAccessError) {
         console.log('⚠️ Detected difficult access zone error');
+      } else if (isServiceUnavailable) {
+        console.log('⚠️ Carrier/service combo not available for this route (Envia 1125)');
       }
       
       await supabase
@@ -1088,7 +1096,11 @@ serve(async (req) => {
         JSON.stringify({ 
           success: false, 
           error: errorMsg,
-          errorCode: isDifficultAccessError ? 'DIFFICULT_ACCESS_ZONE' : undefined
+          errorCode: isDifficultAccessError
+            ? 'DIFFICULT_ACCESS_ZONE'
+            : isServiceUnavailable
+              ? 'SERVICE_NOT_AVAILABLE'
+              : undefined
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
