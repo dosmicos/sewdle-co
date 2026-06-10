@@ -60,6 +60,8 @@ interface EnviaShippingButtonProps {
 // Ref interface for external control
 export interface EnviaShippingButtonRef {
   createLabelWithDefaults: () => Promise<void>;
+  /** Re-consulta la guía en DB (para guías creadas por fuera, ej. auto-generación) */
+  refreshLabel: () => Promise<ShippingLabel | null>;
   isReady: boolean;
   isCreatingLabel: boolean;
   hasExistingLabel: boolean;
@@ -745,6 +747,12 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
           await handleCreateLabel();
         }
       },
+      refreshLabel: async () => {
+        if (!currentOrganization?.id) return null;
+        const label = await getExistingLabel(shopifyOrderId, currentOrganization.id);
+        onLabelChange?.(label);
+        return label;
+      },
       isReady: !!isReady,
       isCreatingLabel,
       hasExistingLabel: !!isActiveLabel,
@@ -754,7 +762,7 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
     return () => {
       apiRef.current = null;
     };
-  }, [apiRef, isReady, isCreatingLabel, isActiveLabel, shippingAddress, handleCreateLabel, handleQuoteAndCreateLabel, quoteState.status, selectedCarrier, quotes, recommendedCarrier]);
+  }, [apiRef, isReady, isCreatingLabel, isActiveLabel, shippingAddress, handleCreateLabel, handleQuoteAndCreateLabel, quoteState.status, selectedCarrier, quotes, recommendedCarrier, currentOrganization?.id, getExistingLabel, shopifyOrderId, onLabelChange]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CO', {
