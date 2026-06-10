@@ -634,7 +634,7 @@ const COLOMBIA_CARRIERS: Record<string, { carrier: string; service: string }> = 
   'coordinadora': { carrier: 'coordinadora', service: 'ecommerce' },
   'interrapidisimo': { carrier: 'interrapidisimo', service: 'ground' },
   'servientrega': { carrier: 'servientrega', service: 'ground' },
-  'deprisa': { carrier: 'deprisa', service: 'ground' },
+  'deprisa': { carrier: 'deprisa', service: 'estandar' },
   'envia': { carrier: 'envia', service: 'ground' },
   'tcc': { carrier: 'tcc', service: 'ground' }
 };
