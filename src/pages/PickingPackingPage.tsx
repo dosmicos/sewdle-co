@@ -529,6 +529,8 @@ const [showItemsModal, setShowItemsModal] = useState(false);
     [filteredOrdersByTeam]
   );
 
+  const bulkBarVisible = selectedIds.size > 0 || eligibleOrders.length > 0;
+
   const selectedOrders = useMemo(
     () => filteredOrdersByTeam.filter(order => selectedIds.has(order.id)),
     [filteredOrdersByTeam, selectedIds]
@@ -703,7 +705,8 @@ const [showItemsModal, setShowItemsModal] = useState(false);
 
   return (
     <PickingPackingLayout>
-      <div className="space-y-6">
+      {/* pb extra cuando la barra flotante está visible, para no tapar la paginación */}
+      <div className={`space-y-6 ${bulkBarVisible ? 'pb-24' : ''}`}>
         {/* Search and Filters */}
         <div className="space-y-3 md:space-y-4">
           <div className="flex flex-col md:flex-row gap-2 md:gap-4">
@@ -1271,7 +1274,7 @@ const [showItemsModal, setShowItemsModal] = useState(false);
       </div>
 
       {/* Barra de acciones para generación masiva de guías */}
-      {(selectedIds.size > 0 || eligibleOrders.length > 0) && (
+      {bulkBarVisible && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-2 bg-card border rounded-lg shadow-lg px-4 py-2.5 max-w-[95vw]">
           <span className="text-sm font-medium whitespace-nowrap">
             {selectedIds.size} seleccionado{selectedIds.size === 1 ? '' : 's'}
