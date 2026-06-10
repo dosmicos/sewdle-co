@@ -35,6 +35,9 @@ export interface BulkSummary {
 const CONCURRENCY = 3;
 const LABEL_TIMEOUT_MS = 45_000;
 
+// Tope por tanda: protege la cuota de Envia y mantiene el batch manejable.
+export const MAX_BULK_LABELS = 100;
+
 const friendlyError = (errorCode?: string, fallback?: string): string => {
   switch (errorCode) {
     case 'DANE_NOT_FOUND':
@@ -116,8 +119,9 @@ export const useBulkLabelGeneration = () => {
     await Promise.all(workers);
   }, [generateOne, updateItem]);
 
-  const start = useCallback(async (orders: PickingOrder[], organizationId: string) => {
-    if (isRunning || orders.length === 0) return;
+  const start = useCallback(async (allOrders: PickingOrder[], organizationId: string) => {
+    if (isRunning || allOrders.length === 0) return;
+    const orders = allOrders.slice(0, MAX_BULK_LABELS);
 
     cancelRef.current = false;
     requestsRef.current = new Map();
