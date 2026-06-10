@@ -44,6 +44,8 @@ const friendlyError = (errorCode?: string, fallback?: string): string => {
       return 'Ciudad no reconocida en cobertura';
     case 'DIFFICULT_ACCESS_ZONE':
       return 'Zona de difícil acceso: enviar con reclamo en oficina';
+    case 'SERVICE_NOT_AVAILABLE':
+      return 'Transportadora sin servicio para esta ruta — generar manual con otra transportadora';
     default:
       return fallback || 'Error generando la guía';
   }
