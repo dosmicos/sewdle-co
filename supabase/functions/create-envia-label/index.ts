@@ -695,9 +695,9 @@ function selectCarrierByRules(city: string, department: string, isCOD: boolean):
   }
 
   // Check if it's a main city
-  const isMainCity = MAIN_CITIES.some(mainCity => {
+  const isMainCity = normalizedCity.length > 0 && MAIN_CITIES.some(mainCity => {
     const normalizedMainCity = normalizeText(mainCity);
-    return normalizedCity.includes(normalizedMainCity) || normalizedMainCity.includes(normalizedMainCity);
+    return normalizedCity.includes(normalizedMainCity) || normalizedMainCity.includes(normalizedCity);
   });
 
   // Rule 3: Main cities + PAID orders → Deprisa (Deprisa does NOT accept COD)
@@ -865,8 +865,11 @@ serve(async (req) => {
     const district = extractDistrict(body.destination_address, body.destination_city);
     console.log(`📍 District: "${district}"`);
 
-    // Clean phone number (remove non-numeric characters except +)
-    const cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9+]/g, '');
+    // Clean phone number: only digits, strip 57 country prefix (Deprisa rejects +57 numbers)
+    let cleanPhone = (body.recipient_phone || "3000000000").replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('57') && cleanPhone.length > 10) {
+      cleanPhone = cleanPhone.substring(2);
+    }
     
     // Clean identification number: ONLY numeric characters, no + or country prefix
     let cleanIdentification = (body.recipient_phone || "1234567890").replace(/[^0-9]/g, '');
