@@ -1176,7 +1176,7 @@ serve(async (req) => {
           }
 
           let shopDomain = org.shopify_store_url
-            .replace('https://', '').replace('http://', '').replace(/\//$/, '');
+            .replace('https://', '').replace('http://', '').replace(/\/$/, '');
           if (!shopDomain.includes('.myshopify.com')) {
             shopDomain = `${shopDomain}.myshopify.com`;
           }
