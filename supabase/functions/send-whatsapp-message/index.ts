@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sendWhatsAppTemplate } from "../_shared/whatsapp-template.ts";
+import { fetchGraphWithRetry } from "../_shared/graph-retry.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -142,25 +143,27 @@ async function sendWhatsAppImageByLink(
   caption?: string
 ): Promise<{ ok: boolean; messageId?: string; error?: any }> {
   try {
-    const resp = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to,
-        type: 'image',
-        image: {
-          link: imageUrl,
-          caption: caption || '',
+    const { response: resp, data } = await fetchGraphWithRetry(
+      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
-      }),
-    });
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to,
+          type: 'image',
+          image: {
+            link: imageUrl,
+            caption: caption || '',
+          },
+        }),
+      }
+    );
 
-    const data = await resp.json();
     if (!resp.ok) return { ok: false, error: data };
     return { ok: true, messageId: data?.messages?.[0]?.id };
   } catch (e) {
@@ -329,7 +332,7 @@ serve(async (req) => {
       formBody.append('message', JSON.stringify(apiBody.message));
       formBody.append('access_token', sendToken);
 
-      const response = await fetch(apiUrl, {
+      const { response, data: result } = await fetchGraphWithRetry(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -337,7 +340,6 @@ serve(async (req) => {
         body: formBody.toString(),
       });
 
-      const result = await response.json();
       console.log(`${channelType} API response:`, result);
 
       if (!response.ok) {
@@ -562,7 +564,7 @@ serve(async (req) => {
 
       console.log('Sending media message:', JSON.stringify(messagePayload));
 
-      const response = await fetch(
+      const { response, data: mediaSendData } = await fetchGraphWithRetry(
         `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
         {
           method: 'POST',
@@ -574,7 +576,7 @@ serve(async (req) => {
         }
       );
 
-      result = await response.json();
+      result = mediaSendData;
       console.log('WhatsApp API response:', result);
 
       if (!response.ok) {
@@ -617,7 +619,7 @@ serve(async (req) => {
         console.log('Adding reply context to message:', messagePayload.context);
       }
 
-      const response = await fetch(
+      const { response, data: textSendData } = await fetchGraphWithRetry(
         `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
         {
           method: 'POST',
@@ -629,7 +631,7 @@ serve(async (req) => {
         }
       );
 
-      result = await response.json();
+      result = textSendData;
       console.log('WhatsApp API response:', result);
 
       if (!response.ok) {
@@ -712,7 +714,7 @@ async function uploadMediaToWhatsApp(
     formData.append('type', mimeType);
     formData.append('messaging_product', 'whatsapp');
 
-    const response = await fetch(
+    const { response, data: result } = await fetchGraphWithRetry(
       `https://graph.facebook.com/v21.0/${phoneNumberId}/media`,
       {
         method: 'POST',
@@ -723,8 +725,6 @@ async function uploadMediaToWhatsApp(
       }
     );
 
-    const result = await response.json();
-    
     if (!response.ok) {
       console.error('Media upload error:', result);
       return { success: false, error: result?.error?.message || 'Failed to upload media' };
