@@ -26,6 +26,13 @@ const statusLabel: Record<KpiStatus, string> = {
   missing: 'No disponible',
 };
 
+const statusTextClasses: Record<KpiStatus, string> = {
+  green: 'text-emerald-600',
+  yellow: 'text-amber-600',
+  red: 'text-red-600',
+  missing: 'text-slate-400',
+};
+
 const kpiLabels: Record<string, string> = {
   revenue: 'Revenue',
   adSpend: 'Spend',
@@ -107,8 +114,13 @@ const KpiPill: React.FC<{ label: string; kpi: GrowthKpi; metricKey: string }> = 
     <div className="mt-2 text-sm font-semibold text-slate-900">
       {formatKpiValue(metricKey, kpi.actual)}
     </div>
-    <div className="mt-1 text-[11px] text-slate-500">
-      Target: {formatKpiValue(metricKey, kpi.target)}
+    <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
+      <span className="text-slate-500">Target: {formatKpiValue(metricKey, kpi.target)}</span>
+      {kpi.progress !== null && Number.isFinite(kpi.progress) && (
+        <span className={cn('font-semibold tabular-nums', statusTextClasses[kpi.status])}>
+          {formatNumber(Math.round(kpi.progress), '%')} del target
+        </span>
+      )}
     </div>
     <Progress value={kpiProgress(kpi)} className="mt-2 h-1.5" />
   </div>
