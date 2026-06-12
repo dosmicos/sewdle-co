@@ -118,7 +118,7 @@ const KpiPill: React.FC<{ label: string; kpi: GrowthKpi; metricKey: string }> = 
       <span className="text-slate-500">Target: {formatKpiValue(metricKey, kpi.target)}</span>
       {kpi.progress !== null && Number.isFinite(kpi.progress) && (
         <span className={cn('font-semibold tabular-nums', statusTextClasses[kpi.status])}>
-          {formatNumber(Math.round(kpi.progress), '%')} del target
+          Llevamos {formatNumber(Math.round(kpi.progress), '%')}
         </span>
       )}
     </div>
