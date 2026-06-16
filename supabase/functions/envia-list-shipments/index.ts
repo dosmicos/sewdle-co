@@ -88,34 +88,62 @@ serve(async (req) => {
     let apiDebugInfo: any = null; // surfaced in response for diagnostics
 
     try {
-      const res = await fetch(queriesUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${ENVIA_API_KEY}`,
-          'accept': 'application/json',
-        },
-      });
+      // The Envia Queries API paginates at 300 guides per page via ?page=N and
+      // returns NO pagination metadata. We loop until a page comes back with
+      // fewer than a full page (the last page). Without this we only fetched the
+      // first 300 guides — so on high-volume months (e.g. 1600+/month) most
+      // guides never appeared as "available", effectively capping a manifest.
+      const PAGE_SIZE = 300;
+      const MAX_PAGES = 50; // safety cap (15,000 guides) to avoid an infinite loop
+      const all: any[] = [];
+      let firstPageOk = false;
+      let lastStatus = 0;
+      let firstItem: any = null;
 
-      const raw = await res.text();
-      console.log(`  → status ${res.status}, preview: ${raw.slice(0, 500)}`);
+      for (let page = 1; page <= MAX_PAGES; page++) {
+        const pageUrl = page === 1 ? queriesUrl : `${queriesUrl}?page=${page}`;
+        const res = await fetch(pageUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${ENVIA_API_KEY}`,
+            'accept': 'application/json',
+          },
+        });
+        lastStatus = res.status;
 
-      let data: any = null;
-      try { data = JSON.parse(raw); } catch { data = null; }
+        const raw = await res.text();
+        let data: any = null;
+        try { data = JSON.parse(raw); } catch { data = null; }
 
-      // Capture debug info: include full first item so we can see all field names
-      const firstItem = Array.isArray(data?.data) ? data.data[0] : null;
+        if (!res.ok || !Array.isArray(data?.data)) {
+          if (page === 1) {
+            console.warn(`⚠️ Envia Queries API unexpected response: status=${res.status}, preview: ${raw.slice(0, 300)}`);
+          } else {
+            console.warn(`⚠️ Envia Queries API page ${page} failed (status=${res.status}); using ${all.length} guides gathered so far`);
+          }
+          break;
+        }
+
+        const pageItems = data.data as any[];
+        if (page === 1) {
+          firstPageOk = true;
+          firstItem = pageItems[0] || null;
+        }
+        all.push(...pageItems);
+        console.log(`  → page ${page}: ${pageItems.length} guides (accumulated ${all.length})`);
+
+        // Last page: a non-full page means there are no more.
+        if (pageItems.length < PAGE_SIZE) break;
+      }
+
       apiDebugInfo = {
-        status: res.status,
-        ok: res.ok,
-        dataType: data === null ? 'null' : Array.isArray(data?.data) ? 'array' : typeof data?.data,
-        totalFromApi: Array.isArray(data?.data) ? data.data.length : 0,
+        status: lastStatus,
+        ok: firstPageOk,
+        totalFromApi: all.length,
         firstItemKeys: firstItem ? Object.keys(firstItem) : [],
-        firstItem: firstItem,  // full first guide so we see exact field names
       };
 
-      if (res.ok && Array.isArray(data?.data)) {
-        const all = data.data as any[];
-
+      if (firstPageOk) {
         // Filter to last 7 days (API returns full month).
         // Only include guides with status "created" — guides already picked up,
         // in transit, delivered, or cancelled must not appear in the manifest dialog.
@@ -156,9 +184,9 @@ serve(async (req) => {
 
         enviaShipments = filtered;
         enviaOk = true;
-        console.log(`✅ Envia Queries API OK — ${all.length} total this month, ${recentShipments.length} eligible in last 7 days, ${filtered.length} after carrier filter`);
+        console.log(`✅ Envia Queries API OK — ${all.length} total this month (paginated), ${recentShipments.length} eligible in last 7 days, ${filtered.length} after carrier filter`);
       } else {
-        console.warn(`⚠️ Envia Queries API returned unexpected response: status=${res.status}, data type=${typeof data?.data}`);
+        console.warn(`⚠️ Envia Queries API returned no usable data (status=${lastStatus})`);
       }
     } catch (e) {
       console.warn(`⚠️ Envia Queries API fetch error: ${e}`);
