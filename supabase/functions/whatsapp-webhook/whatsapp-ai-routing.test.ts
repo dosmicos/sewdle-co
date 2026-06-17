@@ -39,6 +39,49 @@ Deno.test("WhatsApp AI routing honors Elsa supervised runtime instead of hardcod
   );
 });
 
+
+Deno.test("WhatsApp image replies are rewritten when the model falls back to generic handoff text", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+
+  assert(
+    source.includes("buildImageScreenshotFallbackReply") &&
+      source.includes("shouldReplaceGenericImageReply") &&
+      source.includes("messagesForAI"),
+    "whatsapp-webhook must replace generic image handoffs with a screenshot-aware fallback from OCR-enriched messages",
+  );
+  assert(
+    source.includes("Generic image reply detected; replacing with screenshot-aware fallback"),
+    "whatsapp-webhook must log when it rewrites a generic image reply",
+  );
+
+  const directRewriteCalls = source.match(/shouldReplaceGenericImageReply\(aiText/g) || [];
+  assert(
+    directRewriteCalls.length >= 2,
+    "all WhatsApp AI send paths must run the generic-image rewrite guard before delivery",
+  );
+});
+
+Deno.test("WhatsApp AI routing blocks payment-link confirmations without a URL", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+
+  assert(
+    source.includes("../_shared/payment-link-reply-guard.ts") &&
+      source.includes("shouldReplacePaymentLinkReplyWithoutUrl") &&
+      source.includes("buildPaymentLinkMissingUrlFallbackReply"),
+    "whatsapp-webhook must not send generated/resend payment-link wording unless the URL is present",
+  );
+
+  const guardCalls = source.match(/shouldReplacePaymentLinkReplyWithoutUrl\(aiText/g) || [];
+  assert(
+    guardCalls.length >= 2,
+    "all WhatsApp AI send paths must run the missing-payment-link URL guard before delivery",
+  );
+});
+
 Deno.test("WhatsApp audio messages are transcribed before invoking Elsa", async () => {
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),
@@ -74,4 +117,9 @@ Deno.test("WhatsApp audio messages are transcribed before invoking Elsa", async 
     source.includes("audio_transcription"),
     "the saved messaging message must include transcription metadata for review/debugging",
   );
+  assert(
+    source.includes("const aiRespondableTypes = ['text', 'audio', 'image', 'button', 'interactive'];"),
+    "audio messages must be included in the AI respondable types after transcription",
+  );
 });
+

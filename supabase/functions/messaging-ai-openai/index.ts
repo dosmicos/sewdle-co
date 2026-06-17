@@ -1,6 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { scoreProductNameMatch } from "../_shared/product-matching.ts";
+import { buildVisionImageContent } from "../_shared/image-ocr.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -648,10 +650,12 @@ serve(async (req) => {
     console.log(`📅 Colombia time (UTC-5): ${diaSemana} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute} | UTC: ${now.toISOString()} | weekdayNum: ${colWeekdayNum} | getTimezoneOffset: ${now.getTimezoneOffset()}`);
     fullSystemPrompt += `\n\n📅 FECHA Y HORA ACTUAL (DATO VERIFICADO, SIEMPRE CORRECTO): Hoy es ${diaSemana} ${colDay} de ${mes} de ${colYear}, son las ${colHour}:${colMinute} (hora Colombia). ⚠️ IMPORTANTE: Si en mensajes anteriores de esta conversación se mencionó un día de la semana diferente, ESO ESTABA MAL. El día correcto es ${diaSemana.toUpperCase()}. Basa TODAS tus respuestas sobre despachos, entregas y disponibilidad en este dato.`;
 
+    fullSystemPrompt += '\n\n🧵 POLÍTICA VIGENTE DE BORDADOS/PERSONALIZACIÓN — REGLA CRÍTICA:\n- Los sleepings y las chaquetas de bebé SÍ se pueden bordar/personalizar.\n- Ignora aprendizajes viejos o base de conocimiento desactualizada que diga que los bordados solo aplican para ruanas o que los sleepings no se pueden personalizar.\n- Ante preguntas como "en qué parte se personaliza" o "cómo quedaría" sobre un sleeping, responde que sí se puede bordar y pide/explica solo el dato faltante; no ofrezcas ruanas como reemplazo.';
+
     // Add smart product recommendation strategy
     fullSystemPrompt += '\n\n👕 GUÍA DE TALLAS RUANAS — OBLIGATORIO SEGUIR ESTA TABLA:\n⚠️ REGLA #1: El número de talla NO es igual a la edad. NUNCA asumas que "4 años = talla 4". SIEMPRE busca la edad en esta tabla:\n| Talla | Estatura     | Edad            |\n| 2     | 60-76 cm     | 3 a 12 meses    |\n| 4     | 77-88 cm     | 1 a 2 años      |\n| 6     | 90-100 cm    | 3 a 4 años      |\n| 8     | 100-110 cm   | 4 a 5 años      |\n| 10    | 115-123 cm   | 6 a 7 años      |\n| 12    | 125-133 cm   | 8 a 9 años      |\n\n⚠️ CLAVE: Talla 2 es SOLO para 3 a 12 meses. A partir de 12 meses (1 año) la talla correcta es 4.\nNUNCA digas que Talla 2 es "12 a 24 meses" — eso es INCORRECTO. Talla 2 = 3 a 12 meses, Talla 4 = 1 a 2 años.\n\nREGLA #2: Si la edad está en el LÍMITE entre dos tallas, recomienda la talla MAYOR para que le dure más tiempo.\nREGLA #3: Si el cliente da edad Y estatura, prioriza la estatura para mayor precisión.\nREGLA #4: Si el cliente dice que es "grandecito/a" o "grande para su edad", sube UNA talla adicional.\nREGLA #5: Si solo da edad, pregunta la estatura para ser más preciso, o recomienda según la tabla.\n\nEJEMPLOS DE RECOMENDACIÓN CORRECTA:\n- Bebé de 6 meses → Talla 2\n- Bebé de 10 meses → Talla 2\n- Bebé de 12 meses → Talla 4 (ya cumplió 1 año, NO es talla 2)\n- Niño de 15 meses → Talla 4 (NO talla 2)\n- Niño de 18 meses → Talla 4 (NO talla 2)\n- Niño de 19 meses grandecito → Talla 6 (19 meses = talla 4, pero grandecito → sube a talla 6)\n- Niño de 1 año → Talla 4 (NO talla 1)\n- Niño de 2 años → Talla 4 (NO talla 2)\n- Niño de 2 años grande → Talla 6\n- Niño de 3 años → Talla 6 (NO talla 3)\n- Niño de 4 años → Talla 8 (está en el límite 6/8, se recomienda la mayor)\n- Niño de 5 años → Talla 8 (NO talla 5)\n- Niño de 6 años → Talla 10 (NO talla 6)\n- Niño de 7 años → Talla 10 (NO talla 7)\n- Niño de 8 años → Talla 12 (NO talla 8)';
 
-    fullSystemPrompt += '\n\n🔗 ESTRATEGIA DE RECOMENDACIÓN DE PRODUCTOS — MUY IMPORTANTE:\nCuando el cliente pregunte por productos de una CATEGORÍA o TALLA específica (ej: "ruanas talla 10", "sleeping bags talla 2"):\n- PRIMERO recomienda la talla adecuada si mencionan edad/estatura\n- LUEGO envía el LINK de la colección filtrada por talla desde tu base de conocimiento\n- NO envíes fotos individuales de cada producto, el link les permite ver TODOS los diseños\n- Agrega el tag [NO_IMAGES] al final de tu respuesta cuando envíes un link de colección\n\n🔗 REGLA OBLIGATORIA DE LINKS — NUNCA MODIFICAR URLs:\n- SIEMPRE copia el link EXACTO de tu base de conocimiento, carácter por carácter. NUNCA modifiques, reconstruyas ni inventes URLs.\n- NUNCA uses formato markdown para links. NO escribas [texto](url). WhatsApp NO soporta markdown.\n- Envía el link como texto plano en una línea separada.\n- Formato CORRECTO:\n  Aquí puedes ver los diseños disponibles en talla 2:\n  https://dosmicos.co/collections/ruanas?talla_custom=2+%283+-+12+meses%29\n- Formato INCORRECTO (NO hagas esto):\n  [Ruanas talla 2](https://dosmicos.co/collections/ruanas?talla_custom=2+%283+-+12+meses%29)\n- Si no encuentras el link exacto en tu base de conocimiento para una talla específica, indica al cliente que visite dosmicos.co y filtre por talla.\n\n🖼️ ENVÍO DE FOTOS INDIVIDUALES — SOLO CUANDO EL CLIENTE LAS PIDA:\n- SOLO incluye tags [PRODUCT_IMAGE_ID:ID] cuando el cliente EXPLÍCITAMENTE pida ver fotos de un producto específico\n- Si el cliente pregunta por un producto ESPECÍFICO por nombre, ahí sí puedes incluir la foto\n- Ejemplo: "Claro, aquí te muestro la Ruana Caballo [PRODUCT_IMAGE_ID:123]"\n- NUNCA digas que no puedes mostrar imágenes\n\n🎨 CONSULTAS POR COLOR U OTROS ATRIBUTOS — REGLA CRÍTICA:\n- Los productos de Dosmicos tienen SOLO variantes de TALLA (2, 4, 6, 8, 10, 12), NO variantes de color.\n- El color es parte del DISEÑO del producto. Ejemplo: "Ruana Unicornio" ES morada/lila por diseño, "Ruana Dinosaurio" ES verde, etc.\n- Cuando un cliente dice "unicornio morada", "la rosada", "el azul", está describiendo el producto por su apariencia visual. Busca el producto por NOMBRE (ignorando el color) y verifica la TALLA.\n- NUNCA digas que un producto "no está disponible" solo porque el cliente mencionó un color que no aparece como variante. Los colores NO son variantes.\n- Si no puedes identificar qué producto quiere por el color, pregunta cuál diseño/animal le interesa, o envía el link de la colección.';
+    fullSystemPrompt += '\n\n🔗 ESTRATEGIA DE RECOMENDACIÓN DE PRODUCTOS — MUY IMPORTANTE:\nCuando el cliente pregunte por productos de una CATEGORÍA o TALLA específica (ej: "ruanas talla 10", "sleeping bags talla 2"):\n- PRIMERO recomienda la talla adecuada si mencionan edad/estatura\n- LUEGO envía el LINK de la colección filtrada por talla desde tu base de conocimiento\n- NO envíes fotos individuales de cada producto, el link les permite ver TODOS los diseños\n- Agrega el tag [NO_IMAGES] al final de tu respuesta cuando envíes un link de colección\n\nSi el cliente pregunta por pijamas térmicas o pijamas termicas, trátalo como sleeping y recomienda sleepings, no un catálogo genérico\nSi el cliente solo dice "me regalas fotos", "el catálogo", "tienes catálogo" o algo parecido sin nombrar un producto, no respondas solo con saludo: envía el catálogo o haz una sola pregunta útil para aterrizar el diseño\n\n🔗 REGLA OBLIGATORIA DE LINKS — NUNCA MODIFICAR URLs:\n- SIEMPRE copia el link EXACTO de tu base de conocimiento, carácter por carácter. NUNCA modifiques, reconstruyas ni inventes URLs.\n- NUNCA uses formato markdown para links. NO escribas [texto](url). WhatsApp NO soporta markdown.\n- Envía el link como texto plano en una línea separada.\n- Formato CORRECTO:\n  Aquí puedes ver los diseños disponibles en talla 2:\n  https://dosmicos.co/collections/ruanas?talla_custom=2+%283+-+12+meses%29\n- Formato INCORRECTO (NO hagas esto):\n  [Ruanas talla 2](https://dosmicos.co/collections/ruanas?talla_custom=2+%283+-+12+meses%29)\n- Si no encuentras el link exacto en tu base de conocimiento para una talla específica, indica al cliente que visite dosmicos.co y filtre por talla.\n\n🖼️ ENVÍO DE FOTOS INDIVIDUALES — SOLO CUANDO EL CLIENTE LAS PIDA:\n- SOLO incluye tags [PRODUCT_IMAGE_ID:ID] cuando el cliente EXPLÍCITAMENTE pida ver fotos de un producto específico\n- Si el cliente pregunta por un producto ESPECÍFICO por nombre, ahí sí puedes incluir la foto\n- Ejemplo: "Claro, aquí te muestro la Ruana Caballo [PRODUCT_IMAGE_ID:123]"\n- NUNCA digas que no puedes mostrar imágenes\n\n🎨 CONSULTAS POR COLOR U OTROS ATRIBUTOS — REGLA CRÍTICA:\n- Los productos de Dosmicos tienen SOLO variantes de TALLA (2, 4, 6, 8, 10, 12), NO variantes de color.\n- El color es parte del DISEÑO del producto. Ejemplo: "Ruana Unicornio" ES morada/lila por diseño, "Ruana Dinosaurio" ES verde, etc.\n- Cuando un cliente dice "unicornio morada", "la rosada", "el azul", está describiendo el producto por su apariencia visual. Busca el producto por NOMBRE (ignorando el color) y verifica la TALLA.\n- NUNCA digas que un producto "no está disponible" solo porque el cliente mencionó un color que no aparece como variante. Los colores NO son variantes.\n- Si no puedes identificar qué producto quiere por el color, pregunta cuál diseño/animal le interesa, o envía el link de la colección.';
     
     if (toneConfig) {
       fullSystemPrompt += `\n\n${toneConfig}`;
@@ -694,7 +698,8 @@ ENVÍO GRATIS desde $150.000 en casi todo Colombia (excepto zonas remotas).
 
 BOGOTÁ:
 - Estándar: $3.000 (1-3 días hábiles) → GRATIS si pedido ≥ $150.000
-- Express: $14.000 (12 horas) → NO aplica envío gratis, NO pago contra entrega, solo pago anticipado
+- Express: $15.000 (12 horas) → NO aplica envío gratis, NO pago contra entrega, solo pago anticipado
+- Si la clienta ya dijo express, nunca dejes el estándar por defecto: usa $15.000 en el cálculo y en el total final.
 
 MEDELLÍN Y RESTO DE ANTIOQUIA: $5.000 → GRATIS desde $150.000
 
@@ -728,7 +733,7 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 5. Express Bogotá: NO acepta pago contra entrega, debe pagar anticipadamente
 6. Pasar el campo shippingCost con el valor correcto al llamar create_order (DEBE coincidir con lo que le mostraste al cliente en el desglose)
 7. Si el cliente NO especifica express, asumir envío estándar
-8. URGENCIA EN BOGOTÁ: Si el cliente menciona que necesita el pedido rápido, urgente, para un evento próximo (baby shower, cumpleaños, etc.), o en general expresa prisa → SIEMPRE ofrecer el envío EXPRESS ($14.000, entrega en 12 horas) como opción además del estándar. Explicar las diferencias para que el cliente elija.
+8. URGENCIA EN BOGOTÁ: Si el cliente menciona que necesita el pedido rápido, urgente, para un evento próximo (baby shower, cumpleaños, etc.), o en general expresa prisa → SIEMPRE ofrecer el envío EXPRESS ($15.000, entrega en 12 horas) como opción además del estándar. Explicar las diferencias para que el cliente elija.
 
 ⚠️ REGLA CRÍTICA SOBRE PRECIOS Y ENVÍO — NO CAMBIAR NUNCA EL CÁLCULO:
 - IMPORTANTE: Cada variante/talla puede tener un PRECIO DIFERENTE. Usa el precio específico de la variante que el cliente eligió (aparece como "Precio:$XX.XXX" junto a cada variante en el catálogo). NO asumas que todas las variantes tienen el mismo precio.
@@ -742,9 +747,13 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
     // Add image handling rules
     fullSystemPrompt += `\n\n📸 CUANDO EL CLIENTE ENVÍA IMÁGENES — REGLA CRÍTICA:
 - TÚ SÍ PUEDES TOMAR PEDIDOS. NUNCA digas "no puedo tomar pedidos por aquí" ni nada similar. Tu función principal ES crear pedidos.
-- Si el cliente envía una imagen o screenshot de productos (de la tienda, Instagram, etc.), analiza la imagen para identificar qué productos quiere.
-- Si puedes reconocer los productos en la imagen, menciónalos por nombre y pregunta la talla y cantidad.
-- Si NO puedes identificar los productos en la imagen, pregunta amablemente: "¡Qué lindos productos! ¿Me podrías decir el nombre del producto o diseño que te interesa y la talla que necesitas? Así te ayudo a crear tu pedido. 😊"
+- Si el cliente envía una imagen o screenshot de productos (de la tienda, Instagram, etc.), NO intentes reconocer productos por apariencia visual. Usa solo el OCR/texto visible y lo que escriba el cliente.
+- Si es un screenshot, usa el texto OCR visible tal como aparezca (título, talla, precio, botones) como base principal antes de pedir cualquier aclaración; no inventes producto, diseño, animal, color o modelo por la imagen.
+- Si el cliente escribe el nombre exacto del producto, o responde con el nombre de catálogo después de que se lo pediste, trátalo como producto ya seleccionado y revisa disponibilidad/precio en el catálogo. No respondas "No tengo esa información" si el producto aparece en el catálogo.
+- Si el cliente ya compartió un link de producto o dice "esta/ese/esa/este" sobre un producto ya visto, trátalo como producto ya seleccionado. NO lo mandes al catálogo otra vez; continúa con el checkout y pide solo lo faltante.
+- Si Dosmicos ya envió un link de colección/catálogo con todos los productos y el cliente responde "esta", "este", "esa", "ese", "la de la foto", "quiero esa" o una talla, asume que está intentando comprar desde ese catálogo: NUNCA respondas "primero eliges el producto en el catálogo" ni reenvíes el catálogo; ayuda a cerrar el pedido y pide solo el dato faltante.
+- Si la captura/OCR ya deja claro el producto, no le pidas el nombre exacto ni una foto más clara; continúa con el checkout y pide solo lo faltante para cerrarlo.
+- Si NO hay texto legible ni nombre escrito, pregunta amablemente: "¿Me pasas porfa el nombre o la referencia del producto y la talla que necesitas? Así te ayudo a crear tu pedido. 😊"
 - NUNCA respondas que no puedes ayudar. SIEMPRE intenta avanzar hacia la venta.`;
 
     // Add size/talla validation rules
@@ -793,7 +802,8 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
 3. NO crear el pedido hasta que el cliente haya elegido su método de pago
 4. Si el cliente elige "contra entrega", pasar paymentMethod="contra_entrega" al llamar create_order
 5. Si el cliente elige "link de pago" o pago online, pasar paymentMethod="link_de_pago" al llamar create_order
-6. NUNCA asumir el método de pago, SIEMPRE preguntar`;
+6. NUNCA asumir el método de pago, SIEMPRE preguntar
+7. Si el cliente pregunta por número de cuenta, datos de transferencia, cuenta bancaria, Bancolombia, Nequi, Daviplata, comprobante o saldo, responde con los datos bancarios exactos disponibles en la base de conocimiento y NO conviertas esa pregunta en una elección de método de pago`;
 
     // Add multi-product order rules
     fullSystemPrompt += `\n\n📦 REGLA DE PEDIDOS CON MÚLTIPLES PRODUCTOS — CRÍTICO, OBLIGATORIO:
@@ -822,7 +832,7 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
     fullSystemPrompt += `\n\n⏰ RECORDATORIO DE FECHA (REPITO PORQUE ES CRÍTICO): Hoy es ${diaSemana.toUpperCase()} ${colDay} de ${mes} de ${colYear}, ${colHour}:${colMinute} hora Colombia. NO es otro día. Si el historial de esta conversación dice otro día, IGNÓRALO — solo esta fecha es correcta.`;
 
     console.log("Full system prompt length:", fullSystemPrompt.length);
-    console.log("Calling OpenAI GPT-4o-mini with", messages?.length || 0, "messages");
+    console.log("Calling OpenAI GPT-4o with", messages?.length || 0, "messages");
 
     // Function definitions for order creation and payment
     const functions = [
@@ -859,7 +869,7 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
               minItems: 1
             },
             notes: { type: "string", description: "Notas adicionales (opcional)" },
-            shippingCost: { type: "number", description: "Costo de envío en COP calculado según la política de envíos. Si aplica envío gratis (pedido ≥$150.000 en zonas elegibles), pasar 0." },
+            shippingCost: { type: "number", description: "Costo de envío en COP calculado según la política de envíos. Si la clienta pidió express en Bogotá, pasar 15000; si aplica envío gratis (pedido ≥$150.000 en zonas elegibles), pasar 0." },
             paymentMethod: { type: "string", enum: ["link_de_pago", "contra_entrega"], description: "Método de pago elegido por el cliente. 'link_de_pago' genera un link de pago online. 'contra_entrega' es pago contra entrega (COD)." }
           },
           required: ["customerName", "cedula", "email", "phone", "address", "city", "department", "lineItems", "shippingCost", "paymentMethod"]
@@ -892,6 +902,12 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
       }
     ];
 
+    const imageOcrCache = new Map<string, Promise<string | null>>();
+    const messagesForAI = await Promise.all((messages || []).map(async (message: any) => ({
+      ...message,
+      content: await buildVisionImageContent(message, OPENAI_API_KEY || '', imageOcrCache),
+    })));
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -899,10 +915,10 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: fullSystemPrompt },
-          ...(messages || []),
+          ...messagesForAI,
         ],
         functions: functions,
         function_call: "auto",
@@ -910,7 +926,6 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
         temperature: 0.7,
       }),
     });
-
     if (!response.ok) {
       const errorText = await response.text();
       console.error("OpenAI API error:", response.status, errorText);
@@ -983,15 +998,7 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
           const normalizeForMatch = (s: string) => (s || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
           const scoreProductMatch = (catalogTitle: string, aiName: string): number => {
-            const a = normalizeForMatch(catalogTitle);
-            const b = normalizeForMatch(aiName);
-            if (a === b) return 100;
-            if (a.includes(b) || b.includes(a)) return 80;
-            const aWords = a.split(/\s+/).filter(w => w.length > 2);
-            const bWords = b.split(/\s+/).filter(w => w.length > 2);
-            if (bWords.length === 0) return 0;
-            const matches = bWords.filter(bw => aWords.some(aw => aw.includes(bw) || bw.includes(aw)));
-            return Math.round((matches.length / bWords.length) * 70);
+            return scoreProductNameMatch(catalogTitle, aiName);
           };
 
           for (const item of lineItems) {
@@ -1014,18 +1021,30 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
             // Step 1: Find product by name
             let bestProduct: any = null;
             let bestScore = 0;
+            let secondBestScore = 0;
 
             for (const p of allShopifyProducts) {
               const score = scoreProductMatch(p.title, item.productName);
               if (score > bestScore) {
+                secondBestScore = bestScore;
                 bestScore = score;
                 bestProduct = p;
+              } else if (score > secondBestScore) {
+                secondBestScore = score;
               }
             }
 
-            if (!bestProduct || bestScore < 50) {
-              console.warn(`⚠️ No product match found for "${item.productName}" (best score: ${bestScore}). Keeping AI-provided IDs.`);
-              continue;
+            if (!bestProduct || bestScore < 85 || (bestScore < 100 && secondBestScore > 0 && bestScore - secondBestScore <= 5)) {
+              console.warn(`⚠️ Ambiguous product match for "${item.productName}" (best score: ${bestScore}, second best: ${secondBestScore}). Asking for confirmation before creating the link.`);
+              return new Response(
+                JSON.stringify({
+                  response: "Veo la foto, pero no estoy segura del producto exacto. ¿Me confirmas el nombre completo para enviarte el link correcto?",
+                  order_created: false,
+                  needs_attention: true,
+                  needs_product_confirmation: true,
+                }),
+                { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+              );
             }
 
             const pidChanged = bestProduct.id !== item.productId;
@@ -1050,7 +1069,8 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
             // Use item.size (number) as the PRIMARY source of truth for variant resolution.
             // This is more reliable than variantName/variantId because it's a single number
             // that the AI confirmed to the customer (e.g., 2, 4, 6, 8, 10, 12).
-            const targetSize = item.size != null ? String(item.size) : ((item.variantName || '').match(/(\d+)/) || [])[1];
+            const anyItem = item as any;
+            const targetSize = anyItem.size != null ? String(anyItem.size) : ((item.variantName || '').match(/(\d+)/) || [])[1];
             let resolvedVariant: any = null;
 
             if (targetSize) {
@@ -1116,6 +1136,25 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
           // ======= SHIPPING COST: Calculate server-side but respect express shipping from AI =======
           const rawAiShipping = Number(orderArgs.shippingCost) || 0;
           console.log(`  📦 SHIPPING DEBUG: AI sent shippingCost="${rawAiShipping}" (type=${typeof orderArgs.shippingCost})`);
+
+          const customerRequestedExpressShipping = (messages || [])
+            .filter((message: any) => message?.role === 'user')
+            .map((message: any) => {
+              const content = message?.content;
+              if (typeof content === 'string') return content;
+              if (Array.isArray(content)) {
+                return content.map((part: any) => {
+                  if (typeof part === 'string') return part;
+                  return part?.text ?? part?.content ?? '';
+                }).join(' ');
+              }
+              return String(content ?? '');
+            })
+            .join(' ')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .includes('express');
 
           // Helper: find variant price with fallback
           const getVariantPrice = (item: any): number => {
@@ -1194,13 +1233,13 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
           const isBogota = city.includes('bogota') || dept.includes('bogota');
           const matchedZone = isBogota ? 'bogota' : Object.keys(shippingZones).find(zone => dept.includes(zone));
 
-          // Check if AI is requesting express shipping (Bogotá express = $14,000)
-          const isExpressRequest = isBogota && rawAiShipping === 14000;
+          // Check if AI is requesting express shipping (Bogotá express = $15,000)
+          const isExpressRequest = isBogota && (rawAiShipping === 15000 || customerRequestedExpressShipping);
 
           if (isExpressRequest) {
             // AI confirmed express shipping with the customer — respect it
-            calculatedShippingCost = 14000;
-            console.log(`  🚀 EXPRESS shipping: Bogotá express $14,000 (AI confirmed with customer)`);
+            calculatedShippingCost = 15000;
+            console.log(`  🚀 EXPRESS shipping: Bogotá express $15,000 (AI confirmed with customer)`);
           } else if (matchedZone) {
             const isNoFreeShipping = noFreeShippingZones.some(z => dept.includes(z));
 

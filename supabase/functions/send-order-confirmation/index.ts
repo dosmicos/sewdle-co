@@ -100,13 +100,19 @@ serve(async (req) => {
       );
 
     } else if (body.action === 'send_bulk') {
-      // Find all COD orders without confirmation
+      // Find all COD orders without confirmation, not already prepared/packed, in the last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
       const { data: codOrders, error: ordersError } = await supabase
         .from('shopify_orders')
         .select('shopify_order_id, order_number, customer_first_name, customer_last_name, customer_phone, shipping_address, billing_address, total_price, tags')
         .eq('organization_id', body.organizationId)
         .ilike('tags', '%Contraentrega%')
         .not('tags', 'ilike', '%Confirmado%')
+        .not('tags', 'ilike', '%Empacado%')
+        .not('tags', 'ilike', '%Preparado%')
+        .gte('created_at_shopify', thirtyDaysAgo.toISOString())
         .is('cancelled_at', null)
         .order('created_at_shopify', { ascending: false });
 
@@ -135,14 +141,19 @@ serve(async (req) => {
 
       const alreadySent = new Set((existingConfirmations || []).map(c => c.shopify_order_id));
       const ordersToSend = codOrders.filter(o => !alreadySent.has(o.shopify_order_id));
+      const ordersWithPhone = ordersToSend.filter((order) => {
+        const rawPhone = order.shipping_address?.phone || order.customer_phone || order.billing_address?.phone;
+        return Boolean(rawPhone && normalizeColombianPhone(rawPhone));
+      });
+      const skippedNoPhone = ordersToSend.length - ordersWithPhone.length;
 
-      console.log(`📦 Bulk send: ${codOrders.length} COD orders, ${ordersToSend.length} need confirmation`);
+      console.log(`📦 Bulk send: ${codOrders.length} COD orders, ${ordersWithPhone.length} need confirmation, ${skippedNoPhone} without phone`);
 
       let sent = 0;
       let failed = 0;
       const errors: Array<{ order: string; error: string }> = [];
 
-      for (const order of ordersToSend) {
+      for (const order of ordersWithPhone) {
         try {
           const result = await sendConfirmation(
             supabase, body.organizationId, order.shopify_order_id,
@@ -170,6 +181,7 @@ serve(async (req) => {
           sent,
           failed,
           skipped: alreadySent.size,
+          skipped_no_phone: skippedNoPhone,
           errors: errors.length > 0 ? errors : undefined
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -374,18 +386,21 @@ Gracias por tu compra!`;
   const templateName = Deno.env.get('WHATSAPP_COD_TEMPLATE_NAME') || '';
   let sendResult: { ok: boolean; messageId?: string; error?: any };
 
+  const safeTemplateText = (value: string | null | undefined, fallback: string) =>
+    (value && value.trim() ? value.trim() : fallback);
+
   if (templateName) {
     // Send as WhatsApp Template Message (works outside 24h window)
     sendResult = await sendWhatsAppTemplate(
       phoneNumberId, whatsappToken, phone,
       templateName, 'es_CO',
       [
-        { type: 'text', text: customerName },
-        { type: 'text', text: orderNum },
-        { type: 'text', text: productsForTemplate },
-        { type: 'text', text: total },
-        { type: 'text', text: address },
-        { type: 'text', text: (addr.city || 'N/A').replace(/[\n\t\r]/g, ' ') },
+        { type: 'text', text: safeTemplateText(customerName, 'Cliente') },
+        { type: 'text', text: safeTemplateText(orderNum, 'N/A') },
+        { type: 'text', text: safeTemplateText(productsForTemplate, 'Pedido sin detalle de productos') },
+        { type: 'text', text: safeTemplateText(total, 'N/A') },
+        { type: 'text', text: safeTemplateText(address, 'N/A') },
+        { type: 'text', text: safeTemplateText((addr.city || 'N/A').replace(/[\n\t\r]/g, ' '), 'N/A') },
       ]
     );
   } else {

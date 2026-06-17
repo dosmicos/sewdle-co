@@ -32,6 +32,7 @@ interface OrderData {
   quantity?: number;
   variantId?: number;
   notes?: string;
+  shippingMethod?: string;
   shippingCost?: number;
   paymentMethod?: string;
 }
