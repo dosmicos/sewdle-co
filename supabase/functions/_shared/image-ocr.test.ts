@@ -363,9 +363,12 @@ Deno.test('image OCR helper enriches product screenshots with visible text', asy
   }
 });
 
-Deno.test("OCR uses gpt-4o-mini (not gpt-4o) and logs non-ok OpenAI responses", async () => {
+Deno.test("OCR uses OpenRouter Gemini Flash Lite (fallback gpt-4o-mini), never bare gpt-4o", async () => {
   const src = await Deno.readTextFile(new URL("./image-ocr.ts", import.meta.url));
-  assert(src.includes("model: 'gpt-4o-mini'"), "OCR must call gpt-4o-mini");
-  assert(!/model:\s*'gpt-4o'(?!-)/.test(src), "OCR must not call gpt-4o (was failing in prod)");
-  assert(src.includes("OCR API non-ok"), "OCR must log non-ok OpenAI responses for observability");
+  assert(src.includes("openrouter.ai/api/v1/chat/completions"), "OCR must support the OpenRouter endpoint");
+  assert(src.includes("google/gemini-2.5-flash-lite"), "OCR must use Gemini 2.5 Flash Lite on OpenRouter");
+  assert(src.includes("OPENROUTER_API_KEY"), "OCR must read the OPENROUTER_API_KEY secret");
+  assert(src.includes("'gpt-4o-mini'"), "OCR must keep gpt-4o-mini as the OpenAI fallback");
+  assert(!/model:\s*'gpt-4o'(?!-)/.test(src), "OCR must not hardcode bare gpt-4o (was failing in prod)");
+  assert(src.includes("OCR API non-ok"), "OCR must log non-ok responses for observability");
 });

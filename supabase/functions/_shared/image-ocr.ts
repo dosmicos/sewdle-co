@@ -276,7 +276,17 @@ async function getVisibleTextSummary(
   visionImageSource?: string,
 ): Promise<string | null> {
   const trimmedUrl = String(imageUrl || '').trim();
-  if (!trimmedUrl || !openaiApiKey) return null;
+  // Prefer OpenRouter (Gemini 2.5 Flash Lite — strong OCR, cheap, and off the
+  // flaky OpenAI account that was returning null for every image). Fall back to
+  // OpenAI gpt-4o-mini only if no OPENROUTER_API_KEY secret is configured.
+  const openRouterKey = Deno.env.get('OPENROUTER_API_KEY') || '';
+  const useOpenRouter = Boolean(openRouterKey);
+  const apiKey = useOpenRouter ? openRouterKey : (openaiApiKey || '');
+  const endpoint = useOpenRouter
+    ? 'https://openrouter.ai/api/v1/chat/completions'
+    : 'https://api.openai.com/v1/chat/completions';
+  const ocrModel = useOpenRouter ? 'google/gemini-2.5-flash-lite' : 'gpt-4o-mini';
+  if (!trimmedUrl || !apiKey) return null;
 
   const cached = cache.get(trimmedUrl);
   if (cached) return await cached;
@@ -285,17 +295,17 @@ async function getVisibleTextSummary(
 
   const promise = (async () => {
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${openaiApiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
+          ...(useOpenRouter ? { 'X-Title': 'Sewdle Elsa OCR' } : {}),
         },
         body: JSON.stringify({
-          // gpt-4o-mini is vision-capable, far cheaper, and broadly available.
-          // gpt-4o was failing in production (no account access / quota), which
-          // returned null and broke product recognition from images entirely.
-          model: 'gpt-4o-mini',
+          // OCR model: OpenRouter→Gemini 2.5 Flash Lite (vision, cheap, reliable),
+          // else OpenAI gpt-4o-mini. gpt-4o (the prior model) was failing in prod.
+          model: ocrModel,
           temperature: 0,
           max_tokens: 300,
           messages: [
