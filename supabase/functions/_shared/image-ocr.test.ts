@@ -362,3 +362,10 @@ Deno.test('image OCR helper enriches product screenshots with visible text', asy
     globalThis.fetch = originalFetch;
   }
 });
+
+Deno.test("OCR uses gpt-4o-mini (not gpt-4o) and logs non-ok OpenAI responses", async () => {
+  const src = await Deno.readTextFile(new URL("./image-ocr.ts", import.meta.url));
+  assert(src.includes("model: 'gpt-4o-mini'"), "OCR must call gpt-4o-mini");
+  assert(!/model:\s*'gpt-4o'(?!-)/.test(src), "OCR must not call gpt-4o (was failing in prod)");
+  assert(src.includes("OCR API non-ok"), "OCR must log non-ok OpenAI responses for observability");
+});

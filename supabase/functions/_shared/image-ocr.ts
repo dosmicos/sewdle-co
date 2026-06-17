@@ -292,7 +292,10 @@ async function getVisibleTextSummary(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o',
+          // gpt-4o-mini is vision-capable, far cheaper, and broadly available.
+          // gpt-4o was failing in production (no account access / quota), which
+          // returned null and broke product recognition from images entirely.
+          model: 'gpt-4o-mini',
           temperature: 0,
           max_tokens: 300,
           messages: [
@@ -329,7 +332,13 @@ async function getVisibleTextSummary(
         }),
       });
 
-      if (!response.ok) return null;
+      if (!response.ok) {
+        // Surface the real OpenAI error (429/quota, 401/auth, 404/model) instead
+        // of silently returning null — this is what hid the OCR failure before.
+        const errBody = await response.text().catch(() => '');
+        console.error(`OCR API non-ok: ${response.status} ${errBody.slice(0, 300)}`);
+        return null;
+      }
       const data = await response.json();
       const raw = String(data?.choices?.[0]?.message?.content ?? '').trim();
       if (!raw) return null;

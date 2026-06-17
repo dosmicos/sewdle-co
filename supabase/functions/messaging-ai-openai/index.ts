@@ -966,7 +966,9 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        // Reverted from gpt-4o to gpt-4o-mini: gpt-4o was failing in production
+        // (no account access / quota). gpt-4o-mini is vision-capable and known-good.
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: fullSystemPrompt },
           ...messagesForAI,
