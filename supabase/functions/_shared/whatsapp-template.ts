@@ -3,8 +3,6 @@
  * Template messages can be sent outside the 24-hour messaging window.
  */
 
-import { fetchGraphWithRetry } from './graph-retry.ts';
-
 export async function sendWhatsAppTemplate(
   phoneNumberId: string,
   token: string,
@@ -74,17 +72,16 @@ export async function sendWhatsAppTemplate(
 
     console.log(`📤 Sending WhatsApp template "${templateName}" to ${to}`);
 
-    const { response: resp, data } = await fetchGraphWithRetry(
-      `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      }
-    );
+    const resp = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await resp.json();
 
     if (!resp.ok) {
       console.error('WhatsApp template send error:', data);
