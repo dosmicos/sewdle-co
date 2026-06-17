@@ -608,6 +608,8 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
 
       if (labelResult.success && labelResult.label) {
         onLabelChange?.(labelResult.label);
+        const daneWarning = (labelResult as { dane_warning?: string }).dane_warning;
+        if (daneWarning) toast.warning(daneWarning, { duration: 15000 });
         if (labelResult.label.label_url) {
           const proxyUrl = getProxyLabelUrl(labelResult.label.label_url);
           const printWindow = window.open(proxyUrl, '_blank', 'width=800,height=600');
@@ -684,7 +686,9 @@ export const EnviaShippingButton: React.FC<EnviaShippingButtonProps> = ({
 
     if (result.success && result.label) {
       onLabelChange?.(result.label);
-      
+      const daneWarning = (result as { dane_warning?: string }).dane_warning;
+      if (daneWarning) toast.warning(daneWarning, { duration: 15000 });
+
       if (result.label.label_url) {
         const proxyUrl = getProxyLabelUrl(result.label.label_url);
         const printWindow = window.open(proxyUrl, '_blank', 'width=800,height=600');

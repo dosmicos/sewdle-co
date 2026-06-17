@@ -843,6 +843,18 @@ serve(async (req) => {
     const destDaneCode = daneResult.daneCode;
     console.log(`✅ DANE resolved: ${destDaneCode} (source: ${daneResult.source})`);
 
+    // Low-confidence resolution: the DANE was picked by FUZZY approximation
+    // (not exact/alias). This is exactly how Ubaté once shipped to Sibaté.
+    // Surface a warning so the operator verifies the municipality before
+    // dispatching, and log it loudly for monitoring.
+    const daneLowConfidence = /fuzzy/i.test(daneResult.source);
+    const daneWarning = daneLowConfidence
+      ? `⚠️ La ciudad "${body.destination_city}" se resolvió por aproximación (DANE ${destDaneCode}). Verifica que el municipio de la guía sea el correcto antes de despachar.`
+      : null;
+    if (daneLowConfidence) {
+      console.warn(`🚨 DANE_LOW_CONFIDENCE: order=${body.order_number} city="${body.destination_city}" dept="${body.destination_department}" → ${destDaneCode} (source=${daneResult.source})`);
+    }
+
     // Determine carrier using business rules
     let selectedCarrier = body.preferred_carrier?.toLowerCase();
 
@@ -1336,7 +1348,8 @@ serve(async (req) => {
         tracking_number: shipmentData.trackingNumber,
         label_url: shipmentData.label,
         carrier: shipmentData.carrier || carrierConfig.carrier,
-        delivery_type: enviaRequest.shipment.type === 2 ? 'oficina' : 'domicilio'
+        delivery_type: enviaRequest.shipment.type === 2 ? 'oficina' : 'domicilio',
+        dane_warning: daneWarning,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
