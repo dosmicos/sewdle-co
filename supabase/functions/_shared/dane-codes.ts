@@ -1149,6 +1149,25 @@ for (const entry of DANE_ENTRIES) {
   }
 }
 
+// Aliases para nombres comunes que difieren del nombre oficial DANE.
+// Sin esto, el fuzzy matching puede confundir municipios con nombres similares
+// (ej: "Ubate" → "Sibate" porque tienen distancia Levenshtein = 2 y el nombre
+// oficial "Villa de San Diego de Ubaté" queda muy lejos).
+const MUNICIPALITY_ALIASES: Record<string, string> = {
+  'ubate': 'villa de san diego de ubate',
+  'ubaté': 'villa de san diego de ubate',
+  'san diego de ubate': 'villa de san diego de ubate',
+  'villa de ubate': 'villa de san diego de ubate',
+};
+
+for (const [alias, official] of Object.entries(MUNICIPALITY_ALIASES)) {
+  const normalizedAlias = normalize(alias);
+  const officialEntries = DANE_CODES.get(normalize(official));
+  if (officialEntries && !DANE_CODES.has(normalizedAlias)) {
+    DANE_CODES.set(normalizedAlias, officialEntries);
+  }
+}
+
 function levenshtein(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
