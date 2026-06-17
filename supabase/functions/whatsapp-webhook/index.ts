@@ -8,13 +8,81 @@ import {
 } from "../_shared/elsa-supervision.ts";
 import {
   buildAudioTranscriptionContent,
+  transcribeAudioFromBytes,
   transcribeAudioFromUrl,
 } from "../_shared/audio-transcription.ts";
+import {
+  buildProductSearchContext,
+  buildVisualCandidateInstruction,
+  extractSearchTerms as sharedExtractSearchTerms,
+  extractVisualCandidateSearchTerms,
+  formatProductsForContext as sharedFormatProductsForContext,
+  hasVisualCandidateSearchSignal,
+  isProductQuery as sharedIsProductQuery,
+  searchRelevantProducts as sharedSearchRelevantProducts,
+} from "../_shared/product-matching.ts";
+import {
+  buildImageScreenshotFallbackReply,
+  buildVisionImageContent,
+  contentHasImageSignal,
+  mergeImageContextWithRecentUserTexts,
+  shouldReplaceGenericImageReply,
+} from "../_shared/image-ocr.ts";
+import {
+  buildPaymentLinkMissingUrlFallbackReply,
+  shouldReplacePaymentLinkReplyWithoutUrl,
+} from "../_shared/payment-link-reply-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+function findLatestImageContextMessage(messages: any[] = []): any | undefined {
+  return [...messages]
+    .reverse()
+    .find((msg: any) => msg?.role === 'user' && contentHasImageSignal(msg.content));
+}
+
+function findLatestImageContextIndex(messages: any[] = []): number {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === 'user' && contentHasImageSignal(message.content)) return index;
+  }
+  return -1;
+}
+
+function buildImageContextForFallback(messages: any[] = []): unknown | null {
+  const latestImageIndex = findLatestImageContextIndex(messages);
+  if (latestImageIndex < 0) return null;
+
+  const latestImageMessage = messages[latestImageIndex];
+  const recentUserContents = messages
+    .slice(latestImageIndex)
+    .filter((msg: any) => msg?.role === 'user')
+    .map((msg: any) => msg.content);
+
+  return mergeImageContextWithRecentUserTexts(latestImageMessage.content, recentUserContents);
+}
+
+function latestUserThreadText(messages: any[] = [], limit = 4): string {
+  return [...messages]
+    .filter((msg: any) => msg?.role === 'user')
+    .slice(-limit)
+    .map((msg: any) => {
+      const content = msg?.content;
+      if (typeof content === 'string') return content;
+      if (Array.isArray(content)) {
+        return content
+          .map((part: any) => typeof part === 'string' ? part : String(part?.text || part?.input_text || ''))
+          .filter(Boolean)
+          .join('\n');
+      }
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
 
 // ============== MEDIA DOWNLOAD CONFIG ==============
 const MAX_MEDIA_SIZE = 16 * 1024 * 1024; // 16MB (WhatsApp limit)
@@ -64,7 +132,7 @@ async function fetchMediaUrl(
   messageType: string,
   conversationId: string,
   supabase: any,
-): Promise<{ url: string | null; mimeType: string | null; error?: string }> {
+): Promise<{ url: string | null; mimeType: string | null; audioBytes?: Uint8Array; error?: string }> {
   const accessToken = Deno.env.get('META_WHATSAPP_TOKEN');
   if (!accessToken || !mediaId) {
     return { url: null, mimeType: null, error: 'Missing token or mediaId' };
@@ -178,7 +246,7 @@ async function fetchMediaUrl(
       return { url: null, mimeType, error: 'No public URL' };
     }
 
-    return { url: publicUrl, mimeType };
+    return { url: publicUrl, mimeType, audioBytes: messageType === 'audio' ? uint8Array : undefined };
   } catch (error: any) {
     if (error?.name === 'AbortError') {
       return { url: null, mimeType: null, error: 'Timeout' };
@@ -198,12 +266,23 @@ TU ROL PRINCIPAL:
 - Recomendar la talla correcta según la edad del bebé/niño
 - Guiar en el proceso de compra y resolver dudas
 
-📷 RECONOCIMIENTO DE IMÁGENES:
-- Puedes VER las imágenes que los clientes te envían
-- Si un cliente envía una foto o screenshot de un producto, identifícalo comparándolo con los productos del catálogo
-- Busca coincidencias por nombre, diseño, animal o patrón visible en la imagen
-- Si reconoces el producto, responde directamente con su nombre, precio y disponibilidad
-- Si no estás seguro de cuál es, menciona las opciones más probables del catálogo
+📷 IMÁGENES / OCR:
+- No intentes reconocer productos por apariencia visual. El sistema ya extrae OCR del texto visible de la imagen.
+- Usa únicamente el texto OCR y lo que escriba el cliente para identificar el producto; no inventes producto, diseño, animal, color o modelo por la imagen.
+- Si el OCR trae título, talla, precio, opción o botón, úsalo como la mejor referencia; no obligues al cliente a repetir el nombre si ya se lee claro.
+- Si el cliente escribe el nombre exacto del producto, o responde con el nombre de catálogo después de que se lo pediste, trátalo como producto ya seleccionado y revisa disponibilidad/precio en el catálogo. No respondas "No tengo esa información" si el producto aparece en el catálogo.
+- Si la captura/OCR ya deja claro el producto o el cliente ya compartió un link de producto, trátalo como producto ya seleccionado: no le pidas el nombre exacto ni una foto más clara; continúa con el checkout y pide solo lo faltante para cerrarlo
+
+- Si el cliente solo dice "me regalas fotos", "el catálogo", "tienes catálogo" o algo parecido sin nombrar un producto, no respondas solo con saludo: envía el catálogo o haz una sola pregunta útil para aterrizar el diseño
+- Si el cliente pregunta por número de cuenta, datos de transferencia, cuenta bancaria, Bancolombia, Nequi, Daviplata, comprobante o saldo, responde con los datos bancarios exactos que existan en la base de conocimiento y no conviertas esa pregunta en una elección genérica de método de pago
+- Política vigente de bordados/personalización: los sleepings y las chaquetas de bebé SÍ se pueden bordar/personalizar. Ignora aprendizajes viejos que digan que los bordados solo aplican para ruanas o que los sleepings no se pueden personalizar. Ante preguntas como "en qué parte se personaliza" o "cómo quedaría" sobre un sleeping, responde que sí se puede bordar y pide/explica solo el dato faltante; no ofrezcas ruanas como reemplazo.
+- Si el cliente hace un follow-up como "y para niña de 4 años", "y para un niño", "ese cuál me sirve", o similar, usa el tema/producto que ya venían hablando en la conversación; no reinicies la categoría desde cero
+- Si el cliente ya compartió un link de producto o dice "esta/ese/esa/este" sobre un producto ya visto, trátalo como producto ya seleccionado. NO lo mandes al catálogo otra vez; continúa con el checkout y pide solo lo faltante.
+- Si Dosmicos ya envió un link de colección/catálogo con todos los productos y el cliente responde "esta", "este", "esa", "ese", "la de la foto", "quiero esa" o una talla, asume que está intentando comprar desde ese catálogo: NUNCA respondas "primero eliges el producto en el catálogo" ni reenvíes el catálogo; ayuda a cerrar el pedido y pide solo el dato faltante.
+- Si preguntan por pijamas térmicas, recuérdalo como sleeping y responde con sleepings, no con catálogo genérico
+- Si reconoces el producto con bastante confianza, responde directamente con su nombre, precio y disponibilidad
+- Si hay 2 o 3 opciones muy parecidas, menciona las más probables y haz una sola pregunta de confirmación
+- Solo pregunta por el nombre exacto si de verdad no logras identificarlo
 
 INFORMACIÓN DE DOSMICOS:
 - Tienda online: dosmicos.com
@@ -543,38 +622,12 @@ async function sendWhatsAppImage(phoneNumber: string, imageUrl: string, caption:
 
 // Extract search keywords from customer message
 function extractSearchTerms(message: string): string[] {
-  const stopWords = new Set([
-    'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'de', 'del', 'en', 'con', 'por', 'para',
-    'que', 'qué', 'cual', 'cuál', 'como', 'cómo', 'cuanto', 'cuánto', 'tienen', 'tienen', 'tienes',
-    'hay', 'está', 'estan', 'son', 'es', 'quiero', 'busco', 'necesito', 'me', 'mi', 'te', 'tu',
-    'hola', 'buenos', 'dias', 'tardes', 'noches', 'gracias', 'por', 'favor', 'ayuda', 'info',
-    'información', 'precio', 'precios', 'cuesta', 'cuestan', 'disponible', 'disponibles', 'stock',
-    'envío', 'envio', 'enviar', 'comprar', 'pedir', 'ver', 'mostrar', 'enseñar', 'foto', 'fotos',
-    'imagen', 'imágenes', 'imagenes'
-  ]);
-
-  const normalized = message
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove accents
-    .replace(/[^\w\s]/g, ' ') // Remove punctuation
-    .split(/\s+/)
-    .filter(word => word.length > 2 && !stopWords.has(word));
-
-  return [...new Set(normalized)];
+  return sharedExtractSearchTerms(message);
 }
 
 // Check if message is a product-related query
 function isProductQuery(message: string): boolean {
-  const productIndicators = [
-    'producto', 'precio', 'cuesta', 'cuestan', 'stock', 'disponible', 'talla', 'size',
-    'color', 'tienen', 'hay', 'busco', 'quiero', 'comprar', 'ver', 'mostrar', 'sleeping',
-    'bag', 'ruana', 'cobija', 'bordado', 'walker', 'manta', 'sku', 'referencia',
-    'catalogo', 'catálogo', 'foto', 'imagen'
-  ];
-  
-  const lowerMsg = message.toLowerCase();
-  return productIndicators.some(indicator => lowerMsg.includes(indicator));
+  return sharedIsProductQuery(message);
 }
 
 // Search products by relevance to customer message
@@ -583,105 +636,15 @@ function searchRelevantProducts(
   searchTerms: string[],
   maxResults: number = 10
 ): any[] {
-  if (searchTerms.length === 0) {
-    // Return top products by stock if no search terms
-    return allProducts
-      .map(p => ({
-        product: p,
-        totalStock: (p.variants || []).reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0)
-      }))
-      .filter(p => p.totalStock > 0)
-      .sort((a, b) => b.totalStock - a.totalStock)
-      .slice(0, maxResults)
-      .map(p => p.product);
-  }
-
-  // Score each product by relevance
-  const scored = allProducts.map(product => {
-    let score = 0;
-    const title = (product.title || '').toLowerCase();
-    const description = (product.body_html || '').toLowerCase().replace(/<[^>]*>/g, '');
-    const tags = (product.tags || '').toLowerCase();
-    const productType = (product.product_type || '').toLowerCase();
-    const variants = product.variants || [];
-    const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0);
-    
-    // Skip out of stock products
-    if (totalStock === 0) return { product, score: -1 };
-
-    for (const term of searchTerms) {
-      // Title match (highest weight)
-      if (title.includes(term)) score += 10;
-      
-      // SKU exact match
-      const skuMatch = variants.some((v: any) => (v.sku || '').toLowerCase() === term);
-      if (skuMatch) score += 15;
-      
-      // Variant title match (size, color)
-      const variantMatch = variants.some((v: any) => 
-        (v.title || '').toLowerCase().includes(term) ||
-        (v.option1 || '').toLowerCase().includes(term) ||
-        (v.option2 || '').toLowerCase().includes(term) ||
-        (v.option3 || '').toLowerCase().includes(term)
-      );
-      if (variantMatch) score += 8;
-      
-      // Tags match
-      if (tags.includes(term)) score += 5;
-      
-      // Product type match
-      if (productType.includes(term)) score += 6;
-      
-      // Description match (lower weight)
-      if (description.includes(term)) score += 3;
-    }
-
-    return { product, score, totalStock };
-  });
-
-  // Filter and sort by score, then by stock
-  return scored
-    .filter(s => s.score > 0)
-    .sort((a, b) => b.score - a.score || b.totalStock - a.totalStock)
-    .slice(0, maxResults)
-    .map(s => s.product);
+  return sharedSearchRelevantProducts(allProducts, searchTerms, maxResults);
 }
 
 // Format products for AI context
 function formatProductsForContext(products: any[]): string {
-  if (products.length === 0) return '';
-
-  let context = '\n\n📦 PRODUCTOS RELEVANTES ENCONTRADOS:\n';
-  context += '⚠️ IMPORTANTE: Usa SOLO estos productos para responder. NO inventes otros.\n';
-  context += '🔔 RECUERDA: Si el cliente pregunta por una categoría/talla, envía el LINK de la colección. Solo incluye [PRODUCT_IMAGE_ID:ID] si el cliente pide ver fotos de un producto específico.\n\n';
-
-  products.forEach((product: any, index: number) => {
-    const variants = product.variants || [];
-    const totalStock = variants.reduce((sum: number, v: any) => sum + (v.inventory_quantity || 0), 0);
-    const price = variants[0]?.price 
-      ? `$${Number(variants[0].price).toLocaleString('es-CO')} COP` 
-      : 'Consultar';
-
-    // Build variant info with stock
-    const variantDetails = variants
-      .filter((v: any) => (v.inventory_quantity || 0) > 0)
-      .slice(0, 8)
-      .map((v: any) => `${v.title}: ${v.inventory_quantity} uds`)
-      .join(' | ');
-
-    context += `${index + 1}. ${product.title} [PRODUCT_IMAGE_ID:${product.id}]\n`;
-    context += `   💰 Precio: ${price}\n`;
-    context += `   📊 Stock total: ${totalStock} unidades\n`;
-    if (variantDetails) {
-      context += `   📐 Variantes disponibles: ${variantDetails}\n`;
-    }
-    context += '\n';
-  });
-
-  return context;
+  return sharedFormatProductsForContext(products);
 }
 
-// Generate AI response using OpenAI GPT-4o-mini
+// Generate AI response using OpenAI GPT-4o
 async function generateAIResponse(
   userMessage: string, 
   conversationHistory: any[],
@@ -691,6 +654,7 @@ async function generateAIResponse(
   shopifyCredentials: any
 ): Promise<{ text: string; productImages: Array<{ product_id: number; image_url: string; product_name: string }> }> {
   const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+  const imageOcrCache = new Map<string, Promise<string | null>>();
   
   if (!openaiApiKey) {
     console.log('OPENAI_API_KEY not configured, skipping AI response');
@@ -701,9 +665,28 @@ async function generateAIResponse(
     // 📨 LOG: Message received
     console.log(`📨 Mensaje recibido del cliente: ${userMessage}`);
     
-    // Extract search terms from customer message
-    const searchTerms = extractSearchTerms(userMessage);
-    const isProductRelated = isProductQuery(userMessage);
+    const historyMessages = await Promise.all(conversationHistory.slice(-10).map(async (msg: any) => {
+      const role = msg.direction === 'inbound' ? 'user' : 'assistant';
+
+      return {
+        role,
+        content: await buildVisionImageContent(
+          {
+            role,
+            content: msg.content || '',
+            media_url: msg.media_url,
+            message_type: msg.message_type,
+          },
+          openaiApiKey,
+          imageOcrCache,
+        ),
+      };
+    }));
+
+    // Extract search terms from customer message + OCR-enriched history
+    const contextualSearchSource = buildProductSearchContext(userMessage, historyMessages);
+    const searchTerms = extractSearchTerms(contextualSearchSource);
+    const isProductRelated = isProductQuery(contextualSearchSource);
     
     console.log(`🔍 Buscando productos relevantes para: "${searchTerms.join(', ')}" (isProductQuery: ${isProductRelated})`);
     
@@ -763,11 +746,17 @@ async function generateAIResponse(
             });
             
             if (isProductRelated && connectedShopifyProducts.length > 0) {
-              // Search for relevant products based on customer message
-              relevantProducts = searchRelevantProducts(connectedShopifyProducts, searchTerms, 10);
+              const visualSearchTerms = hasVisualCandidateSearchSignal(contextualSearchSource)
+                ? extractVisualCandidateSearchTerms(contextualSearchSource)
+                : [];
+              const activeSearchTerms = visualSearchTerms.length ? visualSearchTerms : searchTerms;
+
+              // Search for relevant products based on customer message or visual OCR clues
+              relevantProducts = searchRelevantProducts(connectedShopifyProducts, activeSearchTerms, visualSearchTerms.length ? 3 : 10);
               
-              // If no matches found, fallback to top products by stock
-              if (relevantProducts.length === 0) {
+              // If no matches found, fallback to top products by stock only for normal text queries.
+              // For visual-photo candidates, avoid offering unrelated popular products.
+              if (relevantProducts.length === 0 && visualSearchTerms.length === 0) {
                 console.log('🔍 No hay coincidencias exactas, usando productos populares como fallback');
                 relevantProducts = searchRelevantProducts(connectedShopifyProducts, [], 5);
               }
@@ -777,6 +766,9 @@ async function generateAIResponse(
               
               // Format relevant products for context
               productCatalog = formatProductsForContext(relevantProducts);
+              if (visualSearchTerms.length && relevantProducts.length > 0) {
+                productCatalog += buildVisualCandidateInstruction(contextualSearchSource, relevantProducts);
+              }
             } else if (!isProductRelated) {
               console.log('📦 Mensaje no relacionado con productos, omitiendo catálogo del contexto');
               productCatalog = '\n\nNota: El catálogo de productos está disponible si el cliente pregunta por productos específicos.\n';
@@ -899,24 +891,9 @@ async function generateAIResponse(
     // 🤖 LOG: Context sent to AI
     console.log(`🤖 Contexto enviado a IA: ${systemPrompt.substring(0, 500)}...`);
 
-    // Build conversation history for context (include images for vision)
-    const historyMessages = conversationHistory.slice(-10).map((msg: any) => {
-      const role = msg.direction === 'inbound' ? 'user' : 'assistant';
+    // historyMessages already built above with OCR enrichment
 
-      if (role === 'user' && msg.message_type === 'image' && msg.media_url) {
-        return {
-          role,
-          content: [
-            { type: 'text', text: msg.content || 'El cliente envió esta imagen.' },
-            { type: 'image_url', image_url: { url: msg.media_url, detail: 'auto' } }
-          ]
-        };
-      }
-
-      return { role, content: msg.content || '' };
-    });
-
-    console.log('Calling OpenAI GPT-4o-mini for WhatsApp response');
+    console.log('Calling OpenAI GPT-4o for WhatsApp response');
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -925,7 +902,7 @@ async function generateAIResponse(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: systemPrompt },
           ...historyMessages,
@@ -1391,31 +1368,32 @@ async function handleAIAutoReply(
     .select('*')
     .eq('conversation_id', conversation.id)
     .order('sent_at', { ascending: false })
-    .limit(10);
+    .limit(20);
 
   const aiConfig = channel.ai_config || {};
   const aiRuntime = resolveAiRuntime(aiConfig, { defaultProvider: 'minimax' });
   const functionName = aiRuntime.functionName;
 
-  const messagesForAI = [
-    ...(historyMessages || []).reverse().map((m: any) => {
-      const role = m.direction === 'inbound' ? 'user' : 'assistant';
+  const openaiApiKey = Deno.env.get('OPENAI_API_KEY') || '';
+  const imageOcrCache = new Map<string, Promise<string | null>>();
 
-      // Include image URLs for vision support (gpt-4o-mini supports images)
-      if (role === 'user' && m.message_type === 'image' && m.media_url) {
-        return {
+  const messagesForAI = await Promise.all((historyMessages || []).reverse().map(async (m: any) => {
+    const role = m.direction === 'inbound' ? 'user' : 'assistant';
+
+    return {
+      role,
+      content: await buildVisionImageContent(
+        {
           role,
-          content: [
-            { type: 'text', text: m.content || 'El cliente envió esta imagen.' },
-            { type: 'image_url', image_url: { url: m.media_url, detail: 'auto' } }
-          ]
-        };
-      }
-
-      return { role, content: m.content || '' };
-    }),
-    { role: 'user', content }
-  ];
+          content: m.content || '',
+          media_url: m.media_url,
+          message_type: m.message_type,
+        },
+        openaiApiKey,
+        imageOcrCache,
+      ),
+    };
+  }));
 
   const { data: aiData, error: aiError } = await supabase.functions.invoke(functionName, {
     body: {
@@ -1450,6 +1428,17 @@ async function handleAIAutoReply(
   if (!aiText) {
     console.log(`⚠️ [${channelType}] No AI response generated`);
     return;
+  }
+
+  const imageContextForFallback = buildImageContextForFallback(messagesForAI || []);
+  if (imageContextForFallback && shouldReplaceGenericImageReply(aiText, imageContextForFallback)) {
+    console.log(`🖼️ [${channelType}] Generic image reply detected; replacing with screenshot-aware fallback`);
+    aiText = buildImageScreenshotFallbackReply(imageContextForFallback);
+  }
+
+  if (shouldReplacePaymentLinkReplyWithoutUrl(aiText, [], latestUserThreadText(messagesForAI || []))) {
+    console.warn(`💳 [${channelType}] Payment-link reply claimed a link without URL; replacing before delivery`);
+    aiText = buildPaymentLinkMissingUrlFallbackReply();
   }
 
   const deliveryPlan = resolveAiDeliveryPlan(aiRuntime, aiText);
@@ -1624,7 +1613,7 @@ serve(async (req) => {
                 content = message.text?.body || '';
               } else if (message.type === 'image') {
                 mediaId = message.image?.id || null;
-                content = message.image?.caption || 'El cliente envió una imagen de un producto. Analiza la imagen y responde.';
+                content = message.image?.caption || 'El cliente envió una imagen de un producto. Usa solo el OCR/texto visible de la imagen para responder.';
                 messageType = 'image';
               } else if (message.type === 'audio') {
                 mediaId = message.audio?.id || null;
@@ -1771,10 +1760,24 @@ serve(async (req) => {
 
                 if (messageType === 'audio' && mediaUrl) {
                   console.log('🎙️ Transcribing inbound WhatsApp audio before invoking Elsa');
-                  const transcription = await transcribeAudioFromUrl({
-                    mediaUrl,
-                    mimeType: mediaMimeType,
-                  });
+                  let transcription = res.audioBytes?.length
+                    ? await transcribeAudioFromBytes({
+                      audioBytes: res.audioBytes,
+                      mimeType: mediaMimeType,
+                    })
+                    : await transcribeAudioFromUrl({
+                      mediaUrl,
+                      mimeType: mediaMimeType,
+                    });
+
+                  if (!transcription.text && mediaUrl && res.audioBytes?.length) {
+                    console.warn('⚠️ Audio byte transcription failed, retrying with stored media URL');
+                    transcription = await transcribeAudioFromUrl({
+                      mediaUrl,
+                      mimeType: mediaMimeType,
+                    });
+                  }
+
                   audioTranscriptionMetadata = transcription.metadata;
 
                   if (transcription.text) {
@@ -2535,8 +2538,8 @@ serve(async (req) => {
               
               console.log(`AI status check - Channel: ${aiEnabledOnChannel}, Conversation ai_managed: ${conversation.ai_managed}, Will respond: ${aiEnabledOnChannel && aiEnabledOnConversation}`);
               
-              // AI responds to text, image (with caption or for vision), button, and interactive messages
-              const aiRespondableTypes = ['text', 'image', 'button', 'interactive'];
+              // AI responds to text, audio (after transcription), image (with caption or for vision), button, and interactive messages
+              const aiRespondableTypes = ['text', 'audio', 'image', 'button', 'interactive'];
               if (aiEnabledOnChannel && aiEnabledOnConversation && content && aiRespondableTypes.includes(messageType)) {
                 console.log('AI is enabled (channel + conversation), applying debounce...');
 
@@ -2605,7 +2608,7 @@ serve(async (req) => {
                   .select('*')
                   .eq('conversation_id', conversation.id)
                   .order('sent_at', { ascending: false })
-                  .limit(15);
+                  .limit(20);
 
                 const channelAiConfig = channel.ai_config || {};
                 const aiRuntime = resolveAiRuntime(channelAiConfig);
@@ -2613,23 +2616,26 @@ serve(async (req) => {
                 console.log(`Using AI provider: ${aiRuntime.provider}, function: ${functionName}, supervised: ${aiRuntime.supervised}`);
 
                 // Build messages for the AI function — all accumulated messages are already in the DB
-                // Include image URLs for vision analysis when available
-                const messagesForAI = (historyMessages || []).reverse().map((m: any) => {
+                // Include OCR text + image URLs for vision analysis when available
+                const openaiApiKey = Deno.env.get('OPENAI_API_KEY') || '';
+                const imageOcrCache = new Map<string, Promise<string | null>>();
+                const messagesForAI = await Promise.all((historyMessages || []).reverse().map(async (m: any) => {
                   const role = m.direction === 'inbound' ? 'user' : 'assistant';
 
-                  // For user image messages with a stored media URL, include the image for vision
-                  if (role === 'user' && m.message_type === 'image' && m.media_url) {
-                    return {
-                      role,
-                      content: [
-                        { type: 'text', text: m.content || 'El cliente envió esta imagen.' },
-                        { type: 'image_url', image_url: { url: m.media_url, detail: 'auto' } }
-                      ]
-                    };
-                  }
-
-                  return { role, content: m.content || '' };
-                });
+                  return {
+                    role,
+                    content: await buildVisionImageContent(
+                      {
+                        role,
+                        content: m.content || '',
+                        media_url: m.media_url,
+                        message_type: m.message_type,
+                      },
+                      openaiApiKey,
+                      imageOcrCache,
+                    ),
+                  };
+                }));
 
                 // Call the AI edge function selected by channel.ai_config.aiProvider.
                 // Elsa/hermes providers route to elsa-hermes-agent; supervised mode is handled below.
@@ -2670,6 +2676,17 @@ serve(async (req) => {
                 } else {
                   aiText = aiData?.response || '';
                   aiProductImages = aiData?.product_images || [];
+                }
+
+                const imageContextForFallback = buildImageContextForFallback(messagesForAI || []);
+                if (imageContextForFallback && shouldReplaceGenericImageReply(aiText, imageContextForFallback)) {
+                  console.log('🖼️ Generic image reply detected; replacing with screenshot-aware fallback');
+                  aiText = buildImageScreenshotFallbackReply(imageContextForFallback);
+                }
+
+                if (shouldReplacePaymentLinkReplyWithoutUrl(aiText, [], latestUserThreadText(messagesForAI || []))) {
+                  console.warn('💳 Payment-link reply claimed a link without URL; replacing before delivery');
+                  aiText = buildPaymentLinkMissingUrlFallbackReply();
                 }
 
                 if (aiText) {

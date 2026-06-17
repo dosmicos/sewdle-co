@@ -9,6 +9,10 @@ export type CommerceVariant = {
 export type CommerceProduct = {
   id: number;
   title: string;
+  handle?: string;
+  body_html?: string;
+  tags?: string;
+  product_type?: string;
   variants?: CommerceVariant[];
 };
 
@@ -39,6 +43,7 @@ export type PendingPaymentOrderData = {
   neighborhood?: string;
   lineItems: ResolvedLineItem[];
   notes?: string;
+  shippingMethod?: string;
   shippingCost: number;
 };
 
@@ -85,6 +90,28 @@ export type ShopifyCodOrderRequest = {
   totalAmount: number;
 };
 
+export type ManualTransferPaymentMethod = "bancolombia" | "nequi" | "bank_transfer" | "manual_transfer";
+
+export type ManualTransferDraftOrderRequest = {
+  organizationId: string;
+  conversationId?: string;
+  orderData: {
+    customerName: string;
+    cedula?: string;
+    email: string;
+    phone: string;
+    address: string;
+    city: string;
+    department: string;
+    neighborhood?: string;
+    lineItems: ResolvedLineItem[];
+    notes?: string;
+    shippingCost: number;
+    paymentMethod: ManualTransferPaymentMethod;
+  };
+  totalAmount: number;
+};
+
 export function normalizeCommerceText(value: unknown): string {
   return String(value ?? "")
     .toLowerCase()
@@ -93,6 +120,12 @@ export function normalizeCommerceText(value: unknown): string {
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export const BOGOTA_EXPRESS_SHIPPING_COST = 15000;
+
+function hasExpressShippingSignal(...values: unknown[]): boolean {
+  return values.some((value) => normalizeCommerceText(value).includes("express"));
 }
 
 function scoreProductMatch(
@@ -116,29 +149,52 @@ function scoreProductMatch(
   return Math.round((matches.length / requestedWords.length) * 75);
 }
 
+type ProductMatch = {
+  product: CommerceProduct;
+  score: number;
+  secondBestScore: number;
+};
+
 function findBestProduct(
   catalog: CommerceProduct[],
   item: ElsaOrderLineItemPayload,
-): CommerceProduct | null {
+): ProductMatch | null {
   if (item.productId) {
     const byId = catalog.find((product) =>
       String(product.id) === String(item.productId)
     );
-    if (byId) return byId;
+    if (byId) {
+      return { product: byId, score: 100, secondBestScore: 0 };
+    }
   }
 
   const requestedName = item.productName || "";
   let best: CommerceProduct | null = null;
   let bestScore = 0;
+  let secondBestScore = 0;
+
   for (const product of catalog) {
     const score = scoreProductMatch(product.title, requestedName);
     if (score > bestScore) {
+      secondBestScore = bestScore;
       best = product;
       bestScore = score;
+    } else if (score > secondBestScore) {
+      secondBestScore = score;
     }
   }
 
-  return best && bestScore >= 50 ? best : null;
+  return best && bestScore >= 50
+    ? { product: best, score: bestScore, secondBestScore }
+    : null;
+}
+
+function requiresProductConfirmation(match: ProductMatch): boolean {
+  return match.score < 85 || (
+    match.score < 100 &&
+    match.secondBestScore > 0 &&
+    match.score - match.secondBestScore <= 5
+  );
 }
 
 function extractSize(value: unknown): string {
@@ -206,13 +262,19 @@ export function resolveCommerceLineItems(
   }
 
   for (const item of payloadItems) {
-    const product = findBestProduct(catalog, item);
+    const productMatch = findBestProduct(catalog, item);
     const label = item.productName || String(item.productId || "producto");
-    if (!product) {
+    if (!productMatch) {
       errors.push(`No se encontró el producto: ${label}`);
       continue;
     }
 
+    if (requiresProductConfirmation(productMatch)) {
+      errors.push(`Confirma el producto exacto antes de crear el link: ${label}`);
+      continue;
+    }
+
+    const product = productMatch.product;
     const variant = findVariant(product, item);
     if (!variant) {
       errors.push(`No se encontró la talla/variante para ${product.title}`);
@@ -264,6 +326,8 @@ export function calculateOrderTotals(params: {
   city?: string;
   department?: string;
   requestedShippingCost?: number;
+  requestedShippingMethod?: string;
+  notes?: string;
 }) {
   const productTotal = Math.max(
     0,
@@ -329,11 +393,19 @@ export function calculateOrderTotals(params: {
   const matchedZone = isBogota
     ? "bogota"
     : Object.keys(shippingZones).find((zone) => department.includes(zone));
-  const isExpressRequest = isBogota && rawRequestedShipping === 14000;
+  const customerRequestedExpress = hasExpressShippingSignal(
+    params.requestedShippingMethod,
+    params.notes,
+  );
+  const isExpressRequest = isBogota &&
+    (customerRequestedExpress || rawRequestedShipping === BOGOTA_EXPRESS_SHIPPING_COST ||
+      rawRequestedShipping === 14000);
 
   let shippingCost = 5000;
   if (isExpressRequest) {
-    shippingCost = 14000;
+    shippingCost = rawRequestedShipping >= BOGOTA_EXPRESS_SHIPPING_COST && rawRequestedShipping <= 30000
+      ? rawRequestedShipping
+      : BOGOTA_EXPRESS_SHIPPING_COST;
   } else if (matchedZone) {
     const noFreeShipping = noFreeShippingZones.some((zone) =>
       department.includes(zone)
@@ -406,6 +478,8 @@ function buildPendingPaymentRequestBase(params: {
     city: payload.city,
     department: payload.department,
     requestedShippingCost: payload.shippingCost,
+    requestedShippingMethod: payload.shippingMethod,
+    notes: payload.notes,
   });
 
   const productDescription = resolved.lineItems.map((item) => item.productName)
@@ -431,6 +505,9 @@ function buildPendingPaymentRequestBase(params: {
           : undefined,
         lineItems: resolved.lineItems,
         notes: payload.notes ? String(payload.notes).trim() : undefined,
+        shippingMethod: payload.shippingMethod
+          ? String(payload.shippingMethod).trim()
+          : undefined,
         shippingCost: totals.shippingCost,
       },
     },
@@ -510,6 +587,56 @@ export function buildShopifyCodOrderRequest(params: {
   };
 }
 
+function normalizeManualTransferPaymentMethod(value: unknown): ManualTransferPaymentMethod {
+  const normalized = normalizeCommerceText(value || "manual_transfer");
+  if (normalized.includes("nequi")) return "nequi";
+  if (normalized.includes("bancolombia")) return "bancolombia";
+  if (normalized.includes("bank")) return "bank_transfer";
+  return "manual_transfer";
+}
+
+export function buildManualTransferDraftOrderRequest(params: {
+  payload: Record<string, any>;
+  catalog: CommerceProduct[];
+  organizationId: string;
+  conversationId?: string;
+}): { ok: true; request: ManualTransferDraftOrderRequest } | {
+  ok: false;
+  errors: string[];
+} {
+  const built = buildPendingPaymentRequestBase(params);
+  if (built.ok === false) return built;
+  const payload = params.payload || {};
+  const paymentMethod = normalizeManualTransferPaymentMethod(payload.paymentMethod);
+  const proofNote = "Comprobante recibido; pago pendiente por validar por humano";
+  const notes = [payload.notes ? String(payload.notes).trim() : "", proofNote]
+    .filter(Boolean)
+    .join(" | ");
+
+  return {
+    ok: true,
+    request: {
+      organizationId: params.organizationId,
+      conversationId: params.conversationId,
+      totalAmount: built.base.amount,
+      orderData: {
+        customerName: built.base.customerName,
+        cedula: built.base.orderData.cedula,
+        email: built.base.customerEmail,
+        phone: built.base.customerPhone,
+        address: built.base.orderData.address,
+        city: built.base.orderData.city,
+        department: built.base.orderData.department,
+        neighborhood: built.base.orderData.neighborhood,
+        lineItems: built.base.orderData.lineItems,
+        notes,
+        shippingCost: built.base.orderData.shippingCost,
+        paymentMethod,
+      },
+    },
+  };
+}
+
 export function formatShopifyOrderLineItemsForCustomer(
   lineItems: unknown,
 ): string[] {
@@ -556,13 +683,75 @@ export function formatShopifyOrderCreatedReply(params: {
   return `¡Listo! Tu pedido #${orderNumber} quedó creado ${paymentLabel} 😊${summary}${totalLine}\n\nGracias por tu compra 🧡 Te enviaremos la guía cuando sea despachado 🙌`;
 }
 
+function normalizeCatalogSearchText(value: unknown): string {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function catalogQueryTokens(query?: string): string[] {
+  const stopWords = new Set([
+    "para",
+    "pedir",
+    "quiero",
+    "necesito",
+    "una",
+    "uno",
+    "de",
+    "del",
+    "la",
+    "el",
+    "los",
+    "las",
+    "por",
+    "favor",
+    "ruana",
+    "ruanas",
+  ]);
+  return normalizeCatalogSearchText(query)
+    .split(/[^a-z0-9]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 2 && !stopWords.has(token));
+}
+
+function productSearchText(product: CommerceProduct): string {
+  const variantText = (product.variants || [])
+    .map((variant) => `${variant.title || ""} ${variant.sku || ""}`)
+    .join(" ");
+  return normalizeCatalogSearchText(
+    `${product.title || ""} ${product.handle || ""} ${product.product_type || ""} ${product.tags || ""} ${variantText}`,
+  );
+}
+
+function prioritizeCatalogForQuery(
+  catalog: CommerceProduct[],
+  query?: string,
+): CommerceProduct[] {
+  const tokens = catalogQueryTokens(query);
+  if (!tokens.length) return catalog;
+
+  return catalog
+    .map((product, index) => {
+      const text = productSearchText(product);
+      const score = tokens.reduce((total, token) =>
+        total + (text.includes(token) ? 1 : 0), 0);
+      return { product, index, score };
+    })
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((item) => item.product);
+}
+
 export function summarizeCommerceCatalogForPrompt(
   catalog: CommerceProduct[],
   maxProducts = 80,
+  query?: string,
 ) {
-  return catalog.slice(0, maxProducts).map((product) => ({
+  return prioritizeCatalogForQuery(catalog, query).slice(0, maxProducts).map((product) => ({
     id: product.id,
     title: product.title,
+    product_type: product.product_type || "",
+    tags: product.tags || "",
     variants: (product.variants || []).map((variant) => ({
       id: variant.id,
       title: variant.title || "",

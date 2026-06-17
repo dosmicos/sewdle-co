@@ -39,6 +39,67 @@ Deno.test("WhatsApp AI routing honors Elsa supervised runtime instead of hardcod
   );
 });
 
+
+Deno.test("WhatsApp image replies are rewritten when the model falls back to generic handoff text", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+
+  assert(
+    source.includes("buildImageScreenshotFallbackReply") &&
+      source.includes("shouldReplaceGenericImageReply") &&
+      source.includes("messagesForAI"),
+    "whatsapp-webhook must replace generic image handoffs with a screenshot-aware fallback from OCR-enriched messages",
+  );
+  assert(
+    source.includes("Generic image reply detected; replacing with screenshot-aware fallback"),
+    "whatsapp-webhook must log when it rewrites a generic image reply",
+  );
+
+  const directRewriteCalls = source.match(/shouldReplaceGenericImageReply\(aiText/g) || [];
+  assert(
+    directRewriteCalls.length >= 2,
+    "all WhatsApp AI send paths must run the generic-image rewrite guard before delivery",
+  );
+});
+
+Deno.test("WhatsApp AI routing blocks payment-link confirmations without a URL", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+
+  assert(
+    source.includes("../_shared/payment-link-reply-guard.ts") &&
+      source.includes("shouldReplacePaymentLinkReplyWithoutUrl") &&
+      source.includes("buildPaymentLinkMissingUrlFallbackReply"),
+    "whatsapp-webhook must not send generated/resend payment-link wording unless the URL is present",
+  );
+
+  const guardCalls = source.match(/shouldReplacePaymentLinkReplyWithoutUrl\(aiText/g) || [];
+  assert(
+    guardCalls.length >= 2,
+    "all WhatsApp AI send paths must run the missing-payment-link URL guard before delivery",
+  );
+});
+
+Deno.test("WhatsApp visual-photo OCR clues search catalog candidates instead of only asking for a name", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+
+  assert(
+    source.includes("buildVisualCandidateInstruction") &&
+      source.includes("extractVisualCandidateSearchTerms") &&
+      source.includes("hasVisualCandidateSearchSignal"),
+    "whatsapp-webhook must turn visual OCR clues into catalog candidate context",
+  );
+  assert(
+    source.includes("visualSearchTerms.length ? 3 : 10") &&
+      source.includes("relevantProducts.length === 0 && visualSearchTerms.length === 0"),
+    "visual-photo searches must use top 3 real candidates and avoid unrelated popular-product fallback",
+  );
+});
+
 Deno.test("WhatsApp audio messages are transcribed before invoking Elsa", async () => {
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),
@@ -73,5 +134,9 @@ Deno.test("WhatsApp audio messages are transcribed before invoking Elsa", async 
   assert(
     source.includes("audio_transcription"),
     "the saved messaging message must include transcription metadata for review/debugging",
+  );
+  assert(
+    source.includes("const aiRespondableTypes = ['text', 'audio', 'image', 'button', 'interactive'];"),
+    "audio messages must be included in the AI respondable types after transcription",
   );
 });
