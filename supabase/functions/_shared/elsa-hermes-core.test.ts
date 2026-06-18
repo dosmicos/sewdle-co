@@ -4,6 +4,7 @@ import {
   extractHermesOutputText,
   extractJsonObject,
   extractOrderIntakeFromMessages,
+  looksLikeProviderError,
   normalizeChannelKnowledge,
   textFromMessageContent,
 } from "./elsa-hermes-core.ts";
@@ -595,4 +596,26 @@ Deno.test("buildElsaPrompt forbids inventing order numbers without an order in c
   });
   assertIncludes(prompt, "ANTI-INVENCIÓN DE PEDIDOS");
   assertIncludes(prompt, "PROHIBIDO inventar un número de pedido");
+});
+
+Deno.test("looksLikeProviderError flags upstream error strings, not normal replies", () => {
+  // The exact production failure that leaked to a customer:
+  assertEquals(
+    looksLikeProviderError(
+      "API call failed after 3 retries: HTTP 429: The usage limit has been reached",
+    ),
+    true,
+  );
+  assertEquals(looksLikeProviderError("HTTP 500: internal server error"), true);
+  assertEquals(looksLikeProviderError("Rate limit exceeded"), true);
+  // Normal Spanish customer replies must NOT be flagged:
+  assertEquals(
+    looksLikeProviderError("Claro 😊 la Ruana Pollito cuesta $94.900 en talla 4."),
+    false,
+  );
+  assertEquals(
+    looksLikeProviderError("Tenemos varias tallas dentro del límite de stock disponible."),
+    false,
+  );
+  assertEquals(looksLikeProviderError(""), false);
 });

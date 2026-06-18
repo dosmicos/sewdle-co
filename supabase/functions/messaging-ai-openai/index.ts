@@ -1,7 +1,16 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { scoreProductNameMatch } from "../_shared/product-matching.ts";
+import {
+  buildProductSearchContext,
+  buildVisualCandidateInstruction,
+  extractSearchTerms,
+  extractVisualCandidateSearchTerms,
+  formatProductsForContext,
+  hasVisualCandidateSearchSignal,
+  scoreProductNameMatch,
+  searchRelevantProducts,
+} from "../_shared/product-matching.ts";
 import { buildVisionImageContent } from "../_shared/image-ocr.ts";
 
 const corsHeaders = {
@@ -26,6 +35,28 @@ function cleanAIResponse(aiResponse: string): string {
   return aiResponse.replace(/\[PRODUCT_IMAGE_ID:\d+\]/g, '').replace(/\[NO_IMAGES\]/g, '').trim();
 }
 
+function extractTextFromContent(content: unknown): string {
+  if (typeof content === 'string') return content.trim();
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((part) => {
+      if (typeof part === 'string') return part;
+      if (part && typeof part === 'object') {
+        const typed = part as Record<string, unknown>;
+        return String(typed.text || typed.input_text || typed.output_text || '').trim();
+      }
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+}
+
+function latestUserText(messages: any[] = []): string {
+  const latest = [...messages].reverse().find((message) => message?.role === 'user');
+  return extractTextFromContent(latest?.content || '');
+}
+
 // Cache external image to Supabase Storage and return public URL
 async function cacheImageToStorage(
   imageUrl: string,
@@ -35,28 +66,28 @@ async function cacheImageToStorage(
 ): Promise<string | null> {
   try {
     console.log(`Caching image for product ${productId}...`);
-    
+
     // Fetch image from Shopify
     const response = await fetch(imageUrl);
     if (!response.ok) {
       console.error(`Failed to fetch image: ${response.status}`);
       return null;
     }
-    
+
     const contentType = response.headers.get('content-type') || 'image/jpeg';
     const arrayBuffer = await response.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
-    
+
     // Check file size (max 10MB)
     if (uint8Array.length > 10 * 1024 * 1024) {
       console.error('Image too large, skipping cache');
       return imageUrl; // Return original URL as fallback
     }
-    
+
     // Determine extension
     const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
     const path = `products/${organizationId}/${productId}.${ext}`;
-    
+
     // Upload to Supabase Storage with upsert
     const { error: uploadError } = await supabase.storage
       .from('messaging-media')
@@ -64,20 +95,20 @@ async function cacheImageToStorage(
         contentType,
         upsert: true
       });
-    
+
     if (uploadError) {
       console.error('Storage upload error:', uploadError);
       return imageUrl; // Return original URL as fallback
     }
-    
+
     // Get public URL
     const { data: publicUrlData } = supabase.storage
       .from('messaging-media')
       .getPublicUrl(path);
-    
+
     const publicUrl = publicUrlData?.publicUrl;
     console.log(`Image cached successfully: ${publicUrl?.substring(0, 50)}...`);
-    
+
     return publicUrl || imageUrl;
   } catch (err) {
     console.error('Error caching image:', err);
@@ -87,7 +118,7 @@ async function cacheImageToStorage(
 
 // Fetch product image from Shopify using organization credentials
 async function fetchShopifyProductImage(
-  productId: number, 
+  productId: number,
   shopifyCredentials: any
 ): Promise<string | null> {
   if (!shopifyCredentials) {
@@ -106,9 +137,9 @@ async function fetchShopifyProductImage(
   try {
     const cleanDomain = storeDomain.replace('.myshopify.com', '');
     const url = `https://${cleanDomain}.myshopify.com/admin/api/2024-01/products/${productId}.json`;
-    
+
     console.log(`Fetching Shopify product image for ID: ${productId}`);
-    
+
     const response = await fetch(url, {
       headers: {
         'X-Shopify-Access-Token': accessToken,
@@ -123,12 +154,12 @@ async function fetchShopifyProductImage(
 
     const data = await response.json();
     const imageUrl = data.product?.image?.src || data.product?.images?.[0]?.src;
-    
+
     if (imageUrl) {
       console.log(`Found Shopify image for product ${productId}`);
       return imageUrl;
     }
-    
+
     return null;
   } catch (error) {
     console.error('Error fetching Shopify product image:', error);
@@ -145,20 +176,20 @@ serve(async (req) => {
   try {
     const body = await req.json();
     const { action, messages, systemPrompt, organizationId, conversationId } = body;
-    
+
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    
+
     // Handle test-connection action - just verify API key exists without making calls
     if (action === 'test-connection') {
       console.log("messaging-ai-openai: Testing connection for org:", organizationId);
-      
+
       if (!OPENAI_API_KEY) {
         return new Response(
-          JSON.stringify({ connected: false, error: "OPENAI_API_KEY is not configured" }), 
+          JSON.stringify({ connected: false, error: "OPENAI_API_KEY is not configured" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
       // Optionally verify the API key is valid by making a simple models list request
       try {
         const modelsResponse = await fetch("https://api.openai.com/v1/models", {
@@ -167,33 +198,33 @@ serve(async (req) => {
             Authorization: `Bearer ${OPENAI_API_KEY}`,
           },
         });
-        
+
         if (modelsResponse.ok) {
           return new Response(
-            JSON.stringify({ connected: true, success: true }), 
+            JSON.stringify({ connected: true, success: true }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         } else {
           const errorText = await modelsResponse.text();
           console.error("OpenAI API key validation failed:", modelsResponse.status, errorText);
           return new Response(
-            JSON.stringify({ connected: false, error: "API Key inválida" }), 
+            JSON.stringify({ connected: false, error: "API Key inválida" }),
             { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
       } catch (fetchError) {
         console.error("Error validating OpenAI API key:", fetchError);
         return new Response(
-          JSON.stringify({ connected: false, error: "Error al validar API Key" }), 
+          JSON.stringify({ connected: false, error: "Error al validar API Key" }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }
-    
+
     if (!OPENAI_API_KEY) {
       console.error("OPENAI_API_KEY is not configured");
       return new Response(
-        JSON.stringify({ error: "OPENAI_API_KEY is not configured" }), 
+        JSON.stringify({ error: "OPENAI_API_KEY is not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -369,7 +400,7 @@ serve(async (req) => {
           console.error("Error loading channel config:", channelError);
         } else if (channel?.ai_config) {
           const aiConfig = channel.ai_config as any;
-          
+
           // Get saved system prompt
           if (aiConfig.systemPrompt) {
             savedSystemPrompt = aiConfig.systemPrompt;
@@ -429,12 +460,22 @@ serve(async (req) => {
       }
     }
 
+    const imageOcrCache = new Map<string, Promise<string | null>>();
+    const messagesForAI = await Promise.all((messages || []).map(async (message: any) => ({
+      ...message,
+      content: await buildVisionImageContent(message, OPENAI_API_KEY || '', imageOcrCache),
+    })));
+    const productSearchContext = buildProductSearchContext(latestUserText(messagesForAI), messagesForAI);
+    const visualCandidateTerms = hasVisualCandidateSearchSignal(productSearchContext)
+      ? extractVisualCandidateSearchTerms(productSearchContext)
+      : [];
+
     // Load products with Shopify inventory if organizationId is provided
     let productCatalog = '';
     let allShopifyProducts: any[] = []; // Store for product ID validation
     let shopifyCredentials: any = null;
     let productImageMap: Record<number, { url: string; title: string }> = {}; // Map Shopify ID -> image URL + title
-    
+
     if (organizationId) {
       try {
         // First, get connected product IDs from ai_catalog_connections
@@ -469,21 +510,22 @@ serve(async (req) => {
           title: string;
           body_html?: string;
           product_type?: string;
+          tags?: string;
           variants: ShopifyVariant[];
           image?: { src: string };
           images?: { src: string }[];
         }
-        
+
         // Fetch real-time inventory from Shopify if credentials exist
         if (shopifyCredentials) {
           const creds = shopifyCredentials as any;
           const shopifyDomain = creds.store_domain || creds.shopDomain;
           const accessToken = creds.access_token || creds.accessToken;
-          
+
           if (shopifyDomain && accessToken) {
             try {
               console.log("Fetching Shopify products with inventory...");
-              
+
               // Fetch products with inventory from Shopify
               const shopifyResponse = await fetch(
                 `https://${shopifyDomain}/admin/api/2024-01/products.json?status=active&limit=250`,
@@ -494,76 +536,91 @@ serve(async (req) => {
                   },
                 }
               );
-              
+
               if (shopifyResponse.ok) {
                 const shopifyData = await shopifyResponse.json();
                 const shopifyProducts: ShopifyProduct[] = shopifyData.products || [];
-                
+
                 // Filter to only connected products
                 const connectedProducts = shopifyProducts.filter(
                   p => connectedProductIds.size === 0 || connectedProductIds.has(p.id)
                 );
-                
+
                 if (connectedProducts.length > 0) {
                   allShopifyProducts = connectedProducts; // Store for validation
-                  productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
-                  productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible (Stock > 0). Si un producto no tiene stock, indica que está agotado.\n\n';
-                  productCatalog += '⚠️ REGLA OBLIGATORIA DE IMÁGENES - DEBES SEGUIR ESTO SIEMPRE:\n';
-                  productCatalog += 'CADA VEZ que menciones un producto por su nombre, DEBES agregar el tag [PRODUCT_IMAGE_ID:ID] inmediatamente después.\n';
-                  productCatalog += 'Esto es OBLIGATORIO, no opcional. Los clientes esperan ver fotos de los productos.\n\n';
-                  productCatalog += 'Formato correcto (SIEMPRE usa este formato):\n';
-                  productCatalog += '"1. Ruana Caballo [PRODUCT_IMAGE_ID:8842923606251] - Precio: $94.900 COP"\n';
-                  productCatalog += '"2. Ruana Capibara [PRODUCT_IMAGE_ID:8842934517995] - Precio: $94.900 COP"\n\n';
-                  productCatalog += 'Formato INCORRECTO (NO hagas esto):\n';
-                  productCatalog += '"1. Ruana Caballo - Precio: $94.900 COP" (falta el tag de imagen)\n\n';
-                  productCatalog += 'Puedes incluir hasta 10 productos con imágenes en una sola respuesta.\n\n';
-                  
+
+                  // Store image URL and title in map for all connected products
                   connectedProducts.forEach((product) => {
-                    const variants = product.variants || [];
-                    const totalStock = variants.reduce((sum, v) => sum + (v.inventory_quantity || 0), 0);
-                    
-                    // Store image URL and title in map
                     const imageUrl = product.image?.src || product.images?.[0]?.src;
                     if (imageUrl) {
                       productImageMap[product.id] = { url: imageUrl, title: product.title };
                     }
-                    
-                    // Skip products with no stock
-                    if (totalStock === 0) {
-                      productCatalog += `• ${product.title} (ID:${product.id}): ❌ AGOTADO (no ofrecer)\n`;
-                      return;
-                    }
-                    
-                    const price = variants[0]?.price 
-                      ? `$${Number(variants[0].price).toLocaleString('es-CO')} COP` 
-                      : 'Consultar';
-                    
-                    const variantInfo = variants
-                      .map(v => {
-                        const stock = v.inventory_quantity || 0;
-                        const stockStatus = stock > 0 ? `✅ ${stock}` : '❌';
-                        const vPrice = v.price ? `$${Number(v.price).toLocaleString('es-CO')}` : '';
-                        return `${v.title} (variantId:${v.id}, SKU:${v.sku || 'N/A'}, Precio:${vPrice}): ${stockStatus}`;
-                      })
-                      .join(' | ');
-                    
-                    // Clean HTML from description
-                    const cleanDescription = product.body_html 
-                      ? product.body_html.replace(/<[^>]*>/g, '').substring(0, 100) 
-                      : '';
-                    
-                    productCatalog += `\n• ${product.title} (ID:${product.id})`;
-                    productCatalog += `\n  Precio: ${price}`;
-                    productCatalog += `\n  Variantes: ${variantInfo}`;
-                    if (product.product_type) {
-                      productCatalog += `\n  Categoría: ${product.product_type}`;
-                    }
-                    if (cleanDescription) {
-                      productCatalog += `\n  ${cleanDescription}`;
-                    }
-                    productCatalog += '\n';
                   });
-                  
+
+                  if (visualCandidateTerms.length > 0) {
+                    const visualCandidates = searchRelevantProducts(connectedProducts, visualCandidateTerms, 3);
+                    productCatalog = formatProductsForContext(visualCandidates);
+                    if (visualCandidates.length > 0) {
+                      productCatalog += buildVisualCandidateInstruction(productSearchContext, visualCandidates);
+                    }
+                    console.log(`Loaded ${visualCandidates.length} visual catalog candidates from OCR clues: ${visualCandidateTerms.join(', ')}`);
+                  } else {
+                    productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
+                    productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible (Stock > 0). Si un producto no tiene stock, indica que está agotado.\n\n';
+                    productCatalog += '⚠️ REGLA OBLIGATORIA DE IMÁGENES - DEBES SEGUIR ESTO SIEMPRE:\n';
+                    productCatalog += 'CADA VEZ que menciones un producto por su nombre, DEBES agregar el tag [PRODUCT_IMAGE_ID:ID] inmediatamente después.\n';
+                    productCatalog += 'Esto es OBLIGATORIO, no opcional. Los clientes esperan ver fotos de los productos.\n\n';
+                    productCatalog += 'Formato correcto (SIEMPRE usa este formato):\n';
+                    productCatalog += '"1. Ruana Caballo [PRODUCT_IMAGE_ID:8842923606251] - Precio: $94.900 COP"\n';
+                    productCatalog += '"2. Ruana Capibara [PRODUCT_IMAGE_ID:8842934517995] - Precio: $94.900 COP"\n\n';
+                    productCatalog += 'Formato INCORRECTO (NO hagas esto):\n';
+                    productCatalog += '"1. Ruana Caballo - Precio: $94.900 COP" (falta el tag de imagen)\n\n';
+                    productCatalog += 'Puedes incluir hasta 10 productos con imágenes en una sola respuesta.\n\n';
+
+                    connectedProducts.forEach((product) => {
+                      const variants = product.variants || [];
+                      const totalStock = variants.reduce((sum, v) => sum + (v.inventory_quantity || 0), 0);
+
+                      // Skip products with no stock
+                      if (totalStock === 0) {
+                        productCatalog += `• ${product.title} (ID:${product.id}): ❌ AGOTADO (no ofrecer)\n`;
+                        return;
+                      }
+
+                      const price = variants[0]?.price
+                        ? `$${Number(variants[0].price).toLocaleString('es-CO')} COP`
+                        : 'Consultar';
+
+                      const variantInfo = variants
+                        .map(v => {
+                          const stock = v.inventory_quantity || 0;
+                          const stockStatus = stock > 0 ? `✅ ${stock}` : '❌';
+                          const vPrice = v.price ? `$${Number(v.price).toLocaleString('es-CO')}` : '';
+                          return `${v.title} (variantId:${v.id}, SKU:${v.sku || 'N/A'}, Precio:${vPrice}): ${stockStatus}`;
+                        })
+                        .join(' | ');
+
+                      // Clean HTML from description
+                      const cleanDescription = product.body_html
+                        ? product.body_html.replace(/<[^>]*>/g, '').substring(0, 100)
+                        : '';
+
+                      productCatalog += `\n• ${product.title} (ID:${product.id})`;
+                      productCatalog += `\n  Precio: ${price}`;
+                      productCatalog += `\n  Variantes: ${variantInfo}`;
+                      if (product.product_type) {
+                        productCatalog += `\n  Categoría: ${product.product_type}`;
+                      }
+                      if ((product as any).tags) {
+                        productCatalog += `\n  Tags: ${(product as any).tags}`;
+                      }
+                      if (cleanDescription) {
+                        productCatalog += `\n  ${cleanDescription}`;
+                      }
+                      productCatalog += '\n';
+                    });
+                  }
+
                   console.log(`Loaded ${connectedProducts.length} connected products with real-time Shopify inventory`);
                   console.log(`Product image map has ${Object.keys(productImageMap).length} entries`);
                 }
@@ -581,9 +638,9 @@ serve(async (req) => {
           const { data: products, error: productsError } = await supabase
             .from('products')
             .select(`
-              name, 
-              sku, 
-              base_price, 
+              name,
+              sku,
+              base_price,
               category,
               description,
               product_variants (id, size, color, stock_quantity, sku_variant)
@@ -595,12 +652,12 @@ serve(async (req) => {
           if (!productsError && products && products.length > 0) {
             productCatalog = '\n\n📦 CATÁLOGO DE PRODUCTOS DISPONIBLES:\n';
             productCatalog += 'IMPORTANTE: Solo ofrece productos que tengan stock disponible.\n';
-            
+
             products.forEach((p: any) => {
-              const price = p.base_price 
-                ? `$${Number(p.base_price).toLocaleString('es-CO')} COP` 
+              const price = p.base_price
+                ? `$${Number(p.base_price).toLocaleString('es-CO')} COP`
                 : 'Precio: Consultar';
-              
+
               const variants = p.product_variants
                 ?.map((v: any) => {
                   const size = v.size || '';
@@ -610,13 +667,13 @@ serve(async (req) => {
                   return `${size}${color ? ` ${color}` : ''}: ${stockStatus}`;
                 })
                 .join(' | ') || 'Sin variantes';
-              
+
               productCatalog += `\n• ${p.name}`;
               productCatalog += `\n  Precio: ${price}`;
               productCatalog += `\n  Disponibilidad: ${variants}`;
               productCatalog += '\n';
             });
-            
+
             console.log(`Loaded ${products.length} local products for context`);
           }
         }
@@ -628,7 +685,7 @@ serve(async (req) => {
     // Build the full system prompt with all context
     // Priority: saved prompt > provided prompt > default
     const basePrompt = savedSystemPrompt || systemPrompt || "Eres un asistente virtual amigable. Responde siempre en español.";
-    
+
     let fullSystemPrompt = basePrompt;
 
     // Add current date/time context so AI knows what day it is
@@ -656,11 +713,11 @@ serve(async (req) => {
     fullSystemPrompt += '\n\n👕 GUÍA DE TALLAS RUANAS — OBLIGATORIO SEGUIR ESTA TABLA:\n⚠️ REGLA #1: El número de talla NO es igual a la edad. NUNCA asumas que "4 años = talla 4". SIEMPRE busca la edad en esta tabla:\n| Talla | Estatura     | Edad            |\n| 2     | 60-76 cm     | 3 a 12 meses    |\n| 4     | 77-88 cm     | 1 a 2 años      |\n| 6     | 90-100 cm    | 3 a 4 años      |\n| 8     | 100-110 cm   | 4 a 5 años      |\n| 10    | 115-123 cm   | 6 a 7 años      |\n| 12    | 125-133 cm   | 8 a 9 años      |\n\n⚠️ CLAVE: Talla 2 es SOLO para 3 a 12 meses. A partir de 12 meses (1 año) la talla correcta es 4.\nNUNCA digas que Talla 2 es "12 a 24 meses" — eso es INCORRECTO. Talla 2 = 3 a 12 meses, Talla 4 = 1 a 2 años.\n\nREGLA #2: Si la edad está en el LÍMITE entre dos tallas, recomienda la talla MAYOR para que le dure más tiempo.\nREGLA #3: Si el cliente da edad Y estatura, prioriza la estatura para mayor precisión.\nREGLA #4: Si el cliente dice que es "grandecito/a" o "grande para su edad", sube UNA talla adicional.\nREGLA #5: Si solo da edad, pregunta la estatura para ser más preciso, o recomienda según la tabla.\n\nEJEMPLOS DE RECOMENDACIÓN CORRECTA:\n- Bebé de 6 meses → Talla 2\n- Bebé de 10 meses → Talla 2\n- Bebé de 12 meses → Talla 4 (ya cumplió 1 año, NO es talla 2)\n- Niño de 15 meses → Talla 4 (NO talla 2)\n- Niño de 18 meses → Talla 4 (NO talla 2)\n- Niño de 19 meses grandecito → Talla 6 (19 meses = talla 4, pero grandecito → sube a talla 6)\n- Niño de 1 año → Talla 4 (NO talla 1)\n- Niño de 2 años → Talla 4 (NO talla 2)\n- Niño de 2 años grande → Talla 6\n- Niño de 3 años → Talla 6 (NO talla 3)\n- Niño de 4 años → Talla 8 (está en el límite 6/8, se recomienda la mayor)\n- Niño de 5 años → Talla 8 (NO talla 5)\n- Niño de 6 años → Talla 10 (NO talla 6)\n- Niño de 7 años → Talla 10 (NO talla 7)\n- Niño de 8 años → Talla 12 (NO talla 8)';
 
     fullSystemPrompt += '\n\n🔗 ESTRATEGIA DE RECOMENDACIÓN DE PRODUCTOS — MUY IMPORTANTE:\nCuando el cliente pregunte por productos de una CATEGORÍA o TALLA específica (ej: "ruanas talla 10", "sleeping bags talla 2"):\n- PRIMERO recomienda la talla adecuada si mencionan edad/estatura\n- LUEGO envía el LINK de la colección filtrada por talla desde tu base de conocimiento\n- NO envíes fotos individuales de cada producto, el link les permite ver TODOS los diseños\n- Agrega el tag [NO_IMAGES] al final de tu respuesta cuando envíes un link de colección\n\nSi el cliente pregunta por pijamas térmicas o pijamas termicas, trátalo como sleeping y recomienda sleepings, no un catálogo genérico\nSi el cliente solo dice "me regalas fotos", "el catálogo", "tienes catálogo" o algo parecido sin nombrar un producto, no respondas solo con saludo: envía el catálogo o haz una sola pregunta útil para aterrizar el diseño\n\n🔗 REGLA OBLIGATORIA DE LINKS — NUNCA MODIFICAR URLs:\n- SIEMPRE copia el link EXACTO de tu base de conocimiento, carácter por carácter. NUNCA modifiques, reconstruyas ni inventes URLs.\n- NUNCA uses formato markdown para links. NO escribas [texto](url). WhatsApp NO soporta markdown.\n- Envía el link como texto plano en una línea separada.\n- Formato CORRECTO:\n  Aquí puedes ver los diseños disponibles en talla 2:\n  https://dosmicos.co/collections/ruanas?talla_custom=2+%283+-+12+meses%29\n- Formato INCORRECTO (NO hagas esto):\n  [Ruanas talla 2](https://dosmicos.co/collections/ruanas?talla_custom=2+%283+-+12+meses%29)\n- Si no encuentras el link exacto en tu base de conocimiento para una talla específica, indica al cliente que visite dosmicos.co y filtre por talla.\n\n🖼️ ENVÍO DE FOTOS INDIVIDUALES — SOLO CUANDO EL CLIENTE LAS PIDA:\n- SOLO incluye tags [PRODUCT_IMAGE_ID:ID] cuando el cliente EXPLÍCITAMENTE pida ver fotos de un producto específico\n- Si el cliente pregunta por un producto ESPECÍFICO por nombre, ahí sí puedes incluir la foto\n- Ejemplo: "Claro, aquí te muestro la Ruana Caballo [PRODUCT_IMAGE_ID:123]"\n- NUNCA digas que no puedes mostrar imágenes\n\n🎨 CONSULTAS POR COLOR U OTROS ATRIBUTOS — REGLA CRÍTICA:\n- Los productos de Dosmicos tienen SOLO variantes de TALLA (2, 4, 6, 8, 10, 12), NO variantes de color.\n- El color es parte del DISEÑO del producto. Ejemplo: "Ruana Unicornio" ES morada/lila por diseño, "Ruana Dinosaurio" ES verde, etc.\n- Cuando un cliente dice "unicornio morada", "la rosada", "el azul", está describiendo el producto por su apariencia visual. Busca el producto por NOMBRE (ignorando el color) y verifica la TALLA.\n- NUNCA digas que un producto "no está disponible" solo porque el cliente mencionó un color que no aparece como variante. Los colores NO son variantes.\n- Si no puedes identificar qué producto quiere por el color, pregunta cuál diseño/animal le interesa, o envía el link de la colección.';
-    
+
     if (toneConfig) {
       fullSystemPrompt += `\n\n${toneConfig}`;
     }
-    
+
     fullSystemPrompt += knowledgeContext;
     fullSystemPrompt += rulesContext;
     fullSystemPrompt += productCatalog;
@@ -902,12 +959,6 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
       }
     ];
 
-    const imageOcrCache = new Map<string, Promise<string | null>>();
-    const messagesForAI = await Promise.all((messages || []).map(async (message: any) => ({
-      ...message,
-      content: await buildVisionImageContent(message, OPENAI_API_KEY || '', imageOcrCache),
-    })));
-
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -915,7 +966,9 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        // Reverted from gpt-4o to gpt-4o-mini: gpt-4o was failing in production
+        // (no account access / quota). gpt-4o-mini is vision-capable and known-good.
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: fullSystemPrompt },
           ...messagesForAI,
@@ -929,35 +982,35 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
     if (!response.ok) {
       const errorText = await response.text();
       console.error("OpenAI API error:", response.status, errorText);
-      
+
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Límite de solicitudes de OpenAI excedido. Intenta en unos segundos." }), 
+          JSON.stringify({ error: "Límite de solicitudes de OpenAI excedido. Intenta en unos segundos." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
       if (response.status === 401) {
         return new Response(
-          JSON.stringify({ error: "API key de OpenAI inválida." }), 
+          JSON.stringify({ error: "API key de OpenAI inválida." }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
       return new Response(
-        JSON.stringify({ error: "Error en el servicio de OpenAI" }), 
+        JSON.stringify({ error: "Error en el servicio de OpenAI" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const data = await response.json();
-    
+
     // Check if AI wants to call a function
     const functionCall = data.choices?.[0]?.message?.function_call;
-    
+
     if (functionCall) {
       console.log("AI wants to call function:", functionCall.name);
-      
+
       if (functionCall.name === "create_order") {
         try {
           const orderArgs = JSON.parse(functionCall.arguments);
@@ -1525,13 +1578,13 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
           console.error("Error parsing function call:", err);
         }
       }
-      
+
       // Handle create_payment_link function
       if (functionCall.name === "create_payment_link") {
         try {
           const paymentArgs = JSON.parse(functionCall.arguments);
           console.log("Creating payment link with args:", paymentArgs);
-          
+
           // Call the create-bold-payment-link function
           const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('create-bold-payment-link', {
             body: {
@@ -1542,37 +1595,37 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
               organizationId: organizationId
             }
           });
-          
+
           if (paymentError) {
             console.error("Payment link error:", paymentError);
             return new Response(
-              JSON.stringify({ 
+              JSON.stringify({
                 response: "Lo siento, hubo un error al crear el link de pago. Por favor intenta de nuevo.",
                 payment_link_created: false,
                 error: paymentError.message
-              }), 
+              }),
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
           }
-          
+
           console.log("Payment link created:", paymentResult);
-          
+
           const responseText = `¡Tu link de pago está listo! 💳\n\n` +
             `Monto: $${Number(paymentArgs.amount).toLocaleString('es-CO')} COP\n\n` +
             `Haz clic en el siguiente enlace para pagar:\n${paymentResult.paymentUrl}\n\n` +
             `🎯 El link de pago incluye todos los métodos de pago: Tarjeta de crédito, PSE, Nequi, Daviplata, y más.\n\n` +
             `Una vez realizado el pago, recibirás la confirmación automáticamente.`;
-          
+
           return new Response(
-            JSON.stringify({ 
+            JSON.stringify({
               response: responseText,
               payment_link_created: true,
               paymentUrl: paymentResult.paymentUrl,
               paymentLinkId: paymentResult.paymentLinkId
-            }), 
+            }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
-          
+
         } catch (err) {
           console.error("Error parsing payment function call:", err);
         }
@@ -1827,7 +1880,7 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
     }
 
     const rawAiResponse = data.choices?.[0]?.message?.content || "";
-    
+
     console.log("OpenAI raw response:", rawAiResponse.substring(0, 200) + "...");
 
     // Check if AI opted to send collection link instead of individual images
@@ -1840,16 +1893,16 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
     if (noImagesRequested) {
       console.log('📎 AI sent collection link — skipping individual product images');
     }
-    
+
     console.log(`Found ${productIds.length} product IDs in response:`, productIds);
-    
+
     // Build product images array
     const productImages: Array<{ product_id: number; image_url: string; product_name: string }> = [];
-    
+
     for (const productId of productIds) {
       let imageUrl: string | null = null;
       let productName = '';
-      
+
       // First check our cached map
       if (productImageMap[productId]) {
         imageUrl = productImageMap[productId].url;
@@ -1860,39 +1913,39 @@ REGLAS OBLIGATORIAS PARA CREAR PEDIDOS:
         imageUrl = await fetchShopifyProductImage(productId, shopifyCredentials);
         productName = `Producto ${productId}`;
       }
-      
+
       if (imageUrl) {
         // Cache the image in Supabase Storage for reliable delivery
         const cachedUrl = await cacheImageToStorage(imageUrl, productId, organizationId, supabase);
-        
+
         productImages.push({
           product_id: productId,
           image_url: cachedUrl || imageUrl,
           product_name: productName
         });
-        
+
         console.log(`Added image for product ${productId}: ${productName}`);
       } else {
         console.log(`No image found for product ${productId}`);
       }
     }
-    
+
     console.log(`Returning ${productImages.length} product images`);
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         response: cleanedResponse,
         product_images: productImages,
         // Keep legacy fields for backwards compatibility
         product_image_url: productImages[0]?.image_url || null,
         product_id: productIds[0] || null
-      }), 
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("messaging-ai-openai error:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Error desconocido" }), 
+      JSON.stringify({ error: error instanceof Error ? error.message : "Error desconocido" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

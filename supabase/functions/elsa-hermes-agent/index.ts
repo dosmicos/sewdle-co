@@ -20,6 +20,7 @@ import {
   type ElsaStructuredResponse,
   extractHermesOutputText,
   extractJsonObject,
+  looksLikeProviderError,
   normalizeChannelKnowledge,
   safeSnippet,
   textFromMessageContent,
@@ -1495,6 +1496,18 @@ async function callHermesElsa(
   const outputText = extractHermesOutputText(data);
 
   const parsed = extractJsonObject(outputText);
+
+  // Never forward an upstream error string to the customer. If Hermes returned an
+  // error-shaped reply (429/quota/etc.), throw so the OpenAI fallback takes over.
+  const candidateReply = (parsed?.reply ?? outputText) || "";
+  if (looksLikeProviderError(candidateReply)) {
+    throw new Error(
+      `Hermes returned an error-shaped reply; falling back: ${
+        String(candidateReply).slice(0, 160)
+      }`,
+    );
+  }
+
   if (parsed?.reply) return { ...parsed, provider: "hermes", raw: outputText };
 
   return {

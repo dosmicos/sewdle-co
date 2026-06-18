@@ -340,6 +340,38 @@ export function extractHermesOutputText(data: any): string {
   return data?.choices?.[0]?.message?.content || "";
 }
 
+// Detects when an upstream provider returned an ERROR message as the assistant
+// reply (e.g. Hermes/OpenClaw surfacing "API call failed after 3 retries:
+// HTTP 429: The usage limit has been reached" as text). Such replies must never
+// reach the customer — the caller should treat this as a provider failure and
+// fall back / hand off instead of sending the raw error.
+export function looksLikeProviderError(text: unknown): boolean {
+  const t = String(text || "").toLowerCase();
+  if (!t.trim()) return false;
+  const phrases = [
+    "api call failed",
+    "usage limit",
+    "rate limit",
+    "rate-limit",
+    "insufficient_quota",
+    "overloaded",
+    "internal server error",
+    "service unavailable",
+    "request failed",
+    "timed out",
+  ];
+  if (phrases.some((p) => t.includes(p))) return true;
+  if (/\bhttp\s*(4\d\d|5\d\d)\b/.test(t)) return true;
+  if (/\bafter \d+ retries\b/.test(t)) return true;
+  if (
+    /\b(429|500|502|503|504)\b/.test(t) &&
+    (t.includes("error") || t.includes("failed") || t.includes("limit"))
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function colombiaDateContext(now = new Date()): string {
   const colombiaTime = new Date(now.getTime() - 5 * 60 * 60 * 1000);
   const year = colombiaTime.getUTCFullYear();
