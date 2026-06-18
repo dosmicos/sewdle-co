@@ -33,6 +33,10 @@ import {
   shouldReplacePaymentLinkReplyWithoutUrl,
 } from "../_shared/payment-link-reply-guard.ts";
 import {
+  buildKnownVariantAvailabilityReply,
+  shouldReplaceAvailabilityDeferralReply,
+} from "../_shared/availability-reply-guard.ts";
+import {
   classifyPendingAddressVerificationReply,
 } from "../_shared/address-verification-routing.ts";
 
@@ -924,21 +928,30 @@ async function generateAIResponse(
 
     const data = await response.json();
     const rawAiResponse = data.choices?.[0]?.message?.content || '';
+    let finalAiResponse = rawAiResponse;
     
     // 💬 LOG: AI response
     console.log(`💬 Respuesta de IA: ${rawAiResponse.substring(0, 200)}...`);
+
+    if (shouldReplaceAvailabilityDeferralReply(rawAiResponse, contextualSearchSource, relevantProducts)) {
+      const availabilityReply = buildKnownVariantAvailabilityReply(contextualSearchSource, relevantProducts);
+      if (availabilityReply) {
+        console.log('🔁 Replacing availability deferral with known stock reply');
+        finalAiResponse = availabilityReply;
+      }
+    }
     
     // Check if AI opted to send collection link instead of individual images
-    const noImagesRequested = rawAiResponse.includes('[NO_IMAGES]');
+    const noImagesRequested = finalAiResponse.includes('[NO_IMAGES]');
 
     // Extract product IDs from explicit tags, and fallback to matching titles
     let productIds: number[] = [];
 
     if (!noImagesRequested) {
-      productIds = extractProductIdsFromResponse(rawAiResponse);
+      productIds = extractProductIdsFromResponse(finalAiResponse);
 
       if (productIds.length === 0) {
-        const inferred = inferProductIdsFromMentionedNames(rawAiResponse, productImageMap);
+        const inferred = inferProductIdsFromMentionedNames(finalAiResponse, productImageMap);
         if (inferred.length > 0) {
           console.log('No [PRODUCT_IMAGE_ID] tags found; inferred product IDs from titles:', inferred);
           productIds = inferred;
@@ -982,7 +995,7 @@ async function generateAIResponse(
       }
     }
     
-    const cleanedResponse = cleanAIResponse(rawAiResponse);
+    const cleanedResponse = cleanAIResponse(finalAiResponse);
     
     return { 
       text: cleanedResponse, 

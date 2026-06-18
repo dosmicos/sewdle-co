@@ -82,6 +82,25 @@ Deno.test("WhatsApp AI routing blocks payment-link confirmations without a URL",
   );
 });
 
+Deno.test("WhatsApp replaces availability deferrals when product variant stock is known", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+
+  assert(
+    source.includes("shouldReplaceAvailabilityDeferralReply"),
+    "whatsapp-webhook should detect deferral replies like te reviso/te confirmamos",
+  );
+  assert(
+    source.includes("buildKnownVariantAvailabilityReply"),
+    "whatsapp-webhook should build a deterministic availability reply from known catalog stock",
+  );
+  assert(
+    source.includes("finalAiResponse = availabilityReply"),
+    "known stock reply should replace the model deferral before sending",
+  );
+});
+
 Deno.test("WhatsApp pending address verification does not swallow unrelated new product messages", async () => {
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),
