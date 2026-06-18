@@ -42,12 +42,15 @@ export const useOrderConfirmations = () => {
     setLoading(true);
 
     try {
-      // 1. Fetch COD orders (Contraentrega, not Confirmado, not cancelled)
+      // 1. Fetch COD orders (Contraentrega, not Confirmado, not Empacado/Preparado, not cancelled)
       const { data: codOrders, error: ordersError } = await supabase
         .from('shopify_orders')
         .select('shopify_order_id, order_number, customer_first_name, customer_last_name, customer_phone, shipping_address, total_price, tags, created_at_shopify')
         .eq('organization_id', orgId)
         .ilike('tags', '%Contraentrega%')
+        .not('tags', 'ilike', '%Confirmado%')
+        .not('tags', 'ilike', '%Empacado%')
+        .not('tags', 'ilike', '%Preparado%')
         .is('cancelled_at', null)
         .order('created_at_shopify', { ascending: false })
         .limit(200);

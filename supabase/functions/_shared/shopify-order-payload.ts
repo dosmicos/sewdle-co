@@ -13,6 +13,7 @@ export type ShopifyOrderPayloadOrderData = {
   department: string;
   neighborhood?: string;
   notes?: string;
+  shippingMethod?: string;
   shippingCost?: number;
   paymentMethod?: string;
 };
@@ -25,6 +26,21 @@ export type BuildShopifyOrderPayloadParams = {
 };
 
 export const SHOPIFY_COD_GATEWAY = "Cash on Delivery (COD)";
+
+function normalizeOrderText(value: unknown): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function hasExpressShippingSignal(orderData: ShopifyOrderPayloadOrderData): boolean {
+  const shippingCost = Number(orderData.shippingCost || 0);
+  return normalizeOrderText([
+    orderData.shippingMethod,
+    orderData.notes,
+  ].join(" ")).includes("express") || shippingCost === 15000 || shippingCost === 14000;
+}
 
 function customerFirstName(customerName: string): string {
   return customerName.trim().split(/\s+/)[0] || customerName.trim();
@@ -49,6 +65,7 @@ export function buildShopifyOrderPayload(params: BuildShopifyOrderPayloadParams)
   const isContraEntrega = orderData.paymentMethod === "contra_entrega";
   const isLinkDePago = orderData.paymentMethod === "link_de_pago";
   const isAddi = orderData.paymentMethod === "addi";
+  const isExpressShipping = hasExpressShippingSignal(orderData);
   const isBankTransfer = ["bank_transfer", "bancolombia", "nequi", "manual_transfer"].includes(
     String(orderData.paymentMethod || ""),
   );
@@ -58,6 +75,7 @@ export function buildShopifyOrderPayload(params: BuildShopifyOrderPayloadParams)
   if (isLinkDePago) orderTags.push("Link de pago", "Bold");
   if (isAddi) orderTags.push("Addi", "Financiación");
   if (isBankTransfer) orderTags.push("Transferencia", "Pago recibido");
+  if (isExpressShipping) orderTags.push("Express");
 
   const firstName = customerFirstName(orderData.customerName);
   const lastName = customerLastName(orderData.customerName);
@@ -89,9 +107,9 @@ export function buildShopifyOrderPayload(params: BuildShopifyOrderPayloadParams)
       },
       shipping_lines: orderData.shippingCost && orderData.shippingCost > 0
         ? [{
-          title: "Envío",
+          title: isExpressShipping ? "Envío express" : "Envío",
           price: String(orderData.shippingCost),
-          code: "SHIPPING",
+          code: isExpressShipping ? "EXPRESS_SHIPPING" : "SHIPPING",
         }]
         : [],
       note: orderData.notes || "Pedido creado desde WhatsApp",

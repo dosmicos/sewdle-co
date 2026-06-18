@@ -6,16 +6,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Verify payment with Bold API by checking transaction status directly
+// Verify payment with Bold API by checking the payment link status.
+// The transaction endpoint rejects the same API-key auth used by the working link endpoint,
+// so this uses the persisted Bold payment link id as the source of truth.
 async function verifyPaymentWithBoldAPI(
-  transactionId: string,
+  transactionId: string | null,
+  paymentLinkId: string | null,
   reference: string,
   expectedAmount: number,
   boldApiKey: string
 ): Promise<{ verified: boolean; reason: string }> {
+  if (!paymentLinkId) {
+    return { verified: false, reason: 'Missing Bold payment link id for verification' };
+  }
+
   try {
-    // Bold Transaction Status API
-    const resp = await fetch(`https://integrations.api.bold.co/online/transaction/v1/${transactionId}`, {
+    const resp = await fetch(`https://integrations.api.bold.co/online/link/v1/${paymentLinkId}`, {
       method: 'GET',
       headers: {
         'Authorization': `x-api-key ${boldApiKey}`,
@@ -24,34 +30,45 @@ async function verifyPaymentWithBoldAPI(
     });
 
     if (!resp.ok) {
-      console.error(`Bold API verification failed: HTTP ${resp.status}`);
+      console.error(`Bold link verification failed: HTTP ${resp.status}`);
       // If Bold API is down, DON'T auto-approve — fail safe
-      return { verified: false, reason: `Bold API returned HTTP ${resp.status}` };
+      return { verified: false, reason: `Bold link API returned HTTP ${resp.status}` };
     }
 
-    const txData = await resp.json();
-    console.log("Bold API transaction data:", JSON.stringify(txData));
+    const linkData = await resp.json();
+    console.log("Bold link verification data:", JSON.stringify({
+      id: linkData.id || linkData.payload?.id,
+      status: linkData.status || linkData.payload?.status,
+      reference: linkData.reference || linkData.payload?.reference,
+      total: linkData.total || linkData.payload?.total || linkData.amount?.total_amount,
+      transaction_id: linkData.transaction_id || linkData.payload?.transaction_id,
+    }));
 
-    const txStatus = txData.payload?.status || txData.status;
-    const txReference = txData.payload?.reference || txData.reference;
-    const txAmount = txData.payload?.amount?.total_amount || txData.amount?.total_amount;
+    const linkStatus = linkData.payload?.status || linkData.status;
+    const linkReference = linkData.payload?.reference || linkData.reference;
+    const linkAmount = linkData.payload?.total || linkData.total || linkData.amount?.total_amount;
+    const linkTransactionId = linkData.payload?.transaction_id || linkData.transaction_id;
 
-    // Verify transaction is approved
-    if (txStatus !== 'APPROVED') {
-      return { verified: false, reason: `Transaction status is '${txStatus}', not APPROVED` };
+    if (linkStatus !== 'PAID') {
+      return { verified: false, reason: `Bold link status is '${linkStatus}', not PAID` };
     }
 
     // Verify reference matches our pending order
-    if (txReference && txReference !== reference) {
-      return { verified: false, reason: `Reference mismatch: expected '${reference}', got '${txReference}'` };
+    if (linkReference && linkReference !== reference) {
+      return { verified: false, reason: `Reference mismatch: expected '${reference}', got '${linkReference}'` };
+    }
+
+    // If the webhook sent a transaction id, make sure it matches the paid link.
+    if (transactionId && linkTransactionId && transactionId !== linkTransactionId) {
+      return { verified: false, reason: `Transaction mismatch: expected '${transactionId}', got '${linkTransactionId}'` };
     }
 
     // Verify amount matches (within 1 COP tolerance for rounding)
-    if (txAmount && expectedAmount && Math.abs(txAmount - expectedAmount) > 1) {
-      return { verified: false, reason: `Amount mismatch: expected ${expectedAmount}, got ${txAmount}` };
+    if (linkAmount && expectedAmount && Math.abs(Number(linkAmount) - Number(expectedAmount)) > 1) {
+      return { verified: false, reason: `Amount mismatch: expected ${expectedAmount}, got ${linkAmount}` };
     }
 
-    return { verified: true, reason: 'Transaction verified via Bold API' };
+    return { verified: true, reason: 'Payment link verified as PAID via Bold API' };
   } catch (err) {
     console.error("Error verifying with Bold API:", err);
     return { verified: false, reason: `API verification error: ${err instanceof Error ? err.message : 'unknown'}` };
@@ -130,6 +147,23 @@ async function tagConversationRevisarPedido(supabase: any, organizationId: strin
   } catch (err) {
     console.error('Error tagging conversation:', err);
   }
+}
+
+function normalizeWebhookText(value: unknown): string {
+  return String(value ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function isBogotaExpressUnderchargedPendingOrder(pendingOrder: any): boolean {
+  const city = normalizeWebhookText(pendingOrder?.city);
+  const department = normalizeWebhookText(pendingOrder?.department);
+  const notes = normalizeWebhookText(pendingOrder?.notes);
+  const shippingCost = Number(pendingOrder?.shipping_cost || 0);
+  const isBogota = city.includes('bogota') || department.includes('bogota');
+  const requestedExpress = notes.includes('express');
+  return isBogota && requestedExpress && shippingCost > 0 && shippingCost < 15000;
 }
 
 serve(async (req) => {
@@ -226,9 +260,10 @@ serve(async (req) => {
       boldApiKey = Deno.env.get('BOLD_API_KEY');
     }
 
-    if (boldApiKey && transactionId) {
+    if (boldApiKey && pendingOrder.bold_payment_link_id) {
       const verification = await verifyPaymentWithBoldAPI(
-        transactionId,
+        transactionId || null,
+        pendingOrder.bold_payment_link_id,
         reference,
         pendingOrder.total_amount,
         boldApiKey
@@ -245,7 +280,26 @@ serve(async (req) => {
 
       console.log(`✅ PAYMENT VERIFIED via Bold API: ${verification.reason}`);
     } else {
-      console.warn("⚠️ Could not verify payment with Bold API (missing API key or transaction ID). Proceeding with caution.");
+      console.warn("⚠️ Could not verify payment with Bold API (missing API key or payment link id). Proceeding with caution.");
+    }
+
+    if (isBogotaExpressUnderchargedPendingOrder(pendingOrder)) {
+      const reviewNote = ` | Pago Bold aprobado pero pedido express Bogotá quedó subcobrado: shipping_cost=${pendingOrder.shipping_cost}, mínimo express=15000. Revisar antes de crear Shopify.`;
+      console.error(`🚨 Express shipping undercharged for ${reference}; suppressing automatic Shopify order creation`);
+      await supabase
+        .from('pending_orders')
+        .update({
+          status: 'paid',
+          paid_at: new Date().toISOString(),
+          notes: (pendingOrder.notes || '') + reviewNote,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', pendingOrder.id);
+      await tagConversationRevisarPedido(supabase, pendingOrder.organization_id, pendingOrder.conversation_id);
+      return new Response(
+        JSON.stringify({ success: true, needs_review: true, reason: 'express_shipping_undercharged' }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Update pending order status to "paid" — only after API verification
@@ -314,63 +368,104 @@ serve(async (req) => {
       })
       .eq('id', pendingOrder.id);
 
-    // Send WhatsApp confirmation to the customer
-    const whatsappToken = Deno.env.get('META_WHATSAPP_TOKEN');
-    let phoneNumberId = Deno.env.get('META_PHONE_NUMBER_ID');
+    // Send WhatsApp confirmation to the customer.
+    // Prefer the shared confirmation flow so we reuse the template fallback used by COD/shopify-webhook.
+    let confirmationSent = false;
 
-    // Try to get phone number ID from the organization's messaging channel
-    if (pendingOrder.organization_id) {
-      const { data: channels } = await supabase
-        .from('messaging_channels')
-        .select('meta_phone_number_id')
-        .eq('organization_id', pendingOrder.organization_id)
-        .eq('channel_type', 'whatsapp')
-        .eq('is_active', true)
-        .limit(1);
+    if (pendingOrder.organization_id && orderResult?.orderId) {
+      try {
+        const { data: confirmationResult, error: confirmationError } = await supabase.functions.invoke(
+          'send-order-confirmation',
+          {
+            body: {
+              action: 'send_single',
+              organizationId: pendingOrder.organization_id,
+              shopifyOrderId: Number(orderResult.orderId),
+            },
+          },
+        );
 
-      if (channels?.[0]?.meta_phone_number_id) {
-        phoneNumberId = channels[0].meta_phone_number_id;
+        confirmationSent = Boolean(confirmationResult?.success) && !confirmationError;
+        if (confirmationSent) {
+          console.log(
+            'Shared order confirmation sent to customer for order:',
+            orderResult.orderNumber,
+          );
+        } else {
+          console.warn(
+            'Shared order confirmation failed, falling back to direct WhatsApp text:',
+            confirmationError || confirmationResult,
+          );
+        }
+      } catch (invokeError) {
+        console.warn('Error invoking shared order confirmation flow:', invokeError);
       }
     }
 
-    if (whatsappToken && phoneNumberId && pendingOrder.customer_phone) {
-      const productsList = lineItems
-        .map((item: any) => `• ${item.productName} (${item.variantName}) x${item.quantity || 1}`)
-        .join('\n');
+    if (!confirmationSent) {
+      const whatsappToken = Deno.env.get('META_WHATSAPP_TOKEN');
+      let phoneNumberId = Deno.env.get('META_PHONE_NUMBER_ID');
 
-      const confirmationMessage =
-        `¡Tu pago ha sido confirmado! 🎉✅\n\n` +
-        `📋 Número de pedido: #${orderResult.orderNumber}\n` +
-        `💰 Total pagado: $${Number(orderResult.totalPrice).toLocaleString('es-CO')} COP\n\n` +
-        `📦 Productos:\n${productsList}\n\n` +
-        `Tu pedido ha sido creado exitosamente. Te enviaremos la información de seguimiento cuando sea despachado.\n\n` +
-        `¡Gracias por tu compra! 😊`;
+      // Try to get phone number ID from the organization's messaging channel
+      if (pendingOrder.organization_id) {
+        const { data: channels } = await supabase
+          .from('messaging_channels')
+          .select('meta_phone_number_id')
+          .eq('organization_id', pendingOrder.organization_id)
+          .eq('channel_type', 'whatsapp')
+          .eq('is_active', true)
+          .limit(1);
 
-      const sent = await sendWhatsAppMessage(
-        phoneNumberId,
-        whatsappToken,
-        pendingOrder.customer_phone,
-        confirmationMessage
-      );
-
-      if (sent) {
-        console.log("WhatsApp confirmation sent to:", pendingOrder.customer_phone);
-
-        // Save the confirmation message to the conversation
-        if (pendingOrder.conversation_id) {
-          await supabase
-            .from('messaging_messages')
-            .insert({
-              conversation_id: pendingOrder.conversation_id,
-              content: confirmationMessage,
-              direction: 'outbound',
-              message_type: 'text',
-              sent_at: new Date().toISOString(),
-            });
+        if (channels?.[0]?.meta_phone_number_id) {
+          phoneNumberId = channels[0].meta_phone_number_id;
         }
       }
-    } else {
-      console.warn("Missing WhatsApp credentials, could not send confirmation");
+
+      if (whatsappToken && phoneNumberId && pendingOrder.customer_phone) {
+        const productsList = lineItems
+          .map((item: any) => `• ${item.productName} (${item.variantName}) x${item.quantity || 1}`)
+          .join('\n');
+
+        const confirmationMessage =
+          `¡Tu pago ha sido confirmado! 🎉✅\n\n` +
+          `📋 Número de pedido: #${orderResult.orderNumber}\n` +
+          `💰 Total pagado: $${Number(orderResult.totalPrice).toLocaleString('es-CO')} COP\n\n` +
+          `📦 Productos:\n${productsList}\n\n` +
+          `Tu pedido ha sido creado exitosamente. Te enviaremos la información de seguimiento cuando sea despachado.\n\n` +
+          `¡Gracias por tu compra! 😊`;
+
+        const sent = await sendWhatsAppMessage(
+          phoneNumberId,
+          whatsappToken,
+          pendingOrder.customer_phone,
+          confirmationMessage,
+        );
+
+        if (sent) {
+          console.log('WhatsApp confirmation fallback sent to:', pendingOrder.customer_phone);
+
+          // Save the confirmation message to the conversation
+          if (pendingOrder.conversation_id) {
+            await supabase
+              .from('messaging_messages')
+              .insert({
+                conversation_id: pendingOrder.conversation_id,
+                content: confirmationMessage,
+                direction: 'outbound',
+                message_type: 'text',
+                sent_at: new Date().toISOString(),
+              });
+          }
+
+          confirmationSent = true;
+        }
+      } else {
+        console.warn('Missing WhatsApp credentials, could not send confirmation fallback');
+      }
+    }
+
+    if (!confirmationSent) {
+      await tagConversationRevisarPedido(supabase, pendingOrder.organization_id, pendingOrder.conversation_id);
     }
 
     return new Response(

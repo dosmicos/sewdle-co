@@ -11,7 +11,26 @@ function assertEquals(actual: unknown, expected: unknown) {
   }
 }
 
-Deno.test("classifyLearningForCuration auto-activates repeated safe size guidance", () => {
+Deno.test("classifyLearningForCuration keeps safe repeated guidance under review until it appears three times", () => {
+  const decision = classifyLearningForCuration({
+    learning: {
+      category: "sizes",
+      situation:
+        "Cliente pregunta qué talla escoger para un bebé según edad y estatura.",
+      recommended_response:
+        "Para ayudarte mejor con la talla, confírmame porfa la estatura del bebé 😊",
+      confidence: 0.86,
+      status: "needs_review",
+    },
+    duplicateCount: 2,
+  });
+
+  assertEquals(decision.recommendedStatus, "needs_review");
+  assertEquals(decision.autoApply, false);
+  assertEquals(decision.reason, "needs_human_review");
+});
+
+Deno.test("classifyLearningForCuration auto-activates safe guidance after three similar repeats", () => {
   const decision = classifyLearningForCuration({
     learning: {
       category: "sizes",
@@ -84,16 +103,16 @@ Deno.test("classifyLearningForCuration does not auto-activate possible PII", () 
   assertEquals(decision.riskFlags.includes("possible_pii"), true);
 });
 
-Deno.test("learningCurationSignature groups normalized duplicate learning rows", () => {
+Deno.test("learningCurationSignature groups paraphrased safe size questions", () => {
   const first = learningCurationSignature({
     category: "Sizes",
-    situation: "¿Qué talla le sirve?",
+    situation: "¿Qué talla le sirve a un bebé según la estatura?",
     recommended_response: "Confírmame la estatura porfa 😊",
   });
   const second = learningCurationSignature({
     category: "sizes",
-    situation: "Que talla le sirve",
-    recommended_response: "Confirmame la estatura porfa",
+    situation: "¿Qué talla me recomiendas para bebé por su altura?",
+    recommended_response: "Confirmame la altura porfa",
   });
 
   assertEquals(first, second);

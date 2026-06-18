@@ -13,6 +13,7 @@ import {
   ELSA_LEARNING_STATUSES,
   type ElsaResponseLearning,
   formatLearningConfidence,
+  getLearningCurationSummary,
   getLearningStatusLabel,
   normalizeLearningConfidence,
   normalizeLearningStatus,
@@ -83,6 +84,7 @@ function LearningCard({
   const [draft, setDraft] = useState<LearningDraft>(() => toDraft(learning));
   const status = normalizeLearningStatus(learning.status);
   const categoryLabel = CATEGORY_LABELS[learning.category] || learning.category || 'General';
+  const curationSummary = getLearningCurationSummary(learning);
 
   const updateDraft = (field: keyof LearningDraft, value: string) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -104,6 +106,26 @@ function LearningCard({
             <CardDescription>
               Capturado {shortDate(learning.created_at)} · última edición {shortDate(learning.updated_at)}
             </CardDescription>
+            {curationSummary && (
+              <div className={`rounded-lg border px-3 py-2 text-sm ${curationSummary.tone === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                : curationSummary.tone === 'muted'
+                  ? 'border-slate-200 bg-slate-50 text-slate-700'
+                  : 'border-amber-200 bg-amber-50 text-amber-900'
+                }`}>
+                <div className="flex flex-wrap items-center gap-2 font-medium">
+                  <span>{curationSummary.headline}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {curationSummary.badges.map((badge) => (
+                      <Badge key={badge} variant="outline" className="bg-white/80 text-inherit border-current/20">
+                        {badge}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <p className="mt-1 leading-5">{curationSummary.details}</p>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">

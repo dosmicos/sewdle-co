@@ -77,6 +77,113 @@ const GENERIC_LOW_VALUE_PHRASES = [
   "hola, soy alejandra",
 ];
 
+const CURATION_STOP_WORDS = new Set([
+  "a",
+  "al",
+  "ante",
+  "antes",
+  "con",
+  "contra",
+  "de",
+  "del",
+  "desde",
+  "despues",
+  "después",
+  "e",
+  "el",
+  "ella",
+  "ellas",
+  "ellos",
+  "en",
+  "entre",
+  "es",
+  "esa",
+  "ese",
+  "eso",
+  "esta",
+  "está",
+  "este",
+  "esto",
+  "la",
+  "las",
+  "le",
+  "les",
+  "lo",
+  "los",
+  "me",
+  "mi",
+  "mis",
+  "muy",
+  "ni",
+  "o",
+  "os",
+  "para",
+  "pero",
+  "por",
+  "porque",
+  "que",
+  "se",
+  "sin",
+  "sobre",
+  "su",
+  "sus",
+  "te",
+  "tu",
+  "tus",
+  "un",
+  "una",
+  "uno",
+  "unos",
+  "unas",
+  "ya",
+  "yo",
+  "porfa",
+  "favor",
+  "hola",
+  "buenos",
+  "buenas",
+  "dias",
+  "día",
+  "dia",
+  "cliente",
+  "clienta",
+  "pregunta",
+  "preguntar",
+  "quisiera",
+  "quiero",
+  "necesito",
+  "me",
+  "gustaria",
+  "gustaría",
+  "puede",
+  "podria",
+  "podría",
+  "sirve",
+  "sirven",
+  "servir",
+  "recomienda",
+  "recomiendas",
+  "recomendar",
+  "escoger",
+  "escoge",
+  "elegir",
+  "edad",
+  "altura",
+  "alto",
+  "medida",
+  "medidas",
+  "medir",
+  "segun",
+  "según",
+  "segun",
+]);
+
+const CURATION_SYNONYMS: Record<string, string> = {
+  altura: "estatura",
+  alto: "estatura",
+  estatura: "estatura",
+};
+
 function normalize(value: unknown): string {
   return String(value ?? "")
     .toLowerCase()
@@ -96,6 +203,25 @@ function normalizeConfidence(value: unknown): number {
   if (!Number.isFinite(numeric)) return 0.55;
   const ratio = numeric > 1 ? numeric / 100 : numeric;
   return Math.max(0, Math.min(1, ratio));
+}
+
+function canonicalizeToken(token: string): string {
+  return CURATION_SYNONYMS[token] || token;
+}
+
+function meaningfulTokens(value: unknown): string[] {
+  const normalized = normalize(value).replace(/\b\d+\b/g, " 0 ");
+  const tokens = normalized
+    .split(" ")
+    .map(canonicalizeToken)
+    .filter((token) => token && !CURATION_STOP_WORDS.has(token))
+    .filter((token) => token.length > 2 || token === "0");
+
+  return Array.from(new Set(tokens)).sort((a, b) => a.localeCompare(b, "es"));
+}
+
+function canonicalText(value: unknown): string {
+  return meaningfulTokens(value).join(" ");
 }
 
 function textBundle(learning: ElsaLearningForCuration): string {
@@ -140,8 +266,8 @@ export function learningCurationSignature(
 ): string {
   return [
     normalizedCategory(learning.category),
-    normalize(learning.situation).slice(0, 160),
-    normalize(learning.recommended_response).slice(0, 220),
+    canonicalText(learning.situation).slice(0, 160),
+    canonicalText(learning.recommended_response).slice(0, 220),
   ].join("|");
 }
 
@@ -182,8 +308,8 @@ export function classifyLearningForCuration(params: {
   }
 
   const safeCategory = SAFE_AUTO_ACTIVE_CATEGORIES.has(category);
-  const safeRepeated = safeCategory && duplicateCount >= 2 &&
-    confidence >= 0.8 && riskFlags.length === 0;
+  const safeRepeated = safeCategory && duplicateCount >= 3 &&
+    confidence >= 0.85 && riskFlags.length === 0;
 
   if (safeRepeated) {
     return {

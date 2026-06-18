@@ -176,3 +176,6 @@ verify_jwt = false
 
 [functions.elsa-review-suggestion]
 verify_jwt = false
+
+[functions.elsa-capture-insight]
+verify_jwt = false

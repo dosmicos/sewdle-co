@@ -15,5 +15,6 @@ Deno.test("Elsa learnings page is routed and visible from the messaging menu", a
   assert(sidebar.includes("/elsa-learnings"), "Sidebar menu item must navigate to /elsa-learnings");
   assert(page.includes("elsa_response_learnings"), "Page must read Elsa learning rows");
   assert(page.includes("elsa-review-learning"), "Page must call the review Edge Function for actions");
+  assert(page.includes("getLearningCurationSummary"), "Page must render a curation rationale block");
   assert(page.includes("Aprobar") && page.includes("Archivar") && page.includes("Guardar"), "Page must expose approve/archive/save actions");
 });
