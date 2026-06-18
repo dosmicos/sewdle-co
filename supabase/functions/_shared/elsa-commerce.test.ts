@@ -415,6 +415,21 @@ Deno.test("summarizeCommerceCatalogForPrompt prioritizes products matching the c
   assertEquals(summary[0].variants[0].stock, 5);
 });
 
+Deno.test("summarizeCommerceCatalogForPrompt includes product type and tags for visual candidate matching", () => {
+  const summary = summarizeCommerceCatalogForPrompt([
+    {
+      id: 88,
+      title: "Sleeping Walker Koala TOG 2.5",
+      product_type: "Sleeping Walker",
+      tags: "koala, amarillo, animal",
+      variants: [{ id: 188, title: "Talla 2", sku: "KOALA-2", price: "149900", inventory_quantity: 3 }],
+    },
+  ]);
+
+  assertEquals(summary[0].product_type, "Sleeping Walker");
+  assertEquals(summary[0].tags, "koala, amarillo, animal");
+});
+
 Deno.test("formatShopifyOrderCreatedReply includes order number, summary and thanks", () => {
   const reply = formatShopifyOrderCreatedReply({
     orderNumber: "75966",

@@ -1,11 +1,14 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
+  buildProductSearchContext,
+  buildVisualCandidateInstruction,
   extractSearchTerms,
+  extractVisualCandidateSearchTerms,
   formatProductsForContext,
+  hasVisualCandidateSearchSignal,
   isProductQuery,
   scoreProductNameMatch,
   searchRelevantProducts,
-  buildProductSearchContext,
 } from "./product-matching.ts";
 
 Deno.test("extractSearchTerms keeps product words and removes stop words", () => {
@@ -189,6 +192,145 @@ Deno.test("searchRelevantProducts prioritizes exact OCR product title from scree
   const results = searchRelevantProducts(products, extractSearchTerms(context), 5);
 
   assertEquals(results[0].title, "Ruana Venado Aurora");
+});
+
+Deno.test("visual candidate terms keep generic family for catalog search", () => {
+  const context = buildProductSearchContext("Mira esta foto", [
+    {
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: [
+            "OCR del texto visible:",
+            "Texto no legible",
+            "Familia visual probable: ruana",
+            "Pistas visuales: venado | animal",
+            "Descripción visual: ruana color camel con venado bordado",
+          ].join("\n"),
+        },
+      ],
+    },
+  ]);
+
+  assert(hasVisualCandidateSearchSignal(context));
+  assertEquals(extractVisualCandidateSearchTerms(context), ["ruana", "venado", "animal", "camel", "bordado"]);
+});
+
+Deno.test("visual candidate terms keep color values while ignoring the word color", () => {
+  const terms = extractVisualCandidateSearchTerms([
+    "OCR del texto visible:",
+    "Texto no legible",
+    "Familia visual probable: cobija",
+    "Pistas visuales: koala | estrellas",
+    "Descripción visual: producto amarillo con koala, color amarillo",
+  ].join("\n"));
+
+  assert(terms.includes("amarillo"));
+  assert(!terms.includes("color"));
+});
+
+Deno.test("searchRelevantProducts uses visual family and design terms against title tags and product_type", () => {
+  const products = [
+    {
+      id: 30,
+      title: "Ruana Venado Aurora",
+      handle: "ruana-venado-aurora",
+      product_type: "Ruana",
+      tags: "venado, animal, camel",
+      body_html: "",
+      variants: [{ title: "Talla 4", option1: "Talla 4", inventory_quantity: 2, price: "96900" }],
+    },
+    {
+      id: 31,
+      title: "Ruana Mapache",
+      handle: "ruana-mapache",
+      product_type: "Ruana",
+      tags: "mapache, gris",
+      body_html: "",
+      variants: [{ title: "Talla 4", option1: "Talla 4", inventory_quantity: 5, price: "96900" }],
+    },
+  ];
+
+  const terms = extractVisualCandidateSearchTerms([
+    "OCR del texto visible:",
+    "Texto no legible",
+    "Familia visual probable: ruana",
+    "Pistas visuales: venado",
+    "Descripción visual: ruana camel con animal venado",
+  ].join("\n"));
+  const results = searchRelevantProducts(products, terms, 3);
+
+  assertEquals(results[0].title, "Ruana Venado Aurora");
+});
+
+Deno.test("searchRelevantProducts can offer candidates from only a generic visual family", () => {
+  const products = [
+    {
+      id: 40,
+      title: "Ruana Mapache",
+      handle: "ruana-mapache",
+      product_type: "Ruana",
+      tags: "mapache, gris",
+      body_html: "",
+      variants: [{ title: "Talla 2", option1: "Talla 2", inventory_quantity: 2, price: "96900" }],
+    },
+    {
+      id: 41,
+      title: "Sleeping Walker Koala TOG 2.5",
+      handle: "sleeping-walker-koala-tog-2-5",
+      product_type: "Sleeping Walker",
+      tags: "koala, amarillo",
+      body_html: "",
+      variants: [{ title: "Talla 2", option1: "Talla 2", inventory_quantity: 4, price: "149900" }],
+    },
+  ];
+
+  const results = searchRelevantProducts(products, extractVisualCandidateSearchTerms("Familia visual probable: ruana"), 3);
+
+  assertEquals(results.map((product) => product.title), ["Ruana Mapache"]);
+});
+
+Deno.test("visual candidate signal is false when unreadable image has no useful clues", () => {
+  const context = "OCR del texto visible:\nTexto no legible\nEl cliente envió esta imagen.";
+
+  assertEquals(hasVisualCandidateSearchSignal(context), false);
+  assertEquals(extractVisualCandidateSearchTerms(context), []);
+});
+
+Deno.test("buildVisualCandidateInstruction tells the reply model to offer catalog candidates", () => {
+  const instruction = buildVisualCandidateInstruction(
+    [
+      "OCR del texto visible:",
+      "Texto no legible",
+      "Familia visual probable: ruana",
+      "Pistas visuales: venado",
+    ].join("\n"),
+    [
+      { id: 50, title: "Ruana Venado Aurora", variants: [{ inventory_quantity: 2 }] },
+      { id: 51, title: "Ruana Reno Rudolph", variants: [{ inventory_quantity: 1 }] },
+    ],
+  );
+
+  assert(instruction.includes("foto sin nombre legible"));
+  assert(instruction.includes("Ruana Venado Aurora"));
+  assert(instruction.includes("No pidas el nombre en seco"));
+});
+
+Deno.test("formatProductsForContext includes tags and product type for visual matching clues", () => {
+  const context = formatProductsForContext([
+    {
+      id: 60,
+      title: "Sleeping Walker Koala TOG 2.5",
+      handle: "sleeping-walker-koala-tog-2-5",
+      product_type: "Sleeping Walker",
+      tags: "koala, amarillo, animal",
+      variants: [{ title: "Amarillo / Talla 2", option1: "Amarillo", option2: "Talla 2", inventory_quantity: 2, price: "149900" }],
+    },
+  ]);
+
+  assert(context.includes("Tipo: Sleeping Walker"));
+  assert(context.includes("Tags: koala, amarillo, animal"));
 });
 
 Deno.test("formatProductsForContext includes options and reference clues", () => {

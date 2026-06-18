@@ -45,6 +45,13 @@ import {
   type ManualTransferDraftOrderRequest,
   summarizeCommerceCatalogForPrompt,
 } from "../_shared/elsa-commerce.ts";
+import {
+  buildProductSearchContext,
+  buildVisualCandidateInstruction,
+  extractVisualCandidateSearchTerms,
+  hasVisualCandidateSearchSignal,
+  searchRelevantProducts,
+} from "../_shared/product-matching.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1594,16 +1601,26 @@ serve(async (req) => {
       conversationId,
     );
     if (commerceCatalog.length) {
-      const catalogSearchQuery = messages
-        .filter((message) => {
-          if (message.role === "user") return true;
-          return /dosmicos\.co\/products\//i.test(
-            textFromMessageContent(message.content),
-          );
-        })
-        .slice(-5)
-        .map((message) => textFromMessageContent(message.content))
-        .join("\n");
+      const searchHistory = [
+        ...(Array.isArray((sewdleContext as any).recent_messages)
+          ? ((sewdleContext as any).recent_messages as any[]).map((message) => ({
+            direction: message.direction,
+            content: message.content,
+          }))
+          : []),
+        ...messages,
+      ];
+      const latestUserMessage = [...messages].reverse().find((message) => message.role === "user");
+      const catalogSearchQuery = buildProductSearchContext(
+        textFromMessageContent(latestUserMessage?.content || ""),
+        searchHistory,
+      );
+      const visualSearchTerms = hasVisualCandidateSearchSignal(catalogSearchQuery)
+        ? extractVisualCandidateSearchTerms(catalogSearchQuery)
+        : [];
+      const productsForPrompt = visualSearchTerms.length
+        ? searchRelevantProducts(commerceCatalog, visualSearchTerms, 3) as CommerceProduct[]
+        : commerceCatalog;
       sewdleContext.commerce = {
         capabilities: [
           "send_payment_link_bold_pse",
@@ -1616,10 +1633,13 @@ serve(async (req) => {
         payment_flow:
           "Para contra entrega/COD: crear pedido Shopify inmediatamente con gateway Cash on Delivery (COD), estado financiero pending y responder con número de pedido, resumen y agradecimiento. Para PSE/link de pago: generar link Bold y guardar pending_order; Shopify se crea automáticamente solo cuando Bold confirma el pago por webhook. Para Addi: generar solicitud Addi y guardar pending_order; Shopify se crea automáticamente solo cuando Addi aprueba la compra por callback. Para Bancolombia/Nequi/transferencia manual: pedir comprobante; después de recibir la foto del comprobante, crear draft order de Shopify y etiquetar la conversación Pago por validar, sin usar Requiere atencion.",
         products: summarizeCommerceCatalogForPrompt(
-          commerceCatalog,
-          80,
+          productsForPrompt,
+          visualSearchTerms.length ? 3 : 80,
           catalogSearchQuery,
         ),
+        visual_candidate_instruction: visualSearchTerms.length && productsForPrompt.length
+          ? buildVisualCandidateInstruction(catalogSearchQuery, productsForPrompt)
+          : undefined,
       };
     }
     const prompt = buildElsaPrompt({ messages, systemPrompt, sewdleContext });
