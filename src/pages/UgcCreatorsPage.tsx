@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, LayoutGrid, Table as TableIcon, Trophy, RotateCcw, ExternalLink, Lightbulb, Images } from 'lucide-react';
+import { Plus, LayoutGrid, Table as TableIcon, Trophy, RotateCcw, ExternalLink, Lightbulb, Images, Download, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { supabase as supabaseClient } from '@/integrations/supabase/client';
@@ -24,6 +24,7 @@ import { UgcNotificationCenter } from '@/components/ugc/UgcNotificationCenter';
 import { PickingOrderDetailsModal } from '@/components/picking/PickingOrderDetailsModal';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { exportCmdPendingContentReport } from '@/lib/ugcContentChaseExport';
 import type { UgcCreator, UgcCampaign, CampaignStatus, CreatorStatus } from '@/types/ugc';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -47,6 +48,24 @@ const UgcCreatorsPage: React.FC = () => {
   const [videoCampaignId, setVideoCampaignId] = useState<string | null>(null);
   const [pickingOrderId, setPickingOrderId] = useState<string | null>(null);
   const [pickingModalOpen, setPickingModalOpen] = useState(false);
+  const [exportingContentChase, setExportingContentChase] = useState(false);
+
+  const handleExportContentChase = async () => {
+    setExportingContentChase(true);
+    try {
+      const count = await exportCmdPendingContentReport();
+      if (count === 0) {
+        toast.info('No hay creadoras CMD con pedido entregado y sin contenido pendiente.');
+      } else {
+        toast.success(`Reporte generado: ${count} creadora${count === 1 ? '' : 's'} pendiente${count === 1 ? '' : 's'} de contenido.`);
+      }
+    } catch (err) {
+      console.error('Error exporting content-chase report:', err);
+      toast.error(`No se pudo generar el reporte: ${err instanceof Error ? err.message : 'error desconocido'}`);
+    } finally {
+      setExportingContentChase(false);
+    }
+  };
 
   const { creators, isLoading: creatorsLoading, createCreator, updateCreator, updateCreatorStatus, deleteCreator } = useUgcCreators();
   const { campaigns, isLoading: campaignsLoading, createCampaign, updateCampaign, deleteCampaign, updateCampaignStatus } = useUgcCampaigns();
@@ -304,6 +323,15 @@ const UgcCreatorsPage: React.FC = () => {
             </Button>
           </div>
           <UgcNotificationCenter onNotificationClick={handleNotificationClick} />
+          <Button
+            variant="outline"
+            onClick={handleExportContentChase}
+            disabled={exportingContentChase}
+            title="Exportar a Excel las creadoras CMD con pedido entregado (≥1 semana) que aún no han subido contenido"
+          >
+            {exportingContentChase ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
+            Pendientes de contenido
+          </Button>
           <Button onClick={() => { setEditingCreator(null); setCreatorFormOpen(true); }}>
             <Plus className="h-4 w-4 mr-1" /> Nuevo Creador
           </Button>
