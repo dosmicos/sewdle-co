@@ -405,6 +405,7 @@ export function formatProductsForContext(products: ProductLike[]): string {
 
   let context = '\n\n📦 PRODUCTOS RELEVANTES ENCONTRADOS:\n';
   context += '⚠️ IMPORTANTE: Usa SOLO estos productos para responder. NO inventes otros.\n';
+  context += '⚠️ Si el cliente pidió una variante/talla marcada en Variantes agotadas, dilo directo como agotada. NO digas “validando inventario”, “validando con bodega” ni “te confirmamos disponibilidad” cuando el stock ya está en el contexto.\n';
   context += '🔔 RECUERDA: Si el cliente pregunta por una categoría/talla, envía el LINK de la colección. Solo incluye [PRODUCT_IMAGE_ID:ID] si el cliente pide ver fotos de un producto específico.\n\n';
 
   products.forEach((product, index) => {
@@ -417,6 +418,11 @@ export function formatProductsForContext(products: ProductLike[]): string {
       .filter((v) => (v.inventory_quantity || 0) > 0)
       .slice(0, 8)
       .map((v) => `${v.title || v.option1 || 'Variante'}: ${v.inventory_quantity} uds`)
+      .join(' | ');
+    const soldOutVariantDetails = variants
+      .filter((v) => Number(v.inventory_quantity || 0) <= 0)
+      .slice(0, 8)
+      .map((v) => `${v.title || v.option1 || 'Variante'}`)
       .join(' | ');
     const optionSummary = summarizeOptions(product);
     const reference = product.handle ? `\n   🔗 Referencia: ${product.handle}` : '';
@@ -431,6 +437,9 @@ export function formatProductsForContext(products: ProductLike[]): string {
     }
     if (variantDetails) {
       context += `   📐 Variantes disponibles: ${variantDetails}\n`;
+    }
+    if (soldOutVariantDetails) {
+      context += `   ❌ Variantes agotadas: ${soldOutVariantDetails}\n`;
     }
     context += `${productType}${tags}${reference}\n\n`;
   });

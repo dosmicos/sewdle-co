@@ -393,6 +393,14 @@ Deno.test("buildElsaPrompt explicitly prioritizes Sewdle knowledge base when pre
     prompt,
     "No inventes disponibilidad, precios ni estado de pedidos",
   );
+  assertIncludes(
+    prompt,
+    "Si una variante/talla aparece con stock 0",
+  );
+  assertIncludes(
+    prompt,
+    "no respondas que lo vas a validar con bodega",
+  );
 });
 
 Deno.test("buildElsaPrompt teaches Bold PSE payment-link action schema", () => {
