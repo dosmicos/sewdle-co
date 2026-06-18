@@ -13,6 +13,11 @@ import ContributionMarginCard from '@/components/finance-dashboard/ContributionM
 import NetProfitCard from '@/components/finance-dashboard/NetProfitCard';
 import ContributionMarginBreakdown from '@/components/finance-dashboard/ContributionMarginBreakdown';
 import FourQuarterChart from '@/components/finance-dashboard/FourQuarterChart';
+import { useAuth } from '@/contexts/AuthContext';
+
+// Solo estos usuarios ven la rentabilidad (Net Profit + Contribution Margin) en
+// el summary. A los demás con acceso a Growth se les ocultan esos datos.
+const PROFIT_VISIBLE_EMAILS = ['julitocastro96@gmail.com'];
 import BusinessMetricsRow from '@/components/finance-dashboard/BusinessMetricsRow';
 import CustomerHealthSection from '@/components/finance-dashboard/CustomerHealthSection';
 import ForecastChart from '@/components/finance-dashboard/ForecastChart';
@@ -67,6 +72,9 @@ const TikTokIcon = () => (
 
 const FinanceDashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canSeeProfit =
+    !!user?.email && PROFIT_VISIBLE_EMAILS.includes(user.email.toLowerCase());
   const dateRange = useFinanceDateRange();
   const storeMetrics = useStoreMetrics(dateRange.current, dateRange.previous);
   const metaAds = useAdMetrics(dateRange.current, dateRange.previous, 'meta');
@@ -457,19 +465,23 @@ const FinanceDashboardPage: React.FC = () => {
 
         {/* ========== SECTION 1: THE SCOREBOARD ========== */}
         <section className="space-y-4">
-          <ContributionMarginCard data={cmData} formatCOP={formatCOP} />
-          <NetProfitCard data={cmData} formatCOP={formatCOP} />
-          <ContributionMarginBreakdown
-            data={cmData}
-            targetPercents={{
-              cogs: financeSettings.settings?.cogs_percent ?? 20,
-              shipping: financeSettings.settings?.shipping_cost_percent ?? 10,
-              gateway: financeSettings.settings?.payment_gateway_percent ?? 3.5,
-              handling: financeSettings.settings?.handling_cost_percent ?? 2,
-              adSpend: 30,
-            }}
-            formatCOP={formatCOP}
-          />
+          {canSeeProfit && (
+            <>
+              <ContributionMarginCard data={cmData} formatCOP={formatCOP} />
+              <NetProfitCard data={cmData} formatCOP={formatCOP} />
+              <ContributionMarginBreakdown
+                data={cmData}
+                targetPercents={{
+                  cogs: financeSettings.settings?.cogs_percent ?? 20,
+                  shipping: financeSettings.settings?.shipping_cost_percent ?? 10,
+                  gateway: financeSettings.settings?.payment_gateway_percent ?? 3.5,
+                  handling: financeSettings.settings?.handling_cost_percent ?? 2,
+                  adSpend: 30,
+                }}
+                formatCOP={formatCOP}
+              />
+            </>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ForecastChart
               cmData={cmData}
@@ -485,9 +497,11 @@ const FinanceDashboardPage: React.FC = () => {
         </section>
 
         {/* ========== SECTION 2: FOUR QUARTER VIEW ========== */}
-        <section>
-          <FourQuarterChart data={cmData} formatCOP={formatCOP} />
-        </section>
+        {canSeeProfit && (
+          <section>
+            <FourQuarterChart data={cmData} formatCOP={formatCOP} />
+          </section>
+        )}
 
         {/* ========== SECTION 3: BUSINESS METRICS ========== */}
         <section>
