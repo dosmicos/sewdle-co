@@ -43,3 +43,19 @@ Deno.test("image OCR helper is wired into the route", async () => {
     "the route must enrich image messages with OCR text before customer reply generation",
   );
 });
+
+Deno.test("meta-webhook-openai uses visual OCR clues to build catalog candidates", async () => {
+  const source = await Deno.readTextFile(new URL("./index.ts", import.meta.url));
+
+  assert(
+    source.includes("buildVisualCandidateInstruction") &&
+      source.includes("extractVisualCandidateSearchTerms") &&
+      source.includes("hasVisualCandidateSearchSignal"),
+    "meta-webhook-openai must turn visual OCR clues into catalog candidate context",
+  );
+  assert(
+    source.includes("visualSearchTerms.length ? 3 : 10") &&
+      source.includes("relevantProducts.length === 0 && visualSearchTerms.length === 0"),
+    "visual-photo searches must avoid unrelated popular-product fallback",
+  );
+});

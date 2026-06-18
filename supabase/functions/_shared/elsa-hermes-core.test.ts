@@ -586,3 +586,13 @@ Deno.test("buildElsaPrompt requires collecting order data in one message instead
   assertIncludes(prompt, "Ciudad/Departamento:");
   assertIncludes(prompt, "Número de celular:");
 });
+
+Deno.test("buildElsaPrompt forbids inventing order numbers without an order in context", () => {
+  const prompt = buildElsaPrompt({
+    messages: [{ role: "user", content: "En la imagen están las tallas" }],
+    sewdleContext: {},
+    now: new Date("2026-05-02T20:30:00.000Z"),
+  });
+  assertIncludes(prompt, "ANTI-INVENCIÓN DE PEDIDOS");
+  assertIncludes(prompt, "PROHIBIDO inventar un número de pedido");
+});

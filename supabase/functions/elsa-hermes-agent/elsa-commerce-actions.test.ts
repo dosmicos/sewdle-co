@@ -73,12 +73,21 @@ Deno.test("elsa-hermes-agent creates manual-transfer draft orders with Pago por 
 });
 
 Deno.test("elsa-hermes-agent includes assistant product links in catalog search context", () => {
-  assertEquals(source.includes("dosmicos\\.co\\/products\\/"), true);
-  assertEquals(source.includes("message.role === \"user\""), true);
+  assertEquals(source.includes("buildProductSearchContext"), true);
+  assertEquals(source.includes("searchHistory"), true);
+  assertEquals(source.includes("...messages"), true);
 });
 
 Deno.test("elsa-hermes-agent preserves media URLs in recent image context", () => {
   assertEquals(source.includes("media_url"), true);
   assertEquals(source.includes("media_mime_type"), true);
   assertEquals(source.includes("media_url: m.media_url"), true);
+});
+
+Deno.test("elsa-hermes-agent uses OCR visual clues to prioritize commerce candidates", () => {
+  assertEquals(source.includes("buildProductSearchContext"), true);
+  assertEquals(source.includes("extractVisualCandidateSearchTerms"), true);
+  assertEquals(source.includes("buildVisualCandidateInstruction"), true);
+  assertEquals(source.includes("visual_candidate_instruction"), true);
+  assertEquals(source.includes("sewdleContext as any).recent_messages"), true);
 });

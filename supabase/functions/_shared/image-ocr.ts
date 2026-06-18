@@ -276,7 +276,17 @@ async function getVisibleTextSummary(
   visionImageSource?: string,
 ): Promise<string | null> {
   const trimmedUrl = String(imageUrl || '').trim();
-  if (!trimmedUrl || !openaiApiKey) return null;
+  // Prefer OpenRouter (Gemini 2.5 Flash Lite — strong OCR, cheap, and off the
+  // flaky OpenAI account that was returning null for every image). Fall back to
+  // OpenAI gpt-4o-mini only if no OPENROUTER_API_KEY secret is configured.
+  const openRouterKey = Deno.env.get('OPENROUTER_API_KEY') || '';
+  const useOpenRouter = Boolean(openRouterKey);
+  const apiKey = useOpenRouter ? openRouterKey : (openaiApiKey || '');
+  const endpoint = useOpenRouter
+    ? 'https://openrouter.ai/api/v1/chat/completions'
+    : 'https://api.openai.com/v1/chat/completions';
+  const ocrModel = useOpenRouter ? 'google/gemini-2.5-flash-lite' : 'gpt-4o-mini';
+  if (!trimmedUrl || !apiKey) return null;
 
   const cached = cache.get(trimmedUrl);
   if (cached) return await cached;
@@ -285,14 +295,17 @@ async function getVisibleTextSummary(
 
   const promise = (async () => {
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${openaiApiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
+          ...(useOpenRouter ? { 'X-Title': 'Sewdle Elsa OCR' } : {}),
         },
         body: JSON.stringify({
-          model: 'gpt-4o',
+          // OCR model: OpenRouter→Gemini 2.5 Flash Lite (vision, cheap, reliable),
+          // else OpenAI gpt-4o-mini. gpt-4o (the prior model) was failing in prod.
+          model: ocrModel,
           temperature: 0,
           max_tokens: 300,
           messages: [
@@ -329,7 +342,13 @@ async function getVisibleTextSummary(
         }),
       });
 
-      if (!response.ok) return null;
+      if (!response.ok) {
+        // Surface the real OpenAI error (429/quota, 401/auth, 404/model) instead
+        // of silently returning null — this is what hid the OCR failure before.
+        const errBody = await response.text().catch(() => '');
+        console.error(`OCR API non-ok: ${response.status} ${errBody.slice(0, 300)}`);
+        return null;
+      }
       const data = await response.json();
       const raw = String(data?.choices?.[0]?.message?.content ?? '').trim();
       if (!raw) return null;

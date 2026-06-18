@@ -206,9 +206,60 @@ export function isProductQuery(message: string): boolean {
     'color', 'colores', 'tienen', 'hay', 'busco', 'quiero', 'comprar', 'ver', 'mostrar', 'sleeping',
     'bag', 'ruana', 'cobija', 'bordado', 'walker', 'manta', 'pijama', 'termica', 'termico', 'sku', 'referencia',
     'catalogo', 'catálogo', 'foto', 'imagen', 'manga', 'mangas', 'modelo', 'referencia',
+    'familia visual probable', 'pistas visuales', 'descripcion visual', 'descripción visual',
   ];
 
   return productIndicators.some((indicator) => lowerMsg.includes(normalizeForMatch(indicator)));
+}
+
+function extractVisualFieldValues(message: string): string[] {
+  const values: string[] = [];
+  const lines = String(message || '').split(/\r?\n/);
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const match = trimmed.match(/^(familia visual probable|pistas visuales|descripci[oó]n visual)\s*:\s*(.+)$/i);
+    if (!match?.[2]) continue;
+    values.push(...match[2].split(/[|,;/]+/).map((value) => value.trim()).filter(Boolean));
+  }
+
+  return values;
+}
+
+export function extractVisualCandidateSearchTerms(message: string): string[] {
+  const visualValues = extractVisualFieldValues(message);
+  if (!visualValues.length) return [];
+
+  const ignored = new Set([
+    'producto', 'productos', 'visual', 'familia', 'probable', 'pistas', 'descripcion', 'descripción',
+    'texto', 'legible', 'unreadable', 'imagen', 'foto', 'color', 'colores', 'cliente', 'envio', 'envió',
+  ]);
+  const terms = visualValues
+    .flatMap((value) => extractSearchTerms(value))
+    .filter((term) => !ignored.has(normalizeForMatch(term)));
+
+  return Array.from(new Set(terms));
+}
+
+export function hasVisualCandidateSearchSignal(message: string): boolean {
+  return extractVisualCandidateSearchTerms(message).length > 0;
+}
+
+export function buildVisualCandidateInstruction(searchContext: string, candidateProducts: ProductLike[]): string {
+  const terms = extractVisualCandidateSearchTerms(searchContext);
+  if (!terms.length || !candidateProducts.length) return '';
+
+  const names = candidateProducts
+    .slice(0, 3)
+    .map((product, index) => `${index + 1}) ${product.title || product.handle || `Producto ${product.id || index + 1}`}`)
+    .join(' ');
+
+  return [
+    '\n\n🖼️ CANDIDATOS VISUALES DESDE FOTO SIN NOMBRE LEGIBLE:',
+    `Pistas visuales usadas para buscar en catálogo: ${terms.join(', ')}.`,
+    `Posibles productos del catálogo conectado: ${names}.`,
+    'Instrucción: El cliente envió una foto sin nombre legible. No pidas el nombre en seco si hay candidatos. Si un candidato coincide claramente, confírmalo por nombre y avanza pidiendo talla/cantidad o el siguiente dato faltante. Si hay varias opciones, ofrece 2–3 y pregunta cuál es. No afirmes disponibilidad/precio sin validar variantes del catálogo.',
+  ].join('\n');
 }
 
 export function searchRelevantProducts(
@@ -369,6 +420,8 @@ export function formatProductsForContext(products: ProductLike[]): string {
       .join(' | ');
     const optionSummary = summarizeOptions(product);
     const reference = product.handle ? `\n   🔗 Referencia: ${product.handle}` : '';
+    const productType = product.product_type ? `\n   🧩 Tipo: ${product.product_type}` : '';
+    const tags = product.tags ? `\n   🏷️ Tags: ${product.tags}` : '';
 
     context += `${index + 1}. ${product.title} [PRODUCT_IMAGE_ID:${product.id}]\n`;
     context += `   💰 Precio: ${price}\n`;
@@ -379,7 +432,7 @@ export function formatProductsForContext(products: ProductLike[]): string {
     if (variantDetails) {
       context += `   📐 Variantes disponibles: ${variantDetails}\n`;
     }
-    context += `${reference}\n\n`;
+    context += `${productType}${tags}${reference}\n\n`;
   });
 
   return context;

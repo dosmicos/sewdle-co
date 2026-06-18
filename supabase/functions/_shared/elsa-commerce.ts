@@ -9,6 +9,10 @@ export type CommerceVariant = {
 export type CommerceProduct = {
   id: number;
   title: string;
+  handle?: string;
+  body_html?: string;
+  tags?: string;
+  product_type?: string;
   variants?: CommerceVariant[];
 };
 
@@ -715,7 +719,9 @@ function productSearchText(product: CommerceProduct): string {
   const variantText = (product.variants || [])
     .map((variant) => `${variant.title || ""} ${variant.sku || ""}`)
     .join(" ");
-  return normalizeCatalogSearchText(`${product.title || ""} ${variantText}`);
+  return normalizeCatalogSearchText(
+    `${product.title || ""} ${product.handle || ""} ${product.product_type || ""} ${product.tags || ""} ${variantText}`,
+  );
 }
 
 function prioritizeCatalogForQuery(
@@ -744,6 +750,8 @@ export function summarizeCommerceCatalogForPrompt(
   return prioritizeCatalogForQuery(catalog, query).slice(0, maxProducts).map((product) => ({
     id: product.id,
     title: product.title,
+    product_type: product.product_type || "",
+    tags: product.tags || "",
     variants: (product.variants || []).map((variant) => ({
       id: variant.id,
       title: variant.title || "",

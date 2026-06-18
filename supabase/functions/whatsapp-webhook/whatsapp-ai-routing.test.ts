@@ -82,6 +82,24 @@ Deno.test("WhatsApp AI routing blocks payment-link confirmations without a URL",
   );
 });
 
+Deno.test("WhatsApp visual-photo OCR clues search catalog candidates instead of only asking for a name", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+
+  assert(
+    source.includes("buildVisualCandidateInstruction") &&
+      source.includes("extractVisualCandidateSearchTerms") &&
+      source.includes("hasVisualCandidateSearchSignal"),
+    "whatsapp-webhook must turn visual OCR clues into catalog candidate context",
+  );
+  assert(
+    source.includes("visualSearchTerms.length ? 3 : 10") &&
+      source.includes("relevantProducts.length === 0 && visualSearchTerms.length === 0"),
+    "visual-photo searches must use top 3 real candidates and avoid unrelated popular-product fallback",
+  );
+});
+
 Deno.test("WhatsApp audio messages are transcribed before invoking Elsa", async () => {
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),
@@ -122,4 +140,3 @@ Deno.test("WhatsApp audio messages are transcribed before invoking Elsa", async 
     "audio messages must be included in the AI respondable types after transcription",
   );
 });
-

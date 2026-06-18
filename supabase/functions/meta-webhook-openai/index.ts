@@ -6,11 +6,14 @@ import {
   transcribeAudioFromUrl,
 } from "../_shared/audio-transcription.ts";
 import {
+  buildProductSearchContext,
+  buildVisualCandidateInstruction,
   extractSearchTerms as sharedExtractSearchTerms,
+  extractVisualCandidateSearchTerms,
   formatProductsForContext as sharedFormatProductsForContext,
+  hasVisualCandidateSearchSignal,
   isProductQuery as sharedIsProductQuery,
   searchRelevantProducts as sharedSearchRelevantProducts,
-  buildProductSearchContext,
 } from "../_shared/product-matching.ts";
 import { buildVisionImageContent } from "../_shared/image-ocr.ts";
 
@@ -625,11 +628,17 @@ async function generateAIResponse(
             });
             
             if (isProductRelated && connectedShopifyProducts.length > 0) {
-              // Search for relevant products based on customer message
-              relevantProducts = searchRelevantProducts(connectedShopifyProducts, searchTerms, 10);
+              const visualSearchTerms = hasVisualCandidateSearchSignal(contextualSearchSource)
+                ? extractVisualCandidateSearchTerms(contextualSearchSource)
+                : [];
+              const activeSearchTerms = visualSearchTerms.length ? visualSearchTerms : searchTerms;
+
+              // Search for relevant products based on customer message or visual OCR clues
+              relevantProducts = searchRelevantProducts(connectedShopifyProducts, activeSearchTerms, visualSearchTerms.length ? 3 : 10);
               
-              // If no matches found, fallback to top products by stock
-              if (relevantProducts.length === 0) {
+              // If no matches found, fallback to top products by stock only for normal text queries.
+              // For visual-photo candidates, avoid offering unrelated popular products.
+              if (relevantProducts.length === 0 && visualSearchTerms.length === 0) {
                 console.log('🔍 No hay coincidencias exactas, usando productos populares como fallback');
                 relevantProducts = searchRelevantProducts(connectedShopifyProducts, [], 5);
               }
@@ -639,6 +648,9 @@ async function generateAIResponse(
               
               // Format relevant products for context
               productCatalog = formatProductsForContext(relevantProducts);
+              if (visualSearchTerms.length && relevantProducts.length > 0) {
+                productCatalog += buildVisualCandidateInstruction(contextualSearchSource, relevantProducts);
+              }
             } else if (!isProductRelated) {
               console.log('📦 Mensaje no relacionado con productos, omitiendo catálogo del contexto');
               productCatalog = '\n\nNota: El catálogo de productos está disponible si el cliente pregunta por productos específicos.\n';
