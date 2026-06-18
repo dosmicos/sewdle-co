@@ -82,6 +82,28 @@ Deno.test("WhatsApp AI routing blocks payment-link confirmations without a URL",
   );
 });
 
+Deno.test("WhatsApp pending address verification does not swallow unrelated new product messages", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+
+  assert(
+    source.includes("../_shared/address-verification-routing.ts") &&
+      source.includes("classifyPendingAddressVerificationReply"),
+    "whatsapp-webhook must classify pending address replies before intercepting customer messages",
+  );
+  assert(
+    source.includes("addressDecision === 'not_address'") &&
+      source.includes("Pending address verification ignored for unrelated/new-purchase message"),
+    "unrelated messages like greetings or new product requests must continue to normal Elsa handling",
+  );
+  assert(
+    source.includes("addressDecision === 'address_correction'") &&
+      !source.includes("} else {\n                  // Customer wrote something else (new address or question)"),
+    "the address acknowledgment must only run for likely address corrections, not every text message",
+  );
+});
+
 Deno.test("WhatsApp visual-photo OCR clues search catalog candidates instead of only asking for a name", async () => {
   const source = await Deno.readTextFile(
     new URL("./index.ts", import.meta.url),

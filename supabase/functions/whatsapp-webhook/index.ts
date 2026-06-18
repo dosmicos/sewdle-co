@@ -32,6 +32,9 @@ import {
   buildPaymentLinkMissingUrlFallbackReply,
   shouldReplacePaymentLinkReplyWithoutUrl,
 } from "../_shared/payment-link-reply-guard.ts";
+import {
+  classifyPendingAddressVerificationReply,
+} from "../_shared/address-verification-routing.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1948,16 +1951,13 @@ serve(async (req) => {
 
                 // Check button payload first (from template quick reply buttons)
                 const buttonPayload = message.button?.payload || '';
-                const isButtonCorrect = buttonPayload === 'ADDRESS_CORRECT';
-                const isButtonWrong = buttonPayload === 'ADDRESS_WRONG';
 
-                const normalized = content.toLowerCase().trim()
-                  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const addressDecision = classifyPendingAddressVerificationReply(content, buttonPayload);
+                console.log(`[ADDR-VERIFY] Decision for pending address verification: ${addressDecision}`);
 
-                const confirmWords = ['correcto', 'correcta', 'si', 'ok', 'bien', 'esta bien', 'esta correcta', 'esta correcto', 'dale', 'listo', 'perfecto', 'claro'];
-                const isConfirmation = isButtonCorrect || confirmWords.some(w => normalized === w || normalized.startsWith(w + ' ') || normalized.startsWith(w + ',') || normalized.startsWith(w + '.'));
-
-                if (isConfirmation) {
+                if (addressDecision === 'not_address') {
+                  console.log(`↪️ Pending address verification ignored for unrelated/new-purchase message on order ${pendingAddressVerification.order_number}`);
+                } else if (addressDecision === 'confirm') {
                   console.log(`✅ Customer CONFIRMED address for order ${pendingAddressVerification.order_number}`);
                   skipAiForAddress = true;
 
@@ -2066,8 +2066,8 @@ serve(async (req) => {
                     console.error('❌ Error processing address confirmation:', err);
                   }
 
-                } else if (isButtonWrong) {
-                  // Customer clicked "Corregir Dirección" button — ask for correct address
+                } else if (addressDecision === 'request_correction') {
+                  // Customer clicked/wrote that the address is wrong — ask for correct address
                   console.log(`📝 Customer wants to correct address for order ${pendingAddressVerification.order_number}`);
                   skipAiForAddress = true;
 
@@ -2112,8 +2112,8 @@ serve(async (req) => {
                     console.error('❌ Error asking for address correction:', err);
                   }
 
-                } else {
-                  // Customer wrote something else (new address or question)
+                } else if (addressDecision === 'address_correction') {
+                  // Customer wrote a likely new/corrected address
                   console.log(`📝 Customer sent address correction for order ${pendingAddressVerification.order_number}: "${content}"`);
                   skipAiForAddress = true;
 
