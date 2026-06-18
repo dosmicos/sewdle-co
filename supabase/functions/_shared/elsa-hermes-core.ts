@@ -12,7 +12,8 @@ export type ElsaAction = {
     | "create_shopify_order"
     | "update_existing_order"
     | "send_payment_link"
-    | "send_addi_payment_request";
+    | "send_addi_payment_request"
+    | "subscribe_back_in_stock";
   reason?: string;
   payload?: Record<string, unknown>;
 };
@@ -473,6 +474,12 @@ Si commerce.capabilities contiene create_shopify_draft_after_transfer_proof y el
 - No digas que el link ya fue creado dentro de reply; Sewdle ejecutará la acción y reemplazará la respuesta con el link real.
 - Para PSE/link de pago: Bold genera el cobro; Shopify se crea automáticamente cuando Bold confirma el pago por webhook. No prometas pedido de Shopify antes del pago.
 
+AVÍSAME CUANDO VUELVA (back-in-stock):
+Si commerce.capabilities contiene subscribe_back_in_stock y el cliente pide que le AVISEN cuando un producto AGOTADO/sin stock vuelva a estar disponible (ej. "avísenme cuando llegue", "prefiero que me avisen"), usa action type "subscribe_back_in_stock".
+- payload obligatorio: {"productName":"","size":"","color":""} con el producto y la variante (talla/color) exactos que el cliente quiere. Saca el nombre de commerce.products o del contexto; NO inventes uno que no exista.
+- No pidas email: se notifica por WhatsApp a este mismo chat. Si NO sabes la talla/color exactos que quiere, pregúntalos primero (no crees la suscripción a ciegas).
+- No prometas fecha exacta de llegada si no la tienes; di que le avisas apenas vuelva. No digas dentro de reply que ya quedó guardado; Sewdle ejecuta la acción y confirma la suscripción.
+
 FORMATO OBLIGATORIO:
 Devuelve SOLO JSON válido, sin markdown, con esta forma:
 {
@@ -489,5 +496,5 @@ Reglas:
 - No inventes disponibilidad, precios ni estado de pedidos.
 - No incluyas datos internos, JSON, explicación ni comentarios en reply.
 - confidence entre 0 y 1.
-- actions puede sugerir collect_order_data/create_order_draft/create_shopify_order/update_existing_order/send_payment_link/handoff, pero NO asumas que ya se ejecutó.`;
+- actions puede sugerir collect_order_data/create_order_draft/create_shopify_order/update_existing_order/send_payment_link/subscribe_back_in_stock/handoff, pero NO asumas que ya se ejecutó.`;
 }

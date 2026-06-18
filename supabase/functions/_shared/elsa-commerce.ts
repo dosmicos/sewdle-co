@@ -250,6 +250,69 @@ function findVariant(
   return variants.length === 1 ? variants[0] : null;
 }
 
+export type BackInStockTarget = {
+  productId: number;
+  productTitle: string;
+  variantId?: number;
+  sku?: string;
+  variantTitle?: string;
+};
+
+// Resolve a product + (best-effort) variant for a back-in-stock subscription,
+// WITHOUT requiring stock (the customer subscribes precisely because it is out of
+// stock). Prefers a variant whose title matches BOTH the requested size and color.
+export function resolveBackInStockTarget(
+  catalog: CommerceProduct[],
+  item: {
+    productName?: string;
+    productId?: number;
+    size?: string | number;
+    color?: string;
+    sku?: string;
+    variantId?: number;
+  },
+): BackInStockTarget | null {
+  const match = findBestProduct(catalog, {
+    productName: item.productName,
+    productId: item.productId,
+  });
+  if (!match) return null;
+
+  const variants = match.product.variants || [];
+  const sizeTok = item.size != null ? normalizeCommerceText(String(item.size)) : "";
+  const sizeNum = extractSize(item.size);
+  const colorTok = item.color ? normalizeCommerceText(item.color) : "";
+
+  let variant: CommerceVariant | undefined;
+  if (sizeTok || colorTok) {
+    variant = variants.find((v) => {
+      const title = normalizeCommerceText(v.title || "");
+      const okSize = !sizeTok ||
+        title.includes(sizeTok) ||
+        (Boolean(sizeNum) && extractSize(v.title || "") === sizeNum);
+      const okColor = !colorTok || title.includes(colorTok);
+      return okSize && okColor;
+    });
+  }
+  if (!variant) {
+    variant = findVariant(match.product, {
+      productName: item.productName,
+      size: item.size,
+      variantName: item.color,
+      sku: item.sku,
+      variantId: item.variantId,
+    }) || undefined;
+  }
+
+  return {
+    productId: match.product.id,
+    productTitle: match.product.title,
+    variantId: variant?.id,
+    sku: variant?.sku,
+    variantTitle: variant?.title,
+  };
+}
+
 export function resolveCommerceLineItems(
   catalog: CommerceProduct[],
   payloadItems: ElsaOrderLineItemPayload[] = [],

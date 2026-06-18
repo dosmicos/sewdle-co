@@ -44,6 +44,7 @@ import {
   type CommerceProduct,
   formatShopifyOrderCreatedReply,
   type ManualTransferDraftOrderRequest,
+  resolveBackInStockTarget,
   summarizeCommerceCatalogForPrompt,
 } from "../_shared/elsa-commerce.ts";
 import {
@@ -851,6 +852,97 @@ async function executeExistingOrderModificationAction(
   };
 }
 
+// "Avísame cuando vuelva": resolve the product/variant the customer wants, then
+// store a pending subscription. The daily notify-back-in-stock cron will message
+// them when the variant is back in stock. Notification is by WhatsApp (this chat),
+// so we capture the conversation's phone + channel — no email needed.
+async function executeBackInStockSubscriptionAction(
+  supabase: any,
+  params: {
+    action: any;
+    result: ElsaStructuredResponse & { provider: string; raw?: string };
+    catalog: CommerceProduct[];
+    organizationId?: string;
+    conversationId?: string;
+  },
+): Promise<CommerceActionResult> {
+  const payload = params.action?.payload || {};
+  const productName = String(payload.productName || "").trim();
+  const size = payload.size != null ? String(payload.size).trim() : "";
+  const color = payload.color != null ? String(payload.color).trim() : "";
+
+  if (!productName) {
+    return { type: "subscribe_back_in_stock", success: false, reason: "missing_product" };
+  }
+
+  const target = resolveBackInStockTarget(params.catalog, { productName, size, color });
+  if (!target) {
+    // Could not match a real product — let Elsa ask instead of storing a vague row.
+    return {
+      type: "subscribe_back_in_stock",
+      success: false,
+      reason: "product_not_resolved",
+    };
+  }
+
+  // Need the customer's WhatsApp identity + channel to notify later.
+  let customerPhone = "";
+  let channelId: string | null = null;
+  let customerName: string | null = null;
+  if (params.conversationId) {
+    const { data: conv } = await supabase
+      .from("messaging_conversations")
+      .select("external_user_id, user_name, channel_id")
+      .eq("id", params.conversationId)
+      .maybeSingle();
+    customerPhone = String(conv?.external_user_id || "").trim();
+    channelId = conv?.channel_id || null;
+    customerName = conv?.user_name || null;
+  }
+  if (!customerPhone) {
+    return { type: "subscribe_back_in_stock", success: false, reason: "no_customer_phone" };
+  }
+
+  const productLabel = [
+    target.productTitle || productName,
+    size ? `talla ${size}` : "",
+    color || "",
+  ].filter(Boolean).join(" ");
+
+  try {
+    const { error } = await supabase
+      .from("back_in_stock_subscriptions")
+      .insert({
+        organization_id: params.organizationId,
+        conversation_id: params.conversationId || null,
+        channel_id: channelId,
+        customer_phone: customerPhone,
+        customer_name: customerName,
+        product_id: target.productId != null ? String(target.productId) : null,
+        variant_sku: target.sku || null,
+        product_name: target.productTitle || productName,
+        size: size || null,
+        color: color || null,
+        status: "pending",
+      });
+    // 23505 = unique violation → already subscribed; treat as success (idempotent).
+    if (error && error.code !== "23505") throw error;
+
+    params.result.reply =
+      `Listo 😊 te aviso por aquí apenas vuelva ${productLabel}. ¡Gracias por la paciencia! 🙌`;
+    params.result.handoff_required = false;
+    params.result.handoff_reason = "";
+    return { type: "subscribe_back_in_stock", success: true, reason: "subscribed" };
+  } catch (error: any) {
+    console.error("back_in_stock subscription insert failed:", error?.message || error);
+    return {
+      type: "subscribe_back_in_stock",
+      success: false,
+      reason: error?.message || "insert_failed",
+    };
+  }
+}
+
 async function executeCommerceActions(
   supabase: any,
   params: {
@@ -880,6 +972,21 @@ async function executeCommerceActions(
         organizationId: params.organizationId,
       },
     );
+    actionResults.push(actionResult);
+    return { result: params.result, actionResults };
+  }
+
+  const backInStockAction = actions.find((action: any) =>
+    action?.type === "subscribe_back_in_stock"
+  );
+  if (backInStockAction) {
+    const actionResult = await executeBackInStockSubscriptionAction(supabase, {
+      action: backInStockAction,
+      result: params.result,
+      catalog: params.catalog,
+      organizationId: params.organizationId,
+      conversationId: params.conversationId,
+    });
     actionResults.push(actionResult);
     return { result: params.result, actionResults };
   }
@@ -1642,6 +1749,7 @@ serve(async (req) => {
           "create_shopify_draft_after_transfer_proof",
           "create_shopify_order_after_bold_payment",
           "create_shopify_order_after_addi_approval",
+          "subscribe_back_in_stock",
         ],
         payment_flow:
           "Para contra entrega/COD: crear pedido Shopify inmediatamente con gateway Cash on Delivery (COD), estado financiero pending y responder con número de pedido, resumen y agradecimiento. Para PSE/link de pago: generar link Bold y guardar pending_order; Shopify se crea automáticamente solo cuando Bold confirma el pago por webhook. Para Addi: generar solicitud Addi y guardar pending_order; Shopify se crea automáticamente solo cuando Addi aprueba la compra por callback. Para Bancolombia/Nequi/transferencia manual: pedir comprobante; después de recibir la foto del comprobante, crear draft order de Shopify y etiquetar la conversación Pago por validar, sin usar Requiere atencion.",

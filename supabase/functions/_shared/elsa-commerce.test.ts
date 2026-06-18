@@ -22,6 +22,7 @@ import {
   buildShopifyCodOrderRequest,
   calculateOrderTotals,
   formatShopifyOrderCreatedReply,
+  resolveBackInStockTarget,
   resolveCommerceLineItems,
   summarizeCommerceCatalogForPrompt,
 } from "./elsa-commerce.ts";
@@ -448,4 +449,23 @@ Deno.test("formatShopifyOrderCreatedReply includes order number, summary and tha
   assertEquals(reply.includes("1 x Ruana Pollito talla 4"), true);
   assertEquals(reply.includes("Total: $99.900 COP"), true);
   assertEquals(reply.includes("Gracias por tu compra"), true);
+});
+
+Deno.test("resolveBackInStockTarget resolves product+variant by name+size (no stock requirement)", () => {
+  const t = resolveBackInStockTarget(catalog, { productName: "Ruana Pollito", size: "2" });
+  assertEquals(t?.productId, 101);
+  assertEquals(t?.sku, "POLLITO-2");
+  assertEquals(t?.variantId, 1002);
+});
+
+Deno.test("resolveBackInStockTarget resolves an OUT-OF-STOCK variant (the whole point of subscribing)", () => {
+  // MAPACHE-8 has inventory_quantity 0; back-in-stock must still resolve it.
+  const t = resolveBackInStockTarget(catalog, { productName: "Ruana Mapache", size: "8" });
+  assertEquals(t?.productId, 202);
+  assertEquals(t?.sku, "MAPACHE-8");
+});
+
+Deno.test("resolveBackInStockTarget returns null for an unknown product", () => {
+  const t = resolveBackInStockTarget(catalog, { productName: "Producto inexistente xyz" });
+  assertEquals(t, null);
 });
