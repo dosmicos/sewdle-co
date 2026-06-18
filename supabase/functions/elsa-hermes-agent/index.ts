@@ -47,6 +47,7 @@ import {
   resolveBackInStockTarget,
   summarizeCommerceCatalogForPrompt,
 } from "../_shared/elsa-commerce.ts";
+import { buildAvailabilityCorrection } from "../_shared/availability-deferral-guard.ts";
 import {
   buildProductSearchContext,
   buildVisualCandidateInstruction,
@@ -1808,6 +1809,20 @@ serve(async (req) => {
       messages,
       result,
     });
+
+    // Deterministic availability guard: if Elsa hedged ("te reviso / validando inventario
+    // / te confirmamos") but the live catalog already knows this product+size's stock,
+    // answer directly instead of deferring. Runs here (the Dosmicos elsa path) on purpose.
+    const availabilityCorrection = buildAvailabilityCorrection(
+      commerceCatalog,
+      result.reply || "",
+      latestUserThreadText(messages),
+    );
+    if (availabilityCorrection) {
+      result.reply = availabilityCorrection;
+      result.handoff_required = false;
+      result.handoff_reason = "";
+    }
 
     if (shouldReplacePaymentLinkReplyWithoutUrl(result.reply, actionResults, latestUserThreadText(messages))) {
       result.reply = buildPaymentLinkMissingUrlFallbackReply();
