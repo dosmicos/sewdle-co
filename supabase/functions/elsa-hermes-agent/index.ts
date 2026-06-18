@@ -1631,19 +1631,32 @@ async function callHermesElsa(
 async function callOpenAIFallback(
   prompt: string,
 ): Promise<ElsaStructuredResponse & { provider: string; raw?: string }> {
+  // The OpenAI account is down (401 invalid_api_key), so prefer OpenRouter for the
+  // fallback — same OpenAI-compatible chat API, just a different host/key/model id,
+  // mirroring the OCR path. Keep direct OpenAI as a last resort if OpenRouter is unset.
+  const openRouterKey = Deno.env.get("OPENROUTER_API_KEY");
   const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-  if (!openaiApiKey) {
-    throw new Error("OPENAI_API_KEY not configured for fallback");
+  const useOpenRouter = Boolean(openRouterKey);
+  const fallbackKey = useOpenRouter ? openRouterKey : openaiApiKey;
+  if (!fallbackKey) {
+    throw new Error(
+      "No fallback key configured (set OPENROUTER_API_KEY or OPENAI_API_KEY)",
+    );
   }
+  const fallbackEndpoint = useOpenRouter
+    ? "https://openrouter.ai/api/v1/chat/completions"
+    : "https://api.openai.com/v1/chat/completions";
+  const fallbackModel = useOpenRouter ? "openai/gpt-4o-mini" : "gpt-4o-mini";
+  const fallbackProvider = useOpenRouter ? "openrouter-fallback" : "openai-fallback";
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const response = await fetch(fallbackEndpoint, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${openaiApiKey}`,
+      Authorization: `Bearer ${fallbackKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: fallbackModel,
       temperature: 0.2,
       messages: [
         {
@@ -1659,7 +1672,7 @@ async function callOpenAIFallback(
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(
-      `OpenAI fallback error ${response.status}: ${errorText.slice(0, 500)}`,
+      `Fallback (${fallbackProvider}) error ${response.status}: ${errorText.slice(0, 500)}`,
     );
   }
 
@@ -1667,7 +1680,7 @@ async function callOpenAIFallback(
   const outputText = data.choices?.[0]?.message?.content || "";
   const parsed = extractJsonObject(outputText);
   if (parsed?.reply) {
-    return { ...parsed, provider: "openai-fallback", raw: outputText };
+    return { ...parsed, provider: fallbackProvider, raw: outputText };
   }
 
   return {
@@ -1676,7 +1689,7 @@ async function callOpenAIFallback(
     handoff_required: false,
     actions: [{ type: "none" }],
     learning_notes: [],
-    provider: "openai-fallback",
+    provider: fallbackProvider,
     raw: outputText,
   };
 }
