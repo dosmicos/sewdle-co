@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
     console.log('💾 Actualizando estado local...');
     const now = new Date().toISOString();
 
-    // Always update shipped fields
+    // Update shipped fields solo si la orden aún no fue enviada por otra sesión (idempotente).
     const { error: updateError } = await supabase
       .from('picking_packing_orders')
       .update({
@@ -177,7 +177,8 @@ Deno.serve(async (req) => {
         shipped_by: user_id || null,
       })
       .eq('shopify_order_id', shopify_order_id)
-      .eq('organization_id', organization_id);
+      .eq('organization_id', organization_id)
+      .neq('operational_status', 'shipped');
 
     if (updateError) {
       console.error('❌ Error actualizando picking_packing_orders:', updateError);

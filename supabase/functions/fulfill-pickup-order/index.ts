@@ -283,7 +283,9 @@ Deno.serve(async (req) => {
         updated_at: new Date().toISOString()
       })
       .eq('shopify_order_id', shopify_order_id)
-      .eq('organization_id', organization_id);
+      .eq('organization_id', organization_id)
+      // Idempotente: no re-procesar si otra sesión ya lo dejó listo para retiro o enviado.
+      .not('operational_status', 'in', '("awaiting_pickup","shipped")');
 
     if (updateError) {
       console.error(`❌ Error actualizando estado:`, updateError);

@@ -398,9 +398,18 @@ export const usePickingOrders = () => {
 
       // Filter by exclude_tags (EXCLUIR)
       if (filters?.excludeTags && filters.excludeTags.length > 0) {
+        // "empacado" excluye no solo por el tag de Shopify (que se sincroniza de forma
+        // asíncrona y puede tardar minutos) sino también por operational_status, que es la
+        // fuente de verdad y se escribe al instante. Sin esto, un pedido recién empacado por
+        // un operario sigue apareciendo en la cola "Para empacar" de otro hasta que el tag
+        // llega — la ventana en la que se empaca dos veces el mismo pedido.
+        const excludesEmpacado = filters.excludeTags.some(tag => tag.toLowerCase() === 'empacado');
+        const PACKED_STATUSES = ['ready_to_ship', 'awaiting_pickup', 'shipped'];
         ordersData = ordersData.filter((order: any) => {
           const orderTags = (order.shopify_order?.tags || '').toLowerCase().split(',').map((t: string) => t.trim());
-          return !filters.excludeTags?.some(tag => orderTags.includes(tag.toLowerCase()));
+          if (filters.excludeTags?.some(tag => orderTags.includes(tag.toLowerCase()))) return false;
+          if (excludesEmpacado && PACKED_STATUSES.includes(order.operational_status)) return false;
+          return true;
         });
       }
 
@@ -548,12 +557,32 @@ export const usePickingOrders = () => {
         updates.shipped_by = userId;
       }
 
-      const { error } = await supabase
+      // Compare-and-swap: marcar como empacado debe ser un claim atómico. El UPDATE solo
+      // tiene éxito si la orden aún NO está en un estado terminal; Postgres bloquea la fila
+      // durante el UPDATE, así que dos operarios concurrentes se serializan y solo uno gana.
+      // Si afecta 0 filas, otro ya empacó: no tocamos Shopify ni imprimimos.
+      const PACK_CLAIM_BLOCKED = '("ready_to_ship","awaiting_pickup","shipped")';
+      const isPackClaim = newStatus === 'ready_to_ship';
+
+      let updateQuery = supabase
         .from('picking_packing_orders')
         .update(updates)
         .eq('id', pickingOrderId);
 
+      if (isPackClaim) {
+        updateQuery = updateQuery.not('operational_status', 'in', PACK_CLAIM_BLOCKED);
+      }
+
+      const { data: claimedRows, error } = await updateQuery.select('id');
+
       if (error) throw error;
+
+      if (isPackClaim && (!claimedRows || claimedRows.length === 0)) {
+        // El claim se perdió: la orden ya estaba empacada/finalizada por otra sesión.
+        console.warn(`🔒 Claim de empaque rechazado para ${pickingOrderId}: ya estaba empacada por otra persona`);
+        void fetchOrders();
+        return { claimed: false };
+      }
 
       // Update tags in Shopify
       const effectiveShopifyOrderId = shopifyOrderId || order?.shopify_order_id;
@@ -566,7 +595,7 @@ export const usePickingOrders = () => {
           foundInOrders: !!order
         });
         toast.error('Error: No se pudo actualizar etiquetas en Shopify (ID no encontrado)');
-        return;
+        return { claimed: true };
       }
 
       const statusTags: Record<OperationalStatus, string> = {
@@ -594,6 +623,7 @@ export const usePickingOrders = () => {
       toast.success('Estado actualizado correctamente');
       // Fire-and-forget list refresh — modal already updates via optimistic cache
       void fetchOrders();
+      return { claimed: true };
     } catch (error: any) {
       console.error('Error updating order status:', error);
       throw error;
