@@ -151,6 +151,8 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
   const autoPrintTriggeredRef = useRef<string | null>(null);
   const statusUpdateWatchdogRef = useRef<number | null>(null);
   const pickupInFlightRef = useRef(false);
+  // Espejo del estado local para que el listener Realtime no necesite re-suscribirse en cada cambio.
+  const localOrderStatusRef = useRef<OperationalStatus | undefined>(undefined);
 
   // Use cached order as base, fall back to list order - MUST match current orderId
   const order = orders.find(o => o.id === orderId);
@@ -421,6 +423,44 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       setLoadingOrder(false);
     }
   }, [orderId, cachedOrder, localOrder, order]);
+
+  // Mantener el espejo del estado local actualizado para el listener Realtime de abajo.
+  useEffect(() => {
+    localOrderStatusRef.current = effectiveOrder?.operational_status;
+  }, [effectiveOrder?.operational_status]);
+
+  // Realtime: si OTRO operario empaca/envía esta misma orden mientras la tengo abierta,
+  // sincronizamos el estado real (refetch) para que los guards de empaque bloqueen un segundo
+  // empaque y avisamos al usuario. Ataca directamente el "no le aparecía empacado".
+  useEffect(() => {
+    if (!orderId) return;
+
+    const channel = supabase
+      .channel(`picking-order-${orderId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'picking_packing_orders', filter: `id=eq.${orderId}` },
+        (payload) => {
+          const nextStatus = (payload.new as { operational_status?: OperationalStatus })?.operational_status;
+          const isTerminal = nextStatus === 'ready_to_ship'
+            || nextStatus === 'awaiting_pickup'
+            || nextStatus === 'shipped';
+          // Solo reaccionar si la orden pasó a terminal y nuestra copia local aún no lo refleja
+          // (evita ruido por nuestras propias escrituras, que ya actualizaron el estado local).
+          if (isTerminal && localOrderStatusRef.current !== nextStatus) {
+            void refetchOrder(orderId).catch(() => {});
+            if (!packInFlightRef.current) {
+              toast.message('Este pedido acaba de ser empacado por otra persona.');
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [orderId, refetchOrder]);
 
   // Sync notes when effectiveOrder changes AND matches current orderId
   // IMPORTANT: This effect ALWAYS hydrates from DB on first render for the order.
@@ -828,12 +868,23 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
       }
 
       // Update in database and Shopify - pass shopify_order_id directly from localOrder
-      await withTimeout(
+      const claimResult = await withTimeout(
         updateOrderStatus(orderId, newStatus, currentShopifyOrderId),
         25000,
         'Timeout al actualizar estado de la orden'
       );
-      
+
+      // Claim de empaque perdido: otro operario ya empacó esta orden. Revertimos la UI
+      // optimista al estado real (refetch) y avisamos al caller para que NO imprima ni genere guía.
+      if (claimResult && (claimResult as { claimed?: boolean }).claimed === false) {
+        try {
+          await withTimeout(refetchOrder(orderId), 5000, 'Refetch timeout tras claim perdido');
+        } catch (refetchError) {
+          console.warn('⚠️ Refetch tras claim de empaque perdido falló:', refetchError);
+        }
+        return claimResult as { claimed: false };
+      }
+
       // SUCCESS: Update React Query cache immediately for consistency
       const updatedOrderForCache: PickingOrder = {
         ...localOrder,
@@ -1137,6 +1188,7 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     const MAX_ATTEMPTS = 2;
     const RETRY_BACKOFF_MS = 1500;
     let lastError: unknown = null;
+    let claimLost = false;
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
@@ -1144,7 +1196,10 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
           setIsRetryingPack(true);
           console.log(`🔁 Reintentando marcar como empacado (intento ${attempt}/${MAX_ATTEMPTS})`);
         }
-        await handleStatusChange('ready_to_ship');
+        const res = await handleStatusChange('ready_to_ship');
+        if (res && (res as { claimed?: boolean }).claimed === false) {
+          claimLost = true;
+        }
         lastError = null;
         break;
       } catch (error) {
@@ -1157,6 +1212,19 @@ export const PickingOrderDetailsModal: React.FC<PickingOrderDetailsModalProps> =
     }
 
     setIsRetryingPack(false);
+
+    // Claim perdido: la orden ya fue empacada por otra persona. NO imprimir, NO generar guía.
+    // Dejamos autoPackTriggeredRef puesto para que el auto-pack no se vuelva a disparar.
+    if (claimLost) {
+      printWindow?.close();
+      autoPackTriggeredRef.current = orderId;
+      setPackError('Este pedido ya fue empacado por otra persona.');
+      toast.error('⚠️ Este pedido ya fue empacado por otra persona. No se imprimió ni se generó guía.', {
+        duration: 8000,
+      });
+      packInFlightRef.current = false;
+      return;
+    }
 
     if (lastError) {
       // Status update failed — close the blank window so the user doesn't see a blank tab

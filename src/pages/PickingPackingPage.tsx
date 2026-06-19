@@ -223,8 +223,20 @@ const [showItemsModal, setShowItemsModal] = useState(false);
   useEffect(() => {
     if (!currentOrganization?.id) return;
 
+    const onRealtimeChange = (payload: { eventType: string }) => {
+      console.log('🔔 Realtime update received:', payload.eventType);
+      setLastWebhookUpdate(new Date());
+      // Solo auto-refresh si NO hay modal abierto (detalle o generación masiva)
+      if (!selectedOrderId && !showBulkModalRef.current) {
+        handleRefreshListRef.current();
+      } else {
+        // Marcar que hay updates pendientes para cuando se cierre el modal
+        setHasPendingUpdates(true);
+      }
+    };
+
     const channel = supabase
-      .channel('shopify-orders-realtime')
+      .channel('picking-realtime')
       .on(
         'postgres_changes',
         {
@@ -233,17 +245,20 @@ const [showItemsModal, setShowItemsModal] = useState(false);
           table: 'shopify_orders',
           filter: `organization_id=eq.${currentOrganization.id}`
         },
-        (payload) => {
-          console.log('🔔 Webhook update received:', payload.eventType);
-          setLastWebhookUpdate(new Date());
-          // Solo auto-refresh si NO hay modal abierto (detalle o generación masiva)
-          if (!selectedOrderId && !showBulkModalRef.current) {
-            handleRefreshListRef.current();
-          } else {
-            // Marcar que hay updates pendientes para cuando se cierre el modal
-            setHasPendingUpdates(true);
-          }
-        }
+        onRealtimeChange
+      )
+      // Estado de empaque (operational_status) es la fuente de verdad y se escribe al instante,
+      // a diferencia del tag de Shopify (asíncrono). Escuchar esta tabla hace que un pedido
+      // empacado por otro operario salga de la cola "Para empacar" sin esperar la sincronización.
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'picking_packing_orders',
+          filter: `organization_id=eq.${currentOrganization.id}`
+        },
+        onRealtimeChange
       )
       .subscribe();
 
