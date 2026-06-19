@@ -53,6 +53,7 @@ const FinanceDashboardPage = React.lazy(() => import("@/pages/FinanceDashboardPa
 const GrowthTeamScorecardPage = React.lazy(() => import("@/pages/GrowthTeamScorecardPage"));
 const AdPerformancePage = React.lazy(() => import("@/pages/AdPerformancePage"));
 const AdIntelligencePage = React.lazy(() => import("@/pages/AdIntelligencePage"));
+const CustomerVoicePage = React.lazy(() => import("@/pages/CustomerVoicePage"));
 const AdAnalysisPage = React.lazy(() => import("@/pages/AdAnalysisPage"));
 const UgcPerformancePage = React.lazy(() => import("@/pages/UgcPerformancePage"));
 const CostSettingsPage = React.lazy(() => import("@/pages/CostSettingsPage"));
@@ -272,6 +273,13 @@ const FinanceAppContent = () => {
         <PasswordChangeRouteGuard>
           <PermissionRoute module="growth" action="view">
             <CartRecoveryDashboardPage />
+          </PermissionRoute>
+        </PasswordChangeRouteGuard>
+      } />
+      <Route path="/customer-voice" element={
+        <PasswordChangeRouteGuard>
+          <PermissionRoute module="growth" action="view">
+            <CustomerVoicePage />
           </PermissionRoute>
         </PasswordChangeRouteGuard>
       } />
