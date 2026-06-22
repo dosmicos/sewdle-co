@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Calculator, DollarSign, Receipt, CheckCircle, AlertTriangle, Wallet } from "lucide-react";
+import { Calculator, DollarSign, Receipt, CheckCircle, AlertTriangle, Wallet, Tag } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useDeliveryPayments, DeliveryPaymentCalculation } from "@/hooks/useDeliveryPayments";
 import { useOrderAdvances } from "@/hooks/useOrderAdvances";
 import { useToast } from "@/hooks/use-toast";
+import { useOrganization } from "@/contexts/OrganizationContext";
 import { supabase } from "@/integrations/supabase/client";
 
 interface DeliveryPaymentManagerProps {
@@ -45,6 +46,13 @@ interface EstimatedGross {
   items_without_workshop_price: number;
 }
 
+interface MissingWorkshopPrice {
+  product_id: string;
+  product_name: string;
+  sale_unit_price: number;
+  units: number;
+}
+
 const initialAdvancePaymentData: AdvancePaymentData = {
   amount: "",
   advance_date: new Date().toISOString().split('T')[0],
@@ -57,6 +65,7 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
   const { payments, calculatePayment, createPayment, markAsPaid } = useDeliveryPayments();
   const { createAdvance } = useOrderAdvances();
   const { toast } = useToast();
+  const { currentOrganization } = useOrganization();
   const [calculation, setCalculation] = useState<DeliveryPaymentCalculation | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
@@ -76,6 +85,13 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
     customAdvanceDeduction: 0,
     advanceNotes: ""
   });
+  // Configurar precios de taller faltantes desde la entrega
+  const [isWorkshopPriceDialogOpen, setIsWorkshopPriceDialogOpen] = useState(false);
+  const [missingPrices, setMissingPrices] = useState<MissingWorkshopPrice[]>([]);
+  const [priceInputs, setPriceInputs] = useState<Record<string, string>>({});
+  const [workshopInfo, setWorkshopInfo] = useState<{ id: string; name: string } | null>(null);
+  const [isLoadingMissing, setIsLoadingMissing] = useState(false);
+  const [isSavingPrices, setIsSavingPrices] = useState(false);
 
   // Find existing payment for this delivery
   const existingPayment = payments.find(p => p.delivery_id === deliveryId);
@@ -120,6 +136,96 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
     setAdvanceAdjustment(prev => ({ ...prev, customAdvanceDeduction: value }));
     // Recalculate with new advance deduction
     await handleCalculatePayment(value);
+  };
+
+  const openWorkshopPriceDialog = async () => {
+    setIsWorkshopPriceDialogOpen(true);
+    setIsLoadingMissing(true);
+    setMissingPrices([]);
+    setPriceInputs({});
+    try {
+      // Taller de la entrega (para insertar el precio y mostrar el nombre)
+      const { data: delivery, error: deliveryError } = await supabase
+        .from('deliveries')
+        .select('workshop_id')
+        .eq('id', deliveryId)
+        .single();
+      if (deliveryError || !delivery?.workshop_id) throw deliveryError ?? new Error('Entrega sin taller');
+
+      const { data: workshop } = await supabase
+        .from('workshops')
+        .select('name')
+        .eq('id', delivery.workshop_id)
+        .single();
+      setWorkshopInfo({ id: delivery.workshop_id, name: workshop?.name ?? 'el taller' });
+
+      // Productos de la entrega sin precio de taller vigente
+      const { data, error } = await supabase
+        .rpc('get_delivery_missing_workshop_prices', { delivery_id_param: deliveryId });
+      if (error) throw error;
+      setMissingPrices((data ?? []) as MissingWorkshopPrice[]);
+    } catch (error) {
+      console.error('Error loading missing workshop prices:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudieron cargar los productos sin precio de taller"
+      });
+    } finally {
+      setIsLoadingMissing(false);
+    }
+  };
+
+  const handleSaveWorkshopPrices = async () => {
+    if (!workshopInfo) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const rows = missingPrices
+      .map(item => ({ item, price: Number(priceInputs[item.product_id]) }))
+      .filter(({ price }) => Number.isFinite(price) && price > 0)
+      .map(({ item, price }) => ({
+        workshop_id: workshopInfo.id,
+        product_id: item.product_id,
+        unit_price: price,
+        currency: 'COP',
+        effective_from: today,
+        organization_id: currentOrganization?.id,
+      }));
+
+    if (rows.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Sin precios",
+        description: "Ingresa al menos un precio mayor a 0"
+      });
+      return;
+    }
+
+    setIsSavingPrices(true);
+    try {
+      const userId = (await supabase.auth.getUser()).data.user?.id;
+      const { error } = await supabase
+        .from('workshop_pricing')
+        .insert(rows.map(r => ({ ...r, created_by: userId })));
+      if (error) throw error;
+
+      toast({
+        title: "Precios guardados",
+        description: `${rows.length} ${rows.length === 1 ? 'precio configurado' : 'precios configurados'} para ${workshopInfo.name}`
+      });
+      setIsWorkshopPriceDialogOpen(false);
+      // Recalcular el pago con los nuevos precios
+      await handleCalculatePayment();
+    } catch (error) {
+      console.error('Error saving workshop prices:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudieron guardar los precios del taller"
+      });
+    } finally {
+      setIsSavingPrices(false);
+    }
   };
 
   const fetchEstimatedGross = async () => {
@@ -292,12 +398,23 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
               {calculation.items_without_workshop_price > 0 && (
                 <div className="col-span-2 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                  <div className="text-sm text-amber-800">
-                    <p className="font-medium">Precio de taller no configurado</p>
-                    <p className="text-amber-700">
-                      {calculation.items_without_workshop_price} {calculation.items_without_workshop_price === 1 ? 'producto usa' : 'productos usan'} el precio de venta en lugar del precio del taller.
-                      Configure los precios en el Módulo Financiero → Precios por Taller.
-                    </p>
+                  <div className="text-sm text-amber-800 space-y-2">
+                    <div>
+                      <p className="font-medium">Precio de taller no configurado</p>
+                      <p className="text-amber-700">
+                        {calculation.items_without_workshop_price} {calculation.items_without_workshop_price === 1 ? 'producto usa' : 'productos usan'} el precio de venta en lugar del precio del taller.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-300 bg-white text-amber-800 hover:bg-amber-100 hover:text-amber-900"
+                      onClick={openWorkshopPriceDialog}
+                    >
+                      <Tag className="w-4 h-4 mr-2" />
+                      Configurar precios ahora
+                    </Button>
                   </div>
                 </div>
               )}
@@ -674,6 +791,69 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
             {isCalculating ? 'Calculando...' : 'Recalcular'}
           </Button>
         </div>
+
+        {/* Configurar precios de taller faltantes — sin salir de la entrega */}
+        <Dialog open={isWorkshopPriceDialogOpen} onOpenChange={setIsWorkshopPriceDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Configurar precios de taller</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-muted/50 p-3 rounded-lg text-sm space-y-1">
+                <p>Define el precio del taller{workshopInfo ? ` para ${workshopInfo.name}` : ''} de los productos sin precio configurado.</p>
+                <p className="text-muted-foreground">Un precio cubre todas las variantes del producto, aplica desde hoy y recalcula el pago.</p>
+              </div>
+
+              {isLoadingMissing ? (
+                <div className="text-sm text-muted-foreground py-6 text-center">Cargando productos…</div>
+              ) : missingPrices.length === 0 ? (
+                <div className="text-sm text-muted-foreground py-6 text-center">No hay productos sin precio de taller.</div>
+              ) : (
+                <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                  {missingPrices.map((item) => (
+                    <div key={item.product_id} className="border rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-sm">{item.product_name}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{item.units} uds</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Precio de venta (respaldo): {formatCurrency(item.sale_unit_price)}
+                      </p>
+                      <div>
+                        <Label htmlFor={`wp-${item.product_id}`}>Precio del taller (COP)</Label>
+                        <Input
+                          id={`wp-${item.product_id}`}
+                          type="text"
+                          inputMode="decimal"
+                          pattern="[0-9]*\.?[0-9]*"
+                          value={priceInputs[item.product_id] ?? ''}
+                          onChange={(e) => {
+                            const cleaned = e.target.value.replace(/[^0-9.]/g, '');
+                            setPriceInputs(prev => ({ ...prev, [item.product_id]: cleaned }));
+                          }}
+                          placeholder={`Ej: ${item.sale_unit_price}`}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-2">
+                <Button type="button" variant="outline" onClick={() => setIsWorkshopPriceDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSaveWorkshopPrices}
+                  disabled={isSavingPrices || isLoadingMissing || missingPrices.length === 0}
+                >
+                  {isSavingPrices ? 'Guardando…' : 'Guardar precios'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
