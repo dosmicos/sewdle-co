@@ -79,6 +79,7 @@ export const DeliveryPaymentsList = () => {
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [paymentToDelete, setPaymentToDelete] = useState<any>(null);
+  const [isBulkPaymentDialogOpen, setIsBulkPaymentDialogOpen] = useState(false);
   const [paymentFormData, setPaymentFormData] = useState<PaymentFormData>({
     payment_date: new Date().toISOString().split('T')[0],
     payment_method: "",
@@ -271,13 +272,21 @@ export const DeliveryPaymentsList = () => {
     if (selectedPayments.length === 0) return;
 
     try {
+      const count = selectedPayments.length;
       for (const paymentId of selectedPayments) {
         await markAsPaid(paymentId, paymentFormData);
       }
       setSelectedPayments([]);
+      setIsBulkPaymentDialogOpen(false);
+      setPaymentFormData({
+        payment_date: new Date().toISOString().split('T')[0],
+        payment_method: "",
+        reference_number: "",
+        notes: ""
+      });
       toast({
         title: "Pagos registrados",
-        description: `Se han marcado ${selectedPayments.length} pagos como pagados`
+        description: `Se han marcado ${count} pagos como pagados`
       });
     } catch (error) {
       console.error('Error bulk marking as paid:', error);
@@ -360,6 +369,28 @@ export const DeliveryPaymentsList = () => {
 
   // Grand total: payment net + advances
   const selectedGrandTotal = selectedPaymentsTotal + selectedAdvancesTotal;
+
+  // Pagos seleccionados agrupados por taller — para mostrar a quién transferir antes de pagar en lote
+  const selectedWorkshopGroups = useMemo(() => {
+    const map = new Map<string, { workshop_id: string; workshop_name: string | null; total: number; count: number }>();
+    selectedPayments.forEach((id) => {
+      const payment = filteredPayments.find((p) => p.id === id);
+      if (!payment?.workshop_id) return;
+      const existing = map.get(payment.workshop_id);
+      if (existing) {
+        existing.total += payment.net_amount;
+        existing.count += 1;
+      } else {
+        map.set(payment.workshop_id, {
+          workshop_id: payment.workshop_id,
+          workshop_name: payment.workshop_name ?? null,
+          total: payment.net_amount,
+          count: 1,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [selectedPayments, filteredPayments]);
 
   if (loading) {
     return (
@@ -505,9 +536,9 @@ export const DeliveryPaymentsList = () => {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    onClick={handleBulkMarkAsPaid}
+                  <Button
+                    size="sm"
+                    onClick={() => setIsBulkPaymentDialogOpen(true)}
                     disabled={selectedPayments.length === 0}
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
@@ -746,6 +777,84 @@ export const DeliveryPaymentsList = () => {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Payment Dialog — muestra a quién transferir antes de marcar en lote */}
+      <Dialog open={isBulkPaymentDialogOpen} onOpenChange={setIsBulkPaymentDialogOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Marcar {selectedPayments.length} pago(s) como pagados</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="bg-muted/50 p-3 rounded-lg text-sm">
+              Total a transferir: <strong>{formatCurrency(selectedGrandTotal)}</strong>
+              {selectedAdvancesTotal > 0 && (
+                <span className="text-muted-foreground"> (incluye {formatCurrency(selectedAdvancesTotal)} de anticipos)</span>
+              )}
+              . Transfiere a cada taller a su cuenta:
+            </div>
+
+            {selectedWorkshopGroups.map((g) => (
+              <div key={g.workshop_id} className="space-y-1.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{g.workshop_name || 'Taller'}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {g.count} pago(s) · {formatCurrency(g.total)}
+                  </span>
+                </div>
+                <WorkshopPaymentInfo workshopId={g.workshop_id} workshopName={g.workshop_name} />
+              </div>
+            ))}
+
+            <div className="border-t pt-3 space-y-3">
+              <div>
+                <Label htmlFor="bulk_payment_date">Fecha de Pago</Label>
+                <Input
+                  id="bulk_payment_date"
+                  type="date"
+                  value={paymentFormData.payment_date}
+                  onChange={(e) => setPaymentFormData(prev => ({ ...prev, payment_date: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="bulk_payment_method">Método de Pago</Label>
+                <Select
+                  value={paymentFormData.payment_method}
+                  onValueChange={(value) => setPaymentFormData(prev => ({ ...prev, payment_method: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar método" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="transferencia">Transferencia Bancaria</SelectItem>
+                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                    <SelectItem value="cheque">Cheque</SelectItem>
+                    <SelectItem value="otro">Otro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="bulk_reference">Número de Referencia</Label>
+                <Input
+                  id="bulk_reference"
+                  value={paymentFormData.reference_number}
+                  onChange={(e) => setPaymentFormData(prev => ({ ...prev, reference_number: e.target.value }))}
+                  placeholder="Número de transferencia, etc."
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setIsBulkPaymentDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" onClick={handleBulkMarkAsPaid} disabled={selectedPayments.length === 0}>
+                <CheckCircle className="w-4 h-4 mr-2" />
+                Confirmar y marcar pagados
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
