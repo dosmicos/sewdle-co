@@ -142,6 +142,8 @@ declare
   v_n          integer;
   v_t          integer;
   v_cat        record;
+  v_cats       text[];
+  v_catname    text;
   v_ramp       numeric;
   v_pool_base  numeric;
   v_pool_tgt   numeric;
@@ -226,6 +228,9 @@ begin
   left join base_cap bc on bc.category = t.category
   where t.plan_id = v_plan.id;
 
+  -- Lista fija de categorías (evita iterar un cursor sobre _cat mientras se muta)
+  v_cats := array(select category from _cat order by category);
+
   -- Recorre semanas y, en cada una, reparte capacidad (modo shared = un pool repartido
   -- por necesidad restante; per_category = cada categoría con su propia curva).
   for v_t in 0 .. v_n - 1 loop
@@ -247,7 +252,8 @@ begin
                        from _cat);
     end if;
 
-    for v_cat in select * from _cat loop
+    foreach v_catname in array v_cats loop
+      select * into v_cat from _cat where category = v_catname;
       declare
         v_exp_sales numeric := round(v_cat.weekly_sales0 * (1 + (v_plan.seasonal_uplift - 1) * case when v_n>1 then v_t::numeric/(v_n-1) else 0 end));
         v_cap       numeric;
@@ -311,7 +317,8 @@ begin
                                         when v_plan.ramp_profile='s_curve' then 1.0/(1.0+exp(-(gs - v_plan.ramp_weeks/2.0)))
                                         else case when v_plan.ramp_weeks<=0 then 1 else least(1.0, gs::numeric/v_plan.ramp_weeks) end end)
                           from generate_series(0, v_n-1) gs), 0))::int
-         else null end
+         else null end,
+         v_today
   from _cat c;
 
   -- Rollup 'ALL' (útil en modo shared)
@@ -330,7 +337,8 @@ begin
                  / nullif((select sum(case when v_plan.ramp_profile = 'immediate' then 1
                                            when v_plan.ramp_profile = 's_curve' then 1.0/(1.0+exp(-(gs - v_plan.ramp_weeks/2.0)))
                                            else case when v_plan.ramp_weeks <= 0 then 1 else least(1.0, gs::numeric/v_plan.ramp_weeks) end end)
-                             from generate_series(0, v_n - 1) gs), 0) )::int
+                             from generate_series(0, v_n - 1) gs), 0) )::int,
+         v_today
   from _cat c;
 
   -- Reparto por SKU de la SEMANA 0 (mayor residuo) → season_suggested / season_reserve_quota
