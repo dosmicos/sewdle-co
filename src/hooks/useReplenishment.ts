@@ -87,7 +87,16 @@ export const useReplenishment = () => {
       }
       
       console.log('✅ Respuesta RPC:', data);
-      
+
+      // refresh_inventory_replenishment borra y reinserta las filas de hoy, lo que limpia
+      // season_suggested/this_week_target. Si hay un Plan de Temporada activo, recalcularlo
+      // aquí mismo para que la columna "Esta semana" no quede en blanco. Best-effort.
+      try {
+        await (supabase as any).rpc('refresh_season_production_plan', { org_id: currentOrganization.id });
+      } catch (seasonErr) {
+        console.warn('⚠️ Plan de temporada no recalculado tras sugerencias:', seasonErr);
+      }
+
       const result = data as { inserted?: number } | null;
       
       if (result?.inserted !== undefined && result.inserted >= 0) {
