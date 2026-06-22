@@ -109,6 +109,32 @@ async function findExistingShopifyOrder(
   return hit ? { order_number: String(hit.order_number), shopify_order_id: hit.shopify_order_id } : null;
 }
 
+// Direct WhatsApp text send (fallback when send-order-confirmation can't find the
+// just-created order in the local table yet). Mirrors bold-payment-webhook.
+async function sendWhatsAppText(
+  phoneNumberId: string,
+  token: string,
+  to: string,
+  message: string,
+): Promise<boolean> {
+  try {
+    const resp = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: String(to).replace(/[\s+]/g, ""),
+        type: "text",
+        text: { preview_url: false, body: message },
+      }),
+    });
+    return resp.ok;
+  } catch (_) {
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -261,17 +287,56 @@ serve(async (req) => {
       updated_at: new Date().toISOString(),
     }).eq("id", po.id);
 
-    // Send the customer confirmation (reuses the shared flow used by COD).
-    if (orderResult?.orderId) {
-      try {
-        await supabase.functions.invoke("send-order-confirmation", {
-          body: { action: "send_single", organizationId: po.organization_id, shopifyOrderId: Number(orderResult.orderId) },
-        });
-      } catch (_) { /* confirmation is best-effort */ }
+    // Send the customer confirmation. Try the shared flow first (it reads the local
+    // shopify_orders table), but that table may not have synced the just-created order
+    // yet — so fall back to a direct WhatsApp message built from the pending order,
+    // mirroring bold-payment-webhook, so the customer is always confirmed.
+    let confirmationSent = false;
+    try {
+      const { data: confResult, error: confError } = await supabase.functions.invoke(
+        "send-order-confirmation",
+        { body: { action: "send_single", organizationId: po.organization_id, shopifyOrderId: Number(orderResult.orderId) } },
+      );
+      confirmationSent = Boolean(confResult?.success) && !confError;
+    } catch (_) { /* fall through to direct fallback */ }
+
+    if (!confirmationSent && po.customer_phone) {
+      const token = Deno.env.get("META_WHATSAPP_TOKEN");
+      let phoneNumberId = Deno.env.get("META_PHONE_NUMBER_ID");
+      const { data: channels } = await supabase
+        .from("messaging_channels")
+        .select("meta_phone_number_id")
+        .eq("organization_id", po.organization_id)
+        .eq("channel_type", "whatsapp")
+        .eq("is_active", true)
+        .limit(1);
+      if (channels?.[0]?.meta_phone_number_id) phoneNumberId = channels[0].meta_phone_number_id;
+
+      if (token && phoneNumberId) {
+        const productsList = ((po.line_items as any[]) || [])
+          .map((item: any) => `• ${item.productName} (${item.variantName}) x${item.quantity || 1}`)
+          .join("\n");
+        const msg = `¡Tu pago ha sido confirmado! 🎉✅\n\n` +
+          `📋 Número de pedido: #${orderResult.orderNumber}\n` +
+          (orderResult.totalPrice ? `💰 Total pagado: $${Number(orderResult.totalPrice).toLocaleString("es-CO")} COP\n` : "") +
+          `\n📦 Productos:\n${productsList}\n\n` +
+          `Tu pedido ha sido creado exitosamente. Te enviaremos la información de seguimiento cuando sea despachado.\n\n` +
+          `¡Gracias por tu compra! 😊`;
+        confirmationSent = await sendWhatsAppText(phoneNumberId, token, po.customer_phone, msg);
+        if (confirmationSent && po.conversation_id) {
+          await supabase.from("messaging_messages").insert({
+            conversation_id: po.conversation_id,
+            content: msg,
+            direction: "outbound",
+            message_type: "text",
+            sent_at: new Date().toISOString(),
+          });
+        }
+      }
     }
 
     counters.created++;
-    report.push({ ...summary, result: "order_created", shopify_order_number: orderResult.orderNumber });
+    report.push({ ...summary, result: "order_created", shopify_order_number: orderResult.orderNumber, confirmation_sent: confirmationSent });
   }
 
   return new Response(JSON.stringify({ mode, sinceDays, minAgeMinutes, ...counters, report }, null, 2), {
