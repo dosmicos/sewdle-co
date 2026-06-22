@@ -492,6 +492,46 @@ export function calculateOrderTotals(params: {
   };
 }
 
+// "Bordado Personalizado": existing Shopify charge product ($15.000 per garment). It
+// has no real stock (a charge SKU with negative inventory), so it must NOT go through
+// the stock-validating catalog resolver — it is appended as a direct line item and its
+// price is summed explicitly (the charge product can be filtered out of the in-context
+// catalog, which would price it at 0).
+const EMBROIDERY_PRODUCT_ID = 9170402738411;
+const EMBROIDERY_VARIANT_ID = 47129543049451;
+const EMBROIDERY_SKU = "47129543049451";
+const EMBROIDERY_UNIT_PRICE = 15000;
+const EMBROIDERY_SIGNAL =
+  /personaliz|bordad|nombre\s*(a|para)\s*(personalizar|bordar)|nombre a personalizar/;
+
+// How many garments carry embroidery. Prefer an explicit count from the model
+// (embroideryQuantity), capped at the number of garments; otherwise infer from a
+// personalization signal in the notes/name fields and default to 1 (one name, one
+// garment — the common case). $15.000 is billed per unit.
+function resolveEmbroideryQuantity(
+  payload: Record<string, any>,
+  garmentLineItems: ResolvedLineItem[],
+): number {
+  const totalGarments = garmentLineItems.reduce(
+    (sum, item) => sum + Math.max(0, Number(item.quantity || 0)),
+    0,
+  );
+  const explicit = Math.floor(
+    Number(payload.embroideryQuantity ?? payload.personalizedQuantity ?? 0),
+  );
+  if (explicit > 0) return Math.min(explicit, Math.max(1, totalGarments));
+
+  const text = normalizeCommerceText(
+    [
+      payload.notes,
+      payload.personalizationName,
+      payload.embroideryName,
+      payload.nombrePersonalizar,
+    ].filter(Boolean).join(" "),
+  );
+  return EMBROIDERY_SIGNAL.test(text) ? 1 : 0;
+}
+
 function buildPendingPaymentRequestBase(params: {
   payload: Record<string, any>;
   catalog: CommerceProduct[];
@@ -535,6 +575,23 @@ function buildPendingPaymentRequestBase(params: {
       item.quantity;
   }
   if (productTotal <= 0) return { ok: false, errors: ["productTotal"] };
+
+  // Personalization/embroidery: $15.000 per personalized garment, billed via the
+  // existing "Bordado Personalizado" Shopify product. Added as a direct line item
+  // (charge product, no real stock) and summed explicitly, so the payment link total
+  // and the Shopify order both include the embroidery charge.
+  const embroideryQuantity = resolveEmbroideryQuantity(payload, resolved.lineItems);
+  if (embroideryQuantity > 0) {
+    resolved.lineItems.push({
+      productId: EMBROIDERY_PRODUCT_ID,
+      productName: "Bordado Personalizado",
+      variantId: EMBROIDERY_VARIANT_ID,
+      variantName: "Default Title",
+      sku: EMBROIDERY_SKU,
+      quantity: embroideryQuantity,
+    });
+    productTotal += embroideryQuantity * EMBROIDERY_UNIT_PRICE;
+  }
 
   const totals = calculateOrderTotals({
     productTotal,
