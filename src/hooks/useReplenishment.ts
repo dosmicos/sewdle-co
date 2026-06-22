@@ -29,10 +29,8 @@ export interface ReplenishmentSuggestion {
   status: 'pending' | 'approved' | 'rejected' | 'completed';
   // Plan de Temporada (nullable; sólo presentes cuando hay un plan activo calculado)
   season_suggested?: number | null;
-  season_reserve_quota?: number | null;
-  this_week_target?: number | null;
-  season_reserve_total?: number | null; // cuota total de reserva de la talla (toda la temporada)
-  suggested_total?: number | null;       // suggested_quantity + season_reserve_total (total a producir)
+  season_reserve_quota?: number | null; // cuota de reserva de ESTA semana (porción del plan)
+  this_week_target?: number | null;      // = suggested_quantity + season_reserve_quota (a producir/ordenar esta semana)
 }
 
 export const useReplenishment = () => {
