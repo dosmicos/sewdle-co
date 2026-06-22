@@ -41,7 +41,7 @@ export const useProductionOrders = () => {
       const totalAmount = orderData.suggestions.reduce((sum, suggestion) => {
         // For now, we'll use a base price calculation
         // In a real scenario, you'd want to get product prices
-        return sum + (suggestion.suggested_quantity * 10); // Placeholder price
+        return sum + ((suggestion.this_week_target ?? suggestion.suggested_quantity) * 10); // Placeholder price
       }, 0);
 
       // Create the order (tag with active store if one is selected)
@@ -85,9 +85,9 @@ export const useProductionOrders = () => {
           orderItems.push({
             order_id: order.id,
             product_variant_id: suggestion.variant_id,
-            quantity: suggestion.suggested_quantity,
+            quantity: (suggestion.this_week_target ?? suggestion.suggested_quantity),
             unit_price: unitPrice,
-            total_price: suggestion.suggested_quantity * unitPrice
+            total_price: (suggestion.this_week_target ?? suggestion.suggested_quantity) * unitPrice
           });
         }
       }

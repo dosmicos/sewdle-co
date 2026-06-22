@@ -31,6 +31,8 @@ export interface ReplenishmentSuggestion {
   season_suggested?: number | null;
   season_reserve_quota?: number | null;
   this_week_target?: number | null;
+  season_reserve_total?: number | null; // cuota total de reserva de la talla (toda la temporada)
+  suggested_total?: number | null;       // suggested_quantity + season_reserve_total (total a producir)
 }
 
 export const useReplenishment = () => {

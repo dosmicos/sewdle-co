@@ -34,7 +34,10 @@ export const ProductionOrderModal: React.FC<ProductionOrderModalProps> = ({
 
   const activeWorkshops = workshops.filter(w => w.status === 'active');
 
-  const totalQuantity = selectedSuggestions.reduce((sum, s) => sum + s.suggested_quantity, 0);
+  // Las órdenes se crean con la cantidad de "Esta semana" (porción semanal del plan),
+  // no con el total de "Sugerida", para no pedir toda la reserva de golpe.
+  const qtyOf = (s: ReplenishmentSuggestion) => s.this_week_target ?? s.suggested_quantity;
+  const totalQuantity = selectedSuggestions.reduce((sum, s) => sum + qtyOf(s), 0);
   const totalProducts = selectedSuggestions.length;
 
   const handleSubmit = async () => {
@@ -125,7 +128,7 @@ export const ProductionOrderModal: React.FC<ProductionOrderModalProps> = ({
                   </div>
                   <div className="text-right">
                     <Badge variant="outline" className="font-medium">
-                      {suggestion.suggested_quantity} unidades
+                      {qtyOf(suggestion)} unidades
                     </Badge>
                     <p className="text-xs text-muted-foreground mt-1">
                       {suggestion.urgency === 'critical' ? '🔴 CRÍTICA' :

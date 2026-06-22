@@ -58,7 +58,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
     // Aplicar ordenamiento si está activo
     if (sortOrder) {
       filtered = [...filtered].sort((a, b) => {
-        const diff = a.suggested_quantity - b.suggested_quantity;
+        const diff = (a.suggested_total ?? a.suggested_quantity) - (b.suggested_total ?? b.suggested_quantity);
         return sortOrder === 'asc' ? diff : -diff;
       });
     }
@@ -159,7 +159,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
         Number(suggestion.avg_daily_sales || 0).toFixed(2),
         Number(suggestion.days_of_supply || 0).toFixed(1),
         suggestion.pending_production || 0,
-        suggestion.suggested_quantity || 0,
+        suggestion.suggested_total ?? suggestion.suggested_quantity ?? 0,
         `"${suggestion.urgency?.toUpperCase() || 'MEDIUM'}"`,
         `"${suggestion.data_confidence?.toUpperCase() || 'MEDIUM'}"`,
       ];
@@ -292,7 +292,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
                       {selectedSuggestions.length} sugerencias seleccionadas
                     </p>
                     <p className="text-sm text-blue-700">
-                      Total: {getSelectedSuggestions().reduce((sum, s) => sum + s.suggested_quantity, 0)} unidades
+                      A producir esta semana: {getSelectedSuggestions().reduce((sum, s) => sum + (s.this_week_target ?? s.suggested_quantity), 0)} unidades
                     </p>
                   </div>
                 </div>
@@ -372,9 +372,10 @@ export const ReplenishmentSuggestions: React.FC = () => {
                   <TableHead className="text-right">En Producción</TableHead>
                   <TableHead className="text-right">En Calidad</TableHead>
                   <TableHead className="text-right">Cobertura</TableHead>
-                  <TableHead 
+                  <TableHead
                     className="text-right cursor-pointer hover:bg-muted/50 transition-colors"
                     onClick={toggleSortOrder}
+                    title="Total a producir = demanda reactiva (~40 días) + reserva de temporada de la talla. 'Esta semana' es la porción a producir esta semana."
                   >
                     <div className="flex items-center justify-end">
                       Sugerida
@@ -481,7 +482,14 @@ export const ReplenishmentSuggestions: React.FC = () => {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-medium">{suggestion.suggested_quantity}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      {suggestion.suggested_total ?? suggestion.suggested_quantity}
+                      {suggestion.season_reserve_total ? (
+                        <div className="text-[10px] font-normal text-muted-foreground">
+                          {suggestion.suggested_quantity} dem + {suggestion.season_reserve_total} reserva
+                        </div>
+                      ) : null}
+                    </TableCell>
                     <TableCell className="text-right">
                       {suggestion.this_week_target != null && suggestion.this_week_target !== suggestion.suggested_quantity ? (
                         <div>
