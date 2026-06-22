@@ -13,6 +13,7 @@ import { useDeliveryPayments, DeliveryPaymentCalculation } from "@/hooks/useDeli
 import { useOrderAdvances } from "@/hooks/useOrderAdvances";
 import { useToast } from "@/hooks/use-toast";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { WorkshopPaymentInfo } from "@/components/financial/WorkshopPaymentInfo";
 import { supabase } from "@/integrations/supabase/client";
 
 interface DeliveryPaymentManagerProps {
@@ -718,6 +719,12 @@ export const DeliveryPaymentManager = ({ deliveryId, onPaymentCreated }: Deliver
                 <DialogHeader>
                   <DialogTitle>Registrar Pago</DialogTitle>
                 </DialogHeader>
+                {existingPayment?.workshop_id && (
+                  <WorkshopPaymentInfo
+                    workshopId={existingPayment.workshop_id}
+                    workshopName={existingPayment.workshop_name}
+                  />
+                )}
                 <form onSubmit={handleMarkAsPaid} className="space-y-4">
                   <div>
                     <Label htmlFor="payment_date">Fecha de Pago</Label>

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { WorkshopPaymentInfo } from "@/components/financial/WorkshopPaymentInfo";
 import {
   Search,
   Filter,
@@ -676,6 +677,15 @@ export const DeliveryPaymentsList = () => {
           <DialogHeader>
             <DialogTitle>Registrar Pago</DialogTitle>
           </DialogHeader>
+          {(() => {
+            const selectedPayment = payments.find((p) => p.id === selectedPaymentId);
+            return selectedPayment?.workshop_id ? (
+              <WorkshopPaymentInfo
+                workshopId={selectedPayment.workshop_id}
+                workshopName={selectedPayment.workshop_name}
+              />
+            ) : null;
+          })()}
           <form onSubmit={handleMarkAsPaid} className="space-y-4">
             <div>
               <Label htmlFor="payment_date">Fecha de Pago</Label>
