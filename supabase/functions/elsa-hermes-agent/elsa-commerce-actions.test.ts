@@ -52,6 +52,8 @@ Deno.test("elsa-hermes-agent looks up a customer's recent order by phone/email a
   assertEquals(source.includes("conversation.external_user_id"), true);
   // Privacy: prefer the verified WhatsApp phone (last 10 digits) over a typed email.
   assertEquals(source.includes('ilike("customer_phone"'), true);
+  // Never surface a cancelled order as if it were active.
+  assertEquals(source.includes('is("cancelled_at", null)'), true);
 });
 
 Deno.test("elsa-hermes-agent can rewrite generic image/name-reference replies before returning to WhatsApp", () => {

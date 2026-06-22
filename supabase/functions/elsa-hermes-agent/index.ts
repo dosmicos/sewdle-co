@@ -657,6 +657,7 @@ async function findCustomerRecentOrder(
       .select(columns)
       .eq("organization_id", params.organizationId)
       .ilike("customer_phone", `%${last10}`)
+      .is("cancelled_at", null)
       .order("created_at_shopify", { ascending: false })
       .limit(1);
     order = data?.[0] || null;
@@ -669,6 +670,7 @@ async function findCustomerRecentOrder(
       .select(columns)
       .eq("organization_id", params.organizationId)
       .ilike("customer_email", email)
+      .is("cancelled_at", null)
       .order("created_at_shopify", { ascending: false })
       .limit(1);
     order = data?.[0] || null;
