@@ -27,6 +27,10 @@ export interface ReplenishmentSuggestion {
   data_confidence: 'high' | 'medium' | 'low';
   calculated_at: string;
   status: 'pending' | 'approved' | 'rejected' | 'completed';
+  // Plan de Temporada (nullable; sólo presentes cuando hay un plan activo calculado)
+  season_suggested?: number | null;
+  season_reserve_quota?: number | null;
+  this_week_target?: number | null;
 }
 
 export const useReplenishment = () => {
