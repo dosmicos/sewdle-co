@@ -17,8 +17,11 @@ export const SeasonPlanPanel = () => {
   const { plan, targets, feasibility, weeks, loading, calculating, savePlanConfig, calculatePlan } = useSeasonPlan();
 
   const [targetDate, setTargetDate] = useState("2026-11-01");
-  const [targetCapacity, setTargetCapacity] = useState("4000");
-  const [rampWeeks, setRampWeeks] = useState("6");
+  // Capacidad expresada en talleres (crece gradualmente al ir abriendo talleres)
+  const [workshopsStart, setWorkshopsStart] = useState("11");
+  const [outputPerWorkshop, setOutputPerWorkshop] = useState("72");
+  const [workshopsTarget, setWorkshopsTarget] = useState("40");
+  const [rampWeeks, setRampWeeks] = useState("12");
   const [uplift, setUplift] = useState("1.0");
   const [capacityMode, setCapacityMode] = useState<"shared" | "per_category">("shared");
   const [reserves, setReserves] = useState<Record<string, string>>({ Ruanas: "30000", Sleepings: "10000" });
@@ -28,12 +31,21 @@ export const SeasonPlanPanel = () => {
   useEffect(() => {
     if (plan) {
       setTargetDate(plan.target_date);
-      setTargetCapacity(String(plan.target_weekly_capacity ?? ""));
-      setRampWeeks(String(plan.ramp_weeks ?? 6));
+      setRampWeeks(String(plan.ramp_weeks ?? 12));
       setUplift(String(plan.seasonal_uplift ?? 1));
       setCapacityMode(plan.capacity_mode);
+      const o = plan.output_per_workshop ?? null;
+      if (o && o > 0) {
+        setOutputPerWorkshop(String(o));
+        if (plan.baseline_weekly_capacity != null) setWorkshopsStart(String(Math.round(plan.baseline_weekly_capacity / o)));
+        if (plan.target_weekly_capacity != null) setWorkshopsTarget(String(Math.round(plan.target_weekly_capacity / o)));
+      }
     }
   }, [plan]);
+
+  const out = parseFloat(outputPerWorkshop) || 0;
+  const wsStartN = parseInt(workshopsStart || "0", 10);
+  const wsTargetN = parseInt(workshopsTarget || "0", 10);
 
   useEffect(() => {
     if (targets.length > 0) {
@@ -52,7 +64,10 @@ export const SeasonPlanPanel = () => {
     try {
       const cfg = {
         target_date: targetDate,
-        target_weekly_capacity: parseInt(targetCapacity || "0", 10),
+        // capacidad = talleres × producción por taller; el motor rampa de base→meta
+        target_weekly_capacity: Math.round(wsTargetN * out),
+        baseline_weekly_capacity: Math.round(wsStartN * out),
+        output_per_workshop: out,
         ramp_weeks: parseInt(rampWeeks || "0", 10),
         ramp_profile: "linear" as const,
         seasonal_uplift: parseFloat(uplift || "1"),
@@ -102,12 +117,24 @@ export const SeasonPlanPanel = () => {
               <Input id="target_date" type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} />
             </div>
             <div>
-              <Label htmlFor="target_cap">Capacidad semanal meta (uds/sem)</Label>
-              <Input id="target_cap" type="number" min="0" value={targetCapacity} onChange={(e) => setTargetCapacity(e.target.value)} />
+              <Label htmlFor="ws_start">Talleres ahora</Label>
+              <Input id="ws_start" type="number" min="0" value={workshopsStart} onChange={(e) => setWorkshopsStart(e.target.value)} />
             </div>
             <div>
-              <Label htmlFor="ramp">Semanas de rampa</Label>
+              <Label htmlFor="ws_out">Producción por taller / semana</Label>
+              <Input id="ws_out" type="number" min="0" value={outputPerWorkshop} onChange={(e) => setOutputPerWorkshop(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="ws_target">Talleres meta (a los que llegarás)</Label>
+              <Input id="ws_target" type="number" min="0" value={workshopsTarget} onChange={(e) => setWorkshopsTarget(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="ramp">Semanas para abrir esos talleres (rampa)</Label>
               <Input id="ramp" type="number" min="0" value={rampWeeks} onChange={(e) => setRampWeeks(e.target.value)} />
+            </div>
+            <div className="md:col-span-3 text-xs text-muted-foreground -mt-1">
+              Capacidad: de <strong>{fmt(wsStartN * out)}</strong> a <strong>{fmt(wsTargetN * out)}</strong> uds/semana
+              ({fmt(wsStartN)} → {fmt(wsTargetN)} talleres × {fmt(out)} uds c/u), creciendo en {rampWeeks} semanas.
             </div>
             {PLAN_CATEGORIES.map((c) => (
               <div key={c}>
@@ -170,12 +197,13 @@ export const SeasonPlanPanel = () => {
               ) : (
                 <>
                   <p className="font-medium text-red-900">
-                    Meta inalcanzable al ritmo actual. Faltan {fmt(all.shortfall)} unidades en {all.horizon_weeks} semanas.
+                    Meta inalcanzable a este ritmo. Faltan {fmt(all.shortfall)} unidades en {all.horizon_weeks} semanas.
                   </p>
                   <p className="text-red-800">
-                    Necesitas una capacidad meta de ≈ <strong>{fmt(all.min_target_weekly_capacity || 0)} uds/semana</strong> (hoy
-                    la base es ~{fmt(all.baseline_weekly_capacity)}/sem). Producción total requerida:{" "}
-                    {fmt(all.production_needed)} uds.
+                    Para lograrlo necesitas llegar a ≈{" "}
+                    <strong>{out > 0 ? fmt(Math.ceil((all.min_target_weekly_capacity || 0) / out)) : "—"} talleres</strong>{" "}
+                    (hoy ~{fmt(wsStartN)}), es decir ≈ {fmt(all.min_target_weekly_capacity || 0)} uds/semana. Producción total
+                    requerida: {fmt(all.production_needed)} uds.
                   </p>
                 </>
               )}
