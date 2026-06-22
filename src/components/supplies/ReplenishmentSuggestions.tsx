@@ -381,6 +381,7 @@ export const ReplenishmentSuggestions: React.FC = () => {
                       {getSortIcon()}
                     </div>
                   </TableHead>
+                  <TableHead className="text-right" title="Producir esta semana según el Plan de Temporada (reposición por ventas + cuota de reserva)">Esta semana</TableHead>
                   <TableHead>Urgencia</TableHead>
                 </TableRow>
               </TableHeader>
@@ -481,12 +482,24 @@ export const ReplenishmentSuggestions: React.FC = () => {
                       )}
                     </TableCell>
                     <TableCell className="text-right font-medium">{suggestion.suggested_quantity}</TableCell>
+                    <TableCell className="text-right">
+                      {suggestion.this_week_target != null && suggestion.this_week_target !== suggestion.suggested_quantity ? (
+                        <div>
+                          <span className="font-semibold">{suggestion.this_week_target}</span>
+                          {suggestion.season_reserve_quota ? (
+                            <div className="text-[10px] text-emerald-700">+{suggestion.season_reserve_quota} reserva</div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell>{getUrgencyBadge(suggestion.urgency)}</TableCell>
                   </TableRow>
                 ))}
                 {filteredSuggestions.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={14} className="text-center py-8 text-muted-foreground">
                       No se encontraron sugerencias de reposición
                     </TableCell>
                   </TableRow>

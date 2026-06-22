@@ -2,9 +2,10 @@
 import React, { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { TrendingUp, BarChart3, TrendingDown } from 'lucide-react';
+import { TrendingUp, BarChart3, TrendingDown, CalendarClock } from 'lucide-react';
 import { ReplenishmentSuggestions } from '@/components/supplies/ReplenishmentSuggestions';
 import { SalesVelocityRanking } from '@/components/supplies/SalesVelocityRanking';
+import { SeasonPlanPanel } from '@/components/supplies/SeasonPlanPanel';
 
 export const ReplenishmentPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('suggestions');
@@ -22,10 +23,14 @@ export const ReplenishmentPage: React.FC = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="suggestions" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
             Sugerencias de Reposición
+          </TabsTrigger>
+          <TabsTrigger value="season" className="flex items-center gap-2">
+            <CalendarClock className="h-4 w-4" />
+            Plan de Temporada
           </TabsTrigger>
           <TabsTrigger value="ranking" className="flex items-center gap-2">
             <TrendingDown className="h-4 w-4" />
@@ -48,6 +53,10 @@ export const ReplenishmentPage: React.FC = () => {
               <ReplenishmentSuggestions />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="season">
+          <SeasonPlanPanel />
         </TabsContent>
 
         <TabsContent value="ranking">
