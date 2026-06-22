@@ -16,6 +16,7 @@ export interface SeasonPlan {
   capacity_mode: "shared" | "per_category";
   baseline_weekly_capacity: number | null;
   target_weekly_capacity: number;
+  output_per_workshop: number | null;
   ramp_weeks: number;
   ramp_profile: "linear" | "immediate" | "s_curve";
   seasonal_uplift: number;
@@ -68,6 +69,7 @@ export interface SeasonPlanConfig {
   seasonal_uplift: number;
   capacity_mode: "shared" | "per_category";
   baseline_weekly_capacity?: number | null;
+  output_per_workshop?: number | null;
   targets: SeasonCategoryTarget[];
 }
 
@@ -146,6 +148,7 @@ export const useSeasonPlan = () => {
           seasonal_uplift: config.seasonal_uplift,
           capacity_mode: config.capacity_mode,
           baseline_weekly_capacity: config.baseline_weekly_capacity ?? null,
+          output_per_workshop: config.output_per_workshop ?? null,
           status: "active" as const,
           updated_at: new Date().toISOString(),
         };
