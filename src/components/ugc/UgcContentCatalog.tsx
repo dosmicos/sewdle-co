@@ -1,11 +1,13 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, X, ChevronLeft, ChevronRight, Play, Calendar, User } from 'lucide-react';
+import { Download, X, ChevronLeft, ChevronRight, Play, Calendar, User, Megaphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useUgcVideos } from '@/hooks/useUgcVideos';
 import type { UgcVideo, UgcCreator } from '@/types/ugc';
 
 interface UgcContentCatalogProps {
@@ -33,6 +35,8 @@ interface CatalogItem {
 }
 
 const UgcContentCatalog: React.FC<UgcContentCatalogProps> = ({ videos, creators }) => {
+  const { updateVideoPublication } = useUgcVideos();
+
   const creatorById = useMemo(() => {
     const map = new Map<string, UgcCreator>();
     for (const c of creators) map.set(c.id, c);
@@ -111,6 +115,19 @@ const UgcContentCatalog: React.FC<UgcContentCatalogProps> = ({ videos, creators 
     }
   }, []);
 
+  const handlePublicationChange = useCallback((
+    item: CatalogItem,
+    publishedOrganic?: boolean,
+    publishedAds?: boolean,
+  ) => {
+    updateVideoPublication.mutate({
+      id: item.video.id,
+      publishedOrganic,
+      publishedAds,
+      currentStatus: item.video.status,
+    });
+  }, [updateVideoPublication]);
+
   const creatorLabel = (c: UgcCreator | undefined) =>
     c?.name || (c?.instagram_handle ? `@${c.instagram_handle}` : c?.tiktok_handle ? `@${c.tiktok_handle}` : 'Creador desconocido');
 
@@ -148,6 +165,21 @@ const UgcContentCatalog: React.FC<UgcContentCatalogProps> = ({ videos, creators 
             onClick={() => setLightboxIndex(index)}
             className="relative block w-full aspect-[4/5] overflow-hidden rounded-xl border border-border bg-muted/30 group focus:outline-none focus:ring-2 focus:ring-primary"
           >
+            {(item.video.published_organic || item.video.published_ads) && (
+              <span className="absolute top-1.5 left-1.5 z-10 flex flex-col items-start gap-1">
+                {item.video.published_organic && (
+                  <span className="rounded-full bg-green-500/90 px-1.5 py-0.5 text-[9px] font-semibold text-white shadow-sm">
+                    Orgánico
+                  </span>
+                )}
+                {item.video.published_ads && (
+                  <span className="flex items-center gap-1 rounded-full bg-blue-500/90 px-1.5 py-0.5 text-[9px] font-semibold text-white shadow-sm">
+                    <Megaphone className="h-2.5 w-2.5" />
+                    Ads
+                  </span>
+                )}
+              </span>
+            )}
             {item.isVideo ? (
               <>
                 <video
@@ -280,6 +312,44 @@ const UgcContentCatalog: React.FC<UgcContentCatalogProps> = ({ videos, creators 
 
                 <div className="text-xs text-muted-foreground">
                   {lightboxIndex! + 1} de {items.length}
+                </div>
+
+                {/* Publicación: mismos toggles Orgánico / Ads que el modal del creador */}
+                <div className="flex items-center gap-6 pt-3 border-t border-border">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={!!active.video.published_organic}
+                      disabled={updateVideoPublication.isPending}
+                      onCheckedChange={(checked) => handlePublicationChange(active, checked, undefined)}
+                    />
+                    <div>
+                      <span className={`text-xs font-medium ${active.video.published_organic ? 'text-green-700' : 'text-amber-700'}`}>
+                        Orgánico {active.video.published_organic ? '✓' : '—'}
+                      </span>
+                      {active.video.published_organic_at && (
+                        <p className="text-[10px] text-muted-foreground">
+                          {format(new Date(active.video.published_organic_at), 'dd MMM HH:mm', { locale: es })}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={!!active.video.published_ads}
+                      disabled={updateVideoPublication.isPending}
+                      onCheckedChange={(checked) => handlePublicationChange(active, undefined, checked)}
+                    />
+                    <div>
+                      <span className={`text-xs font-medium ${active.video.published_ads ? 'text-blue-700' : 'text-orange-700'}`}>
+                        Ads {active.video.published_ads ? '✓' : '—'}
+                      </span>
+                      {active.video.published_ads_at && (
+                        <p className="text-[10px] text-muted-foreground">
+                          {format(new Date(active.video.published_ads_at), 'dd MMM HH:mm', { locale: es })}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
