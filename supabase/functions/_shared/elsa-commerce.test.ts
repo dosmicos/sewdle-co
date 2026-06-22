@@ -505,6 +505,23 @@ Deno.test("summarizeCommerceCatalogForPrompt includes product type and tags for 
   assertEquals(summary[0].tags, "koala, amarillo, animal");
 });
 
+Deno.test("summarizeCommerceCatalogForPrompt exposes the cleaned product description (material/TOG)", () => {
+  const summary = summarizeCommerceCatalogForPrompt([
+    {
+      id: 301,
+      title: "Sleeping para Bebé Osito TOG 2.5",
+      body_html:
+        "<p>Hecho con materiales suaves.</p><ul><li>TOG 2.5 — climas fríos 14 a 20 grados</li><li>Material: flannel + forro 100% algodón</li></ul>",
+      variants: [{ id: 3001, title: "0 a 3 meses", sku: "OSITO", price: "134900", inventory_quantity: 5 }],
+    },
+  ] as any, 80, "osito");
+
+  const desc = (summary[0] as any).description as string;
+  assertEquals(desc.includes("100% algodón"), true);
+  assertEquals(desc.includes("14 a 20 grados"), true);
+  assertEquals(desc.includes("<"), false); // HTML stripped
+});
+
 Deno.test("formatShopifyOrderCreatedReply includes order number, summary and thanks", () => {
   const reply = formatShopifyOrderCreatedReply({
     orderNumber: "75966",

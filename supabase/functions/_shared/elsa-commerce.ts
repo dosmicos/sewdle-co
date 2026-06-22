@@ -862,16 +862,35 @@ function prioritizeCatalogForQuery(
     .map((item) => item.product);
 }
 
+// Strip HTML + collapse whitespace from a Shopify body_html into plain text Elsa can
+// read (material, TOG, temperature, care instructions live here).
+export function plainTextFromHtml(html: string, max = 600): string {
+  return String(html || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
 export function summarizeCommerceCatalogForPrompt(
   catalog: CommerceProduct[],
   maxProducts = 80,
   query?: string,
 ) {
-  return prioritizeCatalogForQuery(catalog, query).slice(0, maxProducts).map((product) => ({
+  return prioritizeCatalogForQuery(catalog, query).slice(0, maxProducts).map((product, index) => ({
     id: product.id,
     title: product.title,
     product_type: product.product_type || "",
     tags: product.tags || "",
+    // Include the product description (material, TOG, temperature, care) for the most
+    // relevant products so Elsa can answer "what material / for what climate" from the
+    // product itself instead of escalating. Limited to the top matches to keep the
+    // prompt compact; the catalog is already sorted by relevance to the query.
+    ...(index < 14 && product.body_html
+      ? { description: plainTextFromHtml(product.body_html, 600) }
+      : {}),
     variants: (product.variants || []).map((variant) => ({
       id: variant.id,
       title: variant.title || "",
