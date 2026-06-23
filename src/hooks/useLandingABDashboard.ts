@@ -12,6 +12,8 @@ export interface VariantStats {
   cvr: number | null; // orders / visits (0..1)
   aov: number | null; // revenue / orders
   rpv: number | null; // revenue / visits
+  cm: number; // contribution margin total del brazo (revenue - bruto*VAR_RATE)
+  cmPerVisit: number | null; // CM / visitas — métrica de decisión
 }
 
 export interface SignificanceResult {
@@ -41,16 +43,18 @@ export interface ExperimentSummary {
   startedAt: string;
   endedAt: string | null;
   daysRunning: number;
+  attributeKey?: string; // 'lp_version' (ángulo) | 'lp_precio' (precio) | ...
   control: VariantStats;
   challenger: VariantStats;
-  significance: SignificanceResult;
+  significance: SignificanceResult; // z-test sobre CVR
+  cmPerVisitUpliftPct: number | null; // uplift puntual de CM/visita (retador vs control)
   timeseries: TimePoint[];
 }
 
 export interface LandingAbDashboardResponse {
   period: { start: string; end: string };
   experiments: ExperimentSummary[];
-  metadata: { computedAt: string; notes: string[] };
+  metadata: { computedAt: string; notes: string[]; varRate?: number };
 }
 
 export interface UseLandingABDashboardOptions {

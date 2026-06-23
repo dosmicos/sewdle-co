@@ -42,9 +42,11 @@ const VariantCard: React.FC<{ v: VariantStats; leader: boolean }> = ({ v, leader
       <p className="mt-1 text-sm font-semibold text-slate-900">{v.label}</p>
       <div className="mt-3 grid grid-cols-2 gap-3">
         <div><p className="text-[11px] text-slate-500">CVR</p><p className="text-lg font-bold text-slate-900">{formatCvr(v.cvr)}</p></div>
-        <div><p className="text-[11px] text-slate-500">Visitas</p><p className="text-lg font-semibold text-slate-700">{formatNum(v.visits)}</p></div>
+        <div><p className="text-[11px] font-medium text-orange-600">CM / visitante ★</p><p className="text-lg font-bold text-slate-900">{formatCOP(v.cmPerVisit)}</p></div>
+        <div><p className="text-[11px] text-slate-500">Visitas</p><p className="text-sm font-semibold text-slate-700">{formatNum(v.visits)}</p></div>
         <div><p className="text-[11px] text-slate-500">Compras</p><p className="text-sm font-semibold text-slate-700">{formatNum(v.orders)}</p></div>
         <div><p className="text-[11px] text-slate-500">Rev/visita</p><p className="text-sm font-semibold text-slate-700">{formatCOP(v.rpv)}</p></div>
+        <div><p className="text-[11px] text-slate-500">AOV</p><p className="text-sm font-semibold text-slate-700">{formatCOP(v.aov)}</p></div>
       </div>
     </CardContent>
   </Card>
@@ -61,6 +63,10 @@ const MetricRow: React.FC<{ label: string; c: string; ch: string; highlightC?: b
 const ExperimentView: React.FC<{ exp: ExperimentSummary }> = ({ exp }) => {
   const { control, challenger, significance: sig } = exp;
   const leaderRole = sig.winner === 'control' || sig.winner === 'challenger' ? sig.winner : null;
+  const cmLeader: 'control' | 'challenger' | null =
+    control.cmPerVisit != null && challenger.cmPerVisit != null && control.cmPerVisit !== challenger.cmPerVisit
+      ? (challenger.cmPerVisit > control.cmPerVisit ? 'challenger' : 'control')
+      : null;
   const totalOrders = control.orders + challenger.orders;
 
   const chartData = exp.timeseries.map((t) => ({
@@ -105,6 +111,14 @@ const ExperimentView: React.FC<{ exp: ExperimentSummary }> = ({ exp }) => {
                 Uplift CVR del retador:{' '}
                 <span className={cn('font-semibold', sig.upliftPct >= 0 ? 'text-emerald-600' : 'text-red-500')}>
                   {sig.upliftPct >= 0 ? '+' : ''}{formatPctRaw(sig.upliftPct, 1)}
+                </span>
+              </p>
+            )}
+            {exp.cmPerVisitUpliftPct !== null && Number.isFinite(exp.cmPerVisitUpliftPct) && (
+              <p className="mt-0.5 text-xs text-slate-500">
+                CM/visitante del retador <span className="font-medium text-orange-600">(decisión)</span>:{' '}
+                <span className={cn('font-semibold', exp.cmPerVisitUpliftPct >= 0 ? 'text-emerald-600' : 'text-red-500')}>
+                  {exp.cmPerVisitUpliftPct >= 0 ? '+' : ''}{formatPctRaw(exp.cmPerVisitUpliftPct, 1)}
                 </span>
               </p>
             )}
@@ -162,9 +176,14 @@ const ExperimentView: React.FC<{ exp: ExperimentSummary }> = ({ exp }) => {
               <MetricRow label="CVR" c={formatCvr(control.cvr)} ch={formatCvr(challenger.cvr)} highlightC={leaderRole === 'control'} highlightCh={leaderRole === 'challenger'} />
               <MetricRow label="AOV" c={formatCOP(control.aov)} ch={formatCOP(challenger.aov)} />
               <MetricRow label="Revenue por visita" c={formatCOP(control.rpv)} ch={formatCOP(challenger.rpv)} />
+              <MetricRow label="CM / visitante ★ (decisión)" c={formatCOP(control.cmPerVisit)} ch={formatCOP(challenger.cmPerVisit)} highlightC={cmLeader === 'control'} highlightCh={cmLeader === 'challenger'} />
+              <MetricRow label="CM total del brazo" c={formatCOP(control.cm)} ch={formatCOP(challenger.cm)} />
               <MetricRow label="Revenue total" c={formatCOP(control.revenue)} ch={formatCOP(challenger.revenue)} />
             </TableBody>
           </Table>
+          <p className="mt-3 text-[11px] leading-relaxed text-slate-400">
+            ★ <strong>CM/visitante</strong> es la métrica de decisión (margen de contribución por visitante = CVR × CM/orden). El CVR es diagnóstico: bajar el precio casi siempre sube el CVR, pero gana quien deja más <strong>CM por visitante</strong>. La significancia mostrada es del z-test de CVR; el CM/visitante es uplift puntual. Experimentos ortogonales = cada uno se mide independiente del otro.
+          </p>
         </CardContent>
       </Card>
     </div>
