@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useStoreContext } from '@/contexts/StoreContext';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 interface AdminDashboardStats {
   activeOrders: number;
@@ -38,69 +39,29 @@ export const useAdminDashboardData = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { activeStoreId } = useStoreContext();
+  const { currentOrganization } = useOrganization();
 
   const fetchDashboardStats = async () => {
     try {
-      // Active orders count
-      let ordersQuery = supabase
-        .from('orders')
-        .select('*', { count: 'exact', head: true })
-        .in('status', ['pending', 'assigned', 'in_progress']);
-      if (activeStoreId) ordersQuery = ordersQuery.eq('store_id', activeStoreId);
-      const { count: activeOrdersCount, error: ordersError } = await ordersQuery;
+      // Stats agregadas EN EL SERVIDOR (RPC). Antes se traían order_items/delivery_items
+      // al cliente y se sumaban, pero PostgREST corta en 1000 filas → "Unidades en
+      // Producción" salía truncado. Ahora se suma en la base, sin límite.
+      if (!currentOrganization?.id) {
+        setStats({ activeOrders: 0, unitsInProduction: 0, unitsDeliveredWeek: 0, unitsApprovedWeek: 0 });
+        return;
+      }
 
-      if (ordersError) throw ordersError;
+      const { data: statsRows, error: statsError } = await (supabase as any).rpc('get_admin_dashboard_stats', {
+        p_org_id: currentOrganization.id,
+        p_store_id: activeStoreId ?? null,
+      });
+      if (statsError) throw statsError;
+      const row = statsRows?.[0] || {};
 
-      // Units in production (total ordered - total approved)
-      // Get total units ordered in active orders
-      let totalOrderedQuery = supabase
-        .from('order_items')
-        .select(`quantity, orders!inner(status, store_id)`)
-        .in('orders.status', ['pending', 'assigned', 'in_progress']);
-      if (activeStoreId) totalOrderedQuery = totalOrderedQuery.eq('orders.store_id', activeStoreId);
-      const { data: totalOrderedData, error: totalOrderedError } = await totalOrderedQuery;
-
-      if (totalOrderedError) throw totalOrderedError;
-
-      const totalOrdered = totalOrderedData?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
-
-      // Get total units approved from all deliveries of active orders
-      const { data: totalApprovedData, error: totalApprovedError } = await supabase
-        .from('delivery_items')
-        .select(`
-          quantity_approved,
-          deliveries!inner(
-            order_id,
-            orders!inner(status)
-          )
-        `)
-        .in('deliveries.orders.status', ['pending', 'assigned', 'in_progress']);
-
-      if (totalApprovedError) throw totalApprovedError;
-
-      const totalApproved = totalApprovedData?.reduce((sum, item) => sum + (item.quantity_approved || 0), 0) || 0;
-
-      // Units in production = Total ordered - Total approved
-      const unitsInProduction = Math.max(0, totalOrdered - totalApproved);
-
-      // Units delivered this week
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      
-      const { data: weekDeliveredData, error: weekDeliveredError } = await supabase
-        .from('delivery_items')
-        .select('quantity_delivered, deliveries!inner(delivery_date)')
-        .gte('deliveries.delivery_date', weekAgo.toISOString().split('T')[0]);
-
-      const unitsDeliveredWeek = weekDeliveredData?.reduce((sum, item) => sum + (item.quantity_delivered || 0), 0) || 0;
-
-      // Units approved this week
-      const { data: weekApprovedData, error: weekApprovedError } = await supabase
-        .from('delivery_items')
-        .select('quantity_approved, deliveries!inner(delivery_date)')
-        .gte('deliveries.delivery_date', weekAgo.toISOString().split('T')[0]);
-
-      const unitsApprovedWeek = weekApprovedData?.reduce((sum, item) => sum + (item.quantity_approved || 0), 0) || 0;
+      const activeOrdersCount = row.active_orders ?? 0;
+      const unitsInProduction = row.units_in_production ?? 0;
+      const unitsDeliveredWeek = row.delivered_this_week ?? 0;
+      const unitsApprovedWeek = row.approved_this_week ?? 0;
 
       setStats({
         activeOrders: activeOrdersCount || 0,
@@ -298,7 +259,8 @@ export const useAdminDashboardData = () => {
 
   useEffect(() => {
     loadAllData();
-  }, [viewMode, activeStoreId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, activeStoreId, currentOrganization?.id]);
 
   return {
     stats,
