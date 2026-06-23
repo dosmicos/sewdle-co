@@ -15,6 +15,7 @@ import {
   ShoppingCart,
   ClipboardList,
   MessageCircle,
+  FlaskConical,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -32,6 +33,7 @@ const coreItems: NavItem[] = [
 
 const workspaceItems: NavItem[] = [
   { label: 'Team Scorecard', icon: <ClipboardList className="h-4 w-4" />, id: 'team-scorecard', path: '/team-scorecard' },
+  { label: 'A/B Landings', icon: <FlaskConical className="h-4 w-4" />, id: 'landing-ab', path: '/landing-ab-tests' },
   { label: 'Ad Performance', icon: <Target className="h-4 w-4" />, id: 'ad-performance', path: '/ad-performance' },
   { label: 'Intelligence', icon: <Sparkles className="h-4 w-4" />, id: 'intelligence', path: '/intelligence' },
   { label: 'Ad Intelligence', icon: <Brain className="h-4 w-4" />, id: 'ad-analysis', path: '/ad-analysis' },
@@ -64,6 +66,7 @@ const FinanceSidebar: React.FC<FinanceSidebarProps> = ({
   const currentSection = activeSection ?? (() => {
     if (location.pathname === '/ad-performance') return 'ad-performance';
     if (location.pathname === '/team-scorecard') return 'team-scorecard';
+    if (location.pathname === '/landing-ab-tests') return 'landing-ab';
     if (location.pathname === '/intelligence') return 'intelligence';
     if (location.pathname === '/ad-analysis') return 'ad-analysis';
     if (location.pathname === '/ugc-performance') return 'ugc-performance';
