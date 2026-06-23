@@ -1,5 +1,9 @@
 project_id = "ysdcsqsfnckeuafjyrbc"
 
+# Public beacon: in-page A/B split records each new visitor (CVR denominator). No JWT.
+[functions.landing-ab-track]
+verify_jwt = false
+
 [functions.sewdle-copilot]
 verify_jwt = false
 
