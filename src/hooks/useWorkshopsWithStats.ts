@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 export interface WorkshopWithStats extends Workshop {
   stats: {
     unitsDeliveredLastWeek: number;
+    unitsDeliveredLastMonth: number;
     qualityScore: number;
     activeOrders: number;
   };
@@ -27,6 +28,11 @@ export const useWorkshopsWithStats = () => {
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
       const oneWeekAgoString = oneWeekAgo.toISOString().split('T')[0];
+
+      // Fecha de hace 30 días (para "talleres con entregas en el último mes")
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setDate(oneMonthAgo.getDate() - 30);
+      const oneMonthAgoString = oneMonthAgo.toISOString().split('T')[0];
 
       const statsPromises = workshopList.map(async (workshop) => {
         try {
@@ -75,6 +81,15 @@ export const useWorkshopsWithStats = () => {
             .eq('workshop_id', workshop.id)
             .gte('delivery_date', oneWeekAgoString);
 
+          // Obtener entregas del último mes (para contar talleres activos en el mes)
+          const { data: lastMonthDeliveries } = await supabase
+            .from('deliveries')
+            .select(`
+              delivery_items(quantity_delivered)
+            `)
+            .eq('workshop_id', workshop.id)
+            .gte('delivery_date', oneMonthAgoString);
+
           // Obtener todas las entregas para calcular calidad
           const { data: allDeliveries } = await supabase
             .from('deliveries')
@@ -89,6 +104,16 @@ export const useWorkshopsWithStats = () => {
             lastWeekDeliveries.forEach(delivery => {
               delivery.delivery_items?.forEach(item => {
                 unitsDeliveredLastWeek += item.quantity_delivered || 0;
+              });
+            });
+          }
+
+          // Calcular unidades entregadas en el último mes
+          let unitsDeliveredLastMonth = 0;
+          if (lastMonthDeliveries) {
+            lastMonthDeliveries.forEach(delivery => {
+              delivery.delivery_items?.forEach(item => {
+                unitsDeliveredLastMonth += item.quantity_delivered || 0;
               });
             });
           }
@@ -115,6 +140,7 @@ export const useWorkshopsWithStats = () => {
             ...workshop,
             stats: {
               unitsDeliveredLastWeek,
+              unitsDeliveredLastMonth,
               qualityScore,
               activeOrders: pendingUnits
             }
@@ -125,6 +151,7 @@ export const useWorkshopsWithStats = () => {
             ...workshop,
             stats: {
               unitsDeliveredLastWeek: 0,
+              unitsDeliveredLastMonth: 0,
               qualityScore: 0,
               activeOrders: 0
             }
