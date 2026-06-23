@@ -28,7 +28,14 @@ const WorkshopsPage = () => {
   const canCreateWorkshops = hasPermission('workshops', 'create');
   const canEditWorkshops = hasPermission('workshops', 'edit');
   const canDeleteWorkshops = hasPermission('workshops', 'delete');
-  
+
+  // Resumen agregado de todos los talleres
+  const summary = {
+    deliveredLastWeek: workshops.reduce((sum, w) => sum + (w.stats?.unitsDeliveredLastWeek || 0), 0),
+    pending: workshops.reduce((sum, w) => sum + (w.stats?.activeOrders || 0), 0),
+    activeThisMonth: workshops.filter(w => (w.stats?.unitsDeliveredLastMonth || 0) > 0).length,
+  };
+
   const handleWorkshopClick = (workshop: any) => {
     setSelectedWorkshop(workshop);
   };
@@ -92,6 +99,38 @@ const WorkshopsPage = () => {
             Nuevo Taller
           </Button>}
       </div>
+
+      {workshops.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-5 flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
+              <Package className="w-6 h-6 text-blue-500" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-black">{summary.deliveredLastWeek.toLocaleString('es-CO')}</div>
+              <div className="text-sm text-gray-600">Entregadas última semana</div>
+            </div>
+          </Card>
+          <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-5 flex items-center gap-4">
+            <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center shrink-0">
+              <Clock className="w-6 h-6 text-orange-500" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-black">{summary.pending.toLocaleString('es-CO')}</div>
+              <div className="text-sm text-gray-600">Pendientes en producción</div>
+            </div>
+          </Card>
+          <Card className="bg-white border border-gray-200 shadow-sm rounded-2xl p-5 flex items-center gap-4">
+            <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center shrink-0">
+              <Building2 className="w-6 h-6 text-green-600" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-black">{summary.activeThisMonth}</div>
+              <div className="text-sm text-gray-600">Talleres con entregas (último mes)</div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {workshops.length === 0 ? <div className="text-center py-12">
           <Building2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
