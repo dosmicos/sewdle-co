@@ -1,5 +1,19 @@
 project_id = "ysdcsqsfnckeuafjyrbc"
 
+# Voice order-confirmation system (ElevenLabs). These are called by ElevenLabs (server
+# tools + post-call webhook) and by the dispatch cron — no JWT.
+[functions.elsa-voice-knowledge]
+verify_jwt = false
+
+[functions.voice-confirm-tool]
+verify_jwt = false
+
+[functions.voice-confirm-dispatch]
+verify_jwt = false
+
+[functions.voice-call-webhook]
+verify_jwt = false
+
 # Public beacon: in-page A/B split records each new visitor (CVR denominator). No JWT.
 [functions.landing-ab-track]
 verify_jwt = false
