@@ -278,13 +278,16 @@ async function sendStageNotification(
 
   // === Parámetros + texto legible por etapa ===
   let bodyParams: Array<{ type: 'text'; text: string }>;
+  let buttonParams: Array<{ type: 'text'; text: string; subType: 'url' }> | undefined;
   let readable: string;
   if (stage === 'recolectado') {
+    // Body: {{1}}=pedido, {{2}}=guía. El enlace va en un botón URL dinámico
+    // "Rastrear mi pedido" cuya plantilla define ?label={{1}}; aquí pasamos la guía.
     bodyParams = [
       { type: 'text', text: orderClean },
       { type: 'text', text: trackingNumber },
-      { type: 'text', text: trackingUrl },
     ];
+    buttonParams = [{ type: 'text', text: trackingNumber, subType: 'url' }];
     readable = `📦 ¡Tu pedido #${orderClean} ya fue recogido por la transportadora! Tu guía es ${trackingNumber}. Sigue tu envío aquí: ${trackingUrl}`;
   } else if (stage === 'en_reparto') {
     bodyParams = [{ type: 'text', text: orderClean }];
@@ -297,7 +300,7 @@ async function sendStageNotification(
 
   // === Enviar plantilla ===
   const sendResult = await sendWhatsAppTemplate(
-    phoneNumberId, whatsappToken, phone, templateName, lang, bodyParams,
+    phoneNumberId, whatsappToken, phone, templateName, lang, bodyParams, buttonParams,
   );
 
   if (!sendResult.ok) {
