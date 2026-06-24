@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     // teóricamente entre orgs; tomamos la más reciente.
     const { data: label, error: labelErr } = await supabase
       .from('shipping_labels')
-      .select('id, organization_id, order_number, shopify_order_id, tracking_number, carrier, recipient_phone, recipient_name, status')
+      .select('id, organization_id, order_number, shopify_order_id, tracking_number, carrier, recipient_phone, recipient_name, status, destination_address, destination_city, destination_department')
       .eq('tracking_number', String(trackingNumber))
       .order('created_at', { ascending: false })
       .limit(1)
@@ -278,26 +278,35 @@ async function sendStageNotification(
 
   // === Parámetros + texto legible por etapa ===
   let bodyParams: Array<{ type: 'text'; text: string }>;
+  let buttonParams: Array<{ type: 'text'; text: string; subType: 'url' }> | undefined;
   let readable: string;
   if (stage === 'recolectado') {
+    // Body: {{1}}=pedido, {{2}}=guía. El enlace va en un botón URL dinámico
+    // "Rastrear mi pedido" cuya plantilla define ?label={{1}}; aquí pasamos la guía.
     bodyParams = [
       { type: 'text', text: orderClean },
       { type: 'text', text: trackingNumber },
-      { type: 'text', text: trackingUrl },
     ];
+    buttonParams = [{ type: 'text', text: trackingNumber, subType: 'url' }];
     readable = `📦 ¡Tu pedido #${orderClean} ya fue recogido por la transportadora! Tu guía es ${trackingNumber}. Sigue tu envío aquí: ${trackingUrl}`;
   } else if (stage === 'en_reparto') {
     bodyParams = [{ type: 'text', text: orderClean }];
     readable = `🚚 ¡Tu pedido #${orderClean} sale hoy a reparto! Mantente pendiente para recibirlo.`;
   } else {
-    // incidencia
-    bodyParams = [{ type: 'text', text: orderClean }];
-    readable = `⚠️ Tuvimos una novedad al entregar tu pedido #${orderClean}. Te contactaremos para reprogramar; si quieres, respóndenos por aquí.`;
+    // incidencia: mostramos la dirección registrada para que el cliente confirme/corrija
+    // (el error de dirección es la incidencia más común). {{1}}=pedido, {{2}}=dirección.
+    const direccion = [label.destination_address, label.destination_city]
+      .filter(Boolean).join(', ') || 'la registrada en tu pedido';
+    bodyParams = [
+      { type: 'text', text: orderClean },
+      { type: 'text', text: direccion },
+    ];
+    readable = `⚠️ Hubo una novedad con la entrega de tu pedido #${orderClean}. La dirección que tenemos registrada es: ${direccion}. ¿Es correcta? Si hay algún error, respóndenos por aquí con la dirección corregida y reprogramamos tu entrega.`;
   }
 
   // === Enviar plantilla ===
   const sendResult = await sendWhatsAppTemplate(
-    phoneNumberId, whatsappToken, phone, templateName, lang, bodyParams,
+    phoneNumberId, whatsappToken, phone, templateName, lang, bodyParams, buttonParams,
   );
 
   if (!sendResult.ok) {
