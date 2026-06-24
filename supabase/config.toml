@@ -61,6 +61,11 @@ verify_jwt = false
 [functions.envia-cancel]
 verify_jwt = false
 
+# Receptor del webhook de Envia (push de estados de envío). Lo llama Envia, sin JWT;
+# se autentica con ENVIA_WEBHOOK_SECRET en la URL/header.
+[functions.envia-tracking-webhook]
+verify_jwt = false
+
 [functions.populate-shipping-coverage]
 verify_jwt = false
 
