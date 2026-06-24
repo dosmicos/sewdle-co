@@ -42,6 +42,11 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+  // Healthcheck: el botón "Probar" de Envia (y monitores externos) hacen un GET
+  // para validar la conexión. Respondemos 200 sin procesar nada.
+  if (req.method === 'GET') {
+    return json({ ok: true, service: 'envia-tracking-webhook', healthcheck: true });
+  }
   if (req.method !== 'POST') {
     return json({ ok: false, error: 'Method not allowed' }, 405);
   }
