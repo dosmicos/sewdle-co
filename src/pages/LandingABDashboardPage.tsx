@@ -191,7 +191,12 @@ const ExperimentView: React.FC<{ exp: ExperimentSummary }> = ({ exp }) => {
 };
 
 const LandingABDashboardPage: React.FC = () => {
-  const dash = useLandingABDashboard();
+  const toISO = (d: Date) => d.toISOString().slice(0, 10);
+  const daysAgo = (n: number) => { const d = new Date(); d.setDate(d.getDate() - n); return toISO(d); };
+  const [periodStart, setPeriodStart] = useState<string>(daysAgo(30));
+  const [periodEnd, setPeriodEnd] = useState<string>(toISO(new Date()));
+  const setPreset = (n: number) => { setPeriodStart(daysAgo(n)); setPeriodEnd(toISO(new Date())); };
+  const dash = useLandingABDashboard({ periodStart, periodEnd });
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const experiments = dash.data?.experiments ?? [];
 
@@ -234,10 +239,37 @@ const LandingABDashboardPage: React.FC = () => {
               {dash.data ? ` · ${dash.data.period.start} → ${dash.data.period.end}` : ''}
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => dash.refetch()} disabled={dash.isFetching}>
-            {dash.isFetching ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
-            Refrescar
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" onClick={() => setPreset(7)}>7 días</Button>
+              <Button variant="outline" size="sm" onClick={() => setPreset(14)}>14 días</Button>
+              <Button variant="outline" size="sm" onClick={() => setPreset(30)}>30 días</Button>
+            </div>
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                value={periodStart}
+                max={periodEnd}
+                onChange={(e) => setPeriodStart(e.target.value)}
+                className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-700"
+                aria-label="Desde"
+              />
+              <span className="text-xs text-slate-400">→</span>
+              <input
+                type="date"
+                value={periodEnd}
+                min={periodStart}
+                max={toISO(new Date())}
+                onChange={(e) => setPeriodEnd(e.target.value)}
+                className="rounded border border-slate-200 px-2 py-1 text-xs text-slate-700"
+                aria-label="Hasta"
+              />
+            </div>
+            <Button variant="outline" size="sm" onClick={() => dash.refetch()} disabled={dash.isFetching}>
+              {dash.isFetching ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+              Refrescar
+            </Button>
+          </div>
         </div>
 
         {experiments.length > 1 && (
