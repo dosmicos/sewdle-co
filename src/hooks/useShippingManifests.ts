@@ -533,7 +533,8 @@ export const useShippingManifests = () => {
         .from('shipping_labels')
         .select('id, shopify_order_id, order_number, tracking_number, carrier, recipient_name, destination_city, created_at')
         .eq('organization_id', currentOrganization.id)
-        .eq('status', 'created')
+        // Pending = created or in transit but not yet handed over (see edge fn).
+        .in('status', ['created', 'in_transit'])
         .not('tracking_number', 'is', null);
 
       if (carrier) {

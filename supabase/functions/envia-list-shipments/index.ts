@@ -44,6 +44,14 @@ serve(async (req) => {
       return d.toISOString().split('T')[0];
     })();
 
+    // Tighter window for guides that already left 'created' (e.g. 'in_transit'):
+    // only today/yesterday, so same-day status-flips are recovered while older,
+    // already-shipped guides don't reappear in the dialog.
+    const recentDate = (() => {
+      const d = new Date(colombiaNow.getTime() - 1 * 24 * 60 * 60 * 1000);
+      return d.toISOString().split('T')[0];
+    })();
+
     // Extract MM and YYYY from today's date (for the Envia API endpoint)
     const [yyyy, mm] = today.split('-');
 
@@ -156,8 +164,9 @@ serve(async (req) => {
           const createdDate = created.slice(0, 10);
           if (createdDate < cutoffDate) return false;
 
-          // ── Status: only "created" ─────────────────────────────────────────────
-          // Envia API may use different field names across carriers; check all variants.
+          // ── Status: the API only SUPPLEMENTS 'created' portal-only guides ─────
+          // Recent 'in_transit' guides are recovered from the local DB (tighter
+          // window); the API must not re-introduce older, already-shipped ones.
           const rawStatus = s.status || s.status_id || s.status_label || s.statusLabel || '';
           const status = String(rawStatus).toLowerCase();
           if (status !== 'created') return false;
@@ -193,44 +202,43 @@ serve(async (req) => {
       console.warn(`⚠️ Envia Queries API fetch error: ${e}`);
     }
 
-    // ─── 2. Local DB — authoritative base of "created" guides (last 7 days) ───
+    // ─── 2. Local DB — authoritative base of pending guides ───────────────────
+    // shipping_labels.status is kept fresh by envia-tracking-webhook, so the
+    // local table is the source of truth. Two windows (Colombia is UTC-5, so
+    // 00:00 local == 05:00 UTC; no upper bound needed — no future labels):
+    //   • 'created'    → last 7 days (genuinely not picked up yet).
+    //   • 'in_transit' → today/yesterday only (same-day status-flips that would
+    //     otherwise vanish; older in_transit guides have already shipped).
     let dbShipments: any[] = [];
     if (orgId) {
-      let dbQuery = supabase
-        .from('shipping_labels')
-        .select('id, shopify_order_id, order_number, tracking_number, carrier, recipient_name, destination_city, created_at, shipment_id, status')
+      const carrierCanon = body.carrier ? canonicalCarrier(body.carrier) : null;
+      const cols = 'id, shopify_order_id, order_number, tracking_number, carrier, recipient_name, destination_city, created_at, shipment_id, status';
+
+      let qCreated = supabase
+        .from('shipping_labels').select(cols)
         .eq('organization_id', orgId)
-        // Only show guides with status 'created' — same rule as the Envia API path.
         .eq('status', 'created')
         .not('tracking_number', 'is', null)
-        // Colombia is UTC-5: 00:00 local of cutoffDate == 05:00 UTC. No upper
-        // bound is needed (labels can't be created in the future), which also
-        // avoids truncating "today" by the timezone offset.
         .gte('created_at', `${cutoffDate}T05:00:00.000Z`)
         .order('created_at', { ascending: false });
+      if (carrierCanon) qCreated = qCreated.ilike('carrier', carrierCanon);
 
-      if (body.carrier) {
-        // Case-insensitive match so historical 'interRapidisimo' rows also match
-        // the canonical 'interrapidisimo' code coming from the UI.
-        dbQuery = dbQuery.ilike('carrier', canonicalCarrier(body.carrier));
-      }
+      let qTransit = supabase
+        .from('shipping_labels').select(cols)
+        .eq('organization_id', orgId)
+        .eq('status', 'in_transit')
+        .not('tracking_number', 'is', null)
+        .gte('created_at', `${recentDate}T05:00:00.000Z`)
+        .order('created_at', { ascending: false });
+      if (carrierCanon) qTransit = qTransit.ilike('carrier', carrierCanon);
 
-      const { data, error } = await dbQuery;
-      if (!error && data) {
-        dbShipments = data;
-        console.log(`📦 DB: ${dbShipments.length} shipments`);
-      }
+      const [createdRes, transitRes] = await Promise.all([qCreated, qTransit]);
+      dbShipments = [...(createdRes.data || []), ...(transitRes.data || [])];
+      console.log(`📦 DB: ${(createdRes.data || []).length} created + ${(transitRes.data || []).length} in_transit (recent)`);
     }
 
-    // ─── 3. Merge & normalize ────────────────────────────────────────────────
-    // Strategy: always merge API + DB.
-    //   • API guides: filtered to "created" status, not incoming, last 7 days.
-    //   • DB guides not in API: newly created labels that haven't yet been
-    //     indexed by Envia (can be minutes behind). These are added as
-    //     supplements so they don't disappear from the manifest dialog.
-    //   • source = 'envia_api' whenever the API call succeeded (DB supplement
-    //     is transparent to the UI). source = 'database' only when API failed.
-    // Union: the local DB is the authoritative base for "created" guides.
+    // ─── 3. Merge (union, deduped by tracking) ────────────────────────────────
+    // The local DB is the authoritative base for pending guides.
     // shipping_labels.status is now kept up to date by envia-tracking-webhook,
     // so the local table is the source of truth and is ALWAYS included. The
     // Envia Queries API only SUPPLEMENTS it with portal-only guides that have no
