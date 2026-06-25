@@ -242,13 +242,16 @@ Deno.serve(async (req) => {
       ? rawDomain.replace('.myshopify.com', '')
       : rawDomain;
 
-    const dryRun = (Deno.env.get('AUTO_PRODUCT_STATUS_DRY_RUN') ?? 'true').toLowerCase() === 'true';
-    const maxChanges = Number(Deno.env.get('AUTO_PRODUCT_STATUS_MAX_CHANGES') ?? '50');
-
     let body: any = {};
     try { body = await req.json(); } catch (_) {}
     const triggeredBy = body.triggered_by ?? 'cron';
     const requestedOrgId: string | undefined = body.organization_id;
+
+    // El modo se puede forzar por body (lo usa el pg_cron para correr en LIVE sin
+    // depender del secret AUTO_PRODUCT_STATUS_DRY_RUN). Si el body no lo trae, cae al env.
+    const envDryRun = (Deno.env.get('AUTO_PRODUCT_STATUS_DRY_RUN') ?? 'true').toLowerCase() === 'true';
+    const dryRun = typeof body.dry_run === 'boolean' ? body.dry_run : envDryRun;
+    const maxChanges = Number(body.max_changes ?? Deno.env.get('AUTO_PRODUCT_STATUS_MAX_CHANGES') ?? '50');
 
     let organizationId: string | null = requestedOrgId ?? null;
     if (!organizationId) {
