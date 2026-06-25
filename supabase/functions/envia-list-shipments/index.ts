@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { canonicalCarrier } from "../_shared/carrier.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -192,7 +193,7 @@ serve(async (req) => {
       console.warn(`⚠️ Envia Queries API fetch error: ${e}`);
     }
 
-    // ─── 2. DB fallback (shipping_labels for today) ───────────────────────────
+    // ─── 2. Local DB — authoritative base of "created" guides (last 7 days) ───
     let dbShipments: any[] = [];
     if (orgId) {
       let dbQuery = supabase
@@ -202,12 +203,16 @@ serve(async (req) => {
         // Only show guides with status 'created' — same rule as the Envia API path.
         .eq('status', 'created')
         .not('tracking_number', 'is', null)
-        .gte('created_at', `${cutoffDate}T00:00:00.000Z`)
-        .lte('created_at', `${today}T23:59:59.999Z`)
+        // Colombia is UTC-5: 00:00 local of cutoffDate == 05:00 UTC. No upper
+        // bound is needed (labels can't be created in the future), which also
+        // avoids truncating "today" by the timezone offset.
+        .gte('created_at', `${cutoffDate}T05:00:00.000Z`)
         .order('created_at', { ascending: false });
 
       if (body.carrier) {
-        dbQuery = dbQuery.eq('carrier', body.carrier);
+        // Case-insensitive match so historical 'interRapidisimo' rows also match
+        // the canonical 'interrapidisimo' code coming from the UI.
+        dbQuery = dbQuery.ilike('carrier', canonicalCarrier(body.carrier));
       }
 
       const { data, error } = await dbQuery;
@@ -225,40 +230,17 @@ serve(async (req) => {
     //     supplements so they don't disappear from the manifest dialog.
     //   • source = 'envia_api' whenever the API call succeeded (DB supplement
     //     is transparent to the UI). source = 'database' only when API failed.
-    let result: any[] = [];
-    let finalSource: string;
+    // Union: the local DB is the authoritative base for "created" guides.
+    // shipping_labels.status is now kept up to date by envia-tracking-webhook,
+    // so the local table is the source of truth and is ALWAYS included. The
+    // Envia Queries API only SUPPLEMENTS it with portal-only guides that have no
+    // local row yet. (Previously the API was the sole source and silently
+    // dropped any guide it didn't return as 'created' — so labels created
+    // earlier in the day vanished from the manifest dialog.) Deduped by tracking.
+    const byTracking = new Map<string, any>();
 
-    if (enviaOk) {
-      // Envia API is the single source of truth for guide status.
-      // DB metadata (order_number, recipient_name, etc.) is used to enrich
-      // the API results, but the status filter comes from the API only.
-      // We do NOT supplement with DB guides — shipping_labels.status is never
-      // updated when the carrier picks up a package, so it goes stale and would
-      // surface already-collected guides that should no longer appear.
-      const dbByTracking = new Map(dbShipments.map(s => [s.tracking_number, s]));
-
-      result = enviaShipments.map((s: any) => {
-        const db = dbByTracking.get(s.tracking_number);
-        return {
-          id: db?.id || `envia_${s.tracking_number}`,
-          shipment_id: db?.shipment_id || null,
-          tracking_number: s.tracking_number,
-          carrier: s.name || s.carrier || body.carrier || 'unknown',
-          status: s.status || 'created',
-          created_at: s.created_at || new Date().toISOString(),
-          shopify_order_id: db?.shopify_order_id || null,
-          order_number: db?.order_number || null,
-          recipient_name: db?.recipient_name || null,
-          destination_city: db?.destination_city || null,
-          source: 'envia_api',
-        };
-      });
-
-      finalSource = 'envia_api';
-      console.log(`✅ Using Envia API: ${result.length} guides`);
-    } else {
-      // API failed — fall back to DB as emergency measure
-      result = dbShipments.map(s => ({
+    for (const s of dbShipments) {
+      byTracking.set(s.tracking_number, {
         id: s.id,
         shipment_id: s.shipment_id,
         tracking_number: s.tracking_number,
@@ -270,22 +252,42 @@ serve(async (req) => {
         recipient_name: s.recipient_name,
         destination_city: s.destination_city,
         source: 'database',
-      }));
-      finalSource = 'database';
+      });
     }
 
-    // ─── 4. Exclude guides already processed in closed/picked-up manifests ────
-    // Guides in those manifests have already been handed to the carrier.
-    // They still appear as 'created' in shipping_labels (we don't update their
-    // status on manifest pickup), so without this filter they keep showing up
-    // in the manifest creation dialog even after they've shipped.
+    if (enviaOk) {
+      for (const s of enviaShipments) {
+        if (byTracking.has(s.tracking_number)) continue; // local row wins (richer metadata)
+        byTracking.set(s.tracking_number, {
+          id: `envia_${s.tracking_number}`,
+          shipment_id: null,
+          tracking_number: s.tracking_number,
+          carrier: s.name || s.carrier || body.carrier || 'unknown',
+          status: s.status || 'created',
+          created_at: s.created_at || new Date().toISOString(),
+          shopify_order_id: null,
+          order_number: null,
+          recipient_name: null,
+          destination_city: null,
+          source: 'envia_api',
+        });
+      }
+    }
+
+    let result: any[] = Array.from(byTracking.values());
+    const finalSource: string = enviaOk ? 'envia_api' : 'database';
+    console.log(`✅ Candidates: ${dbShipments.length} from DB + ${enviaOk ? enviaShipments.length : 0} from API → ${result.length} merged`);
+
+    // ─── 4. Exclude guides already in ANY manifest (open/closed/picked_up) ────
+    // A guide should appear in exactly one manifest. Excluding open manifests too
+    // prevents the same guide from being added to two manifests at once.
     if (orgId && result.length > 0) {
       try {
         const { data: closedManifests } = await supabase
           .from('shipping_manifests')
           .select('id')
           .eq('organization_id', orgId)
-          .in('status', ['closed', 'picked_up']);
+          .in('status', ['open', 'closed', 'picked_up']);
 
         if (closedManifests && closedManifests.length > 0) {
           const closedIds = closedManifests.map((m: any) => m.id);
@@ -302,7 +304,7 @@ serve(async (req) => {
           result = result.filter(s => !manifestedSet.has(s.tracking_number));
           const removed = before - result.length;
           if (removed > 0) {
-            console.log(`🚫 Excluded ${removed} guides already in closed/picked_up manifests`);
+            console.log(`🚫 Excluded ${removed} guides already in a manifest`);
           }
         }
       } catch (e) {

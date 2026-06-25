@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { lookupDaneCode } from "../_shared/dane-codes.ts";
+import { canonicalCarrier } from "../_shared/carrier.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1167,7 +1168,7 @@ serve(async (req) => {
       organization_id: body.organization_id,
       shopify_order_id: body.shopify_order_id,
       order_number: body.order_number,
-      carrier: shipmentData.carrier || carrierConfig.carrier,
+      carrier: canonicalCarrier(shipmentData.carrier || carrierConfig.carrier),
       tracking_number: shipmentData.trackingNumber,
       label_url: shipmentData.label,
       shipment_id: shipmentData.shipmentId?.toString(),
@@ -1347,7 +1348,7 @@ serve(async (req) => {
         label: savedLabel || labelRecord,
         tracking_number: shipmentData.trackingNumber,
         label_url: shipmentData.label,
-        carrier: shipmentData.carrier || carrierConfig.carrier,
+        carrier: canonicalCarrier(shipmentData.carrier || carrierConfig.carrier),
         delivery_type: enviaRequest.shipment.type === 2 ? 'oficina' : 'domicilio',
         dane_warning: daneWarning,
       }),

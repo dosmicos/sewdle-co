@@ -241,7 +241,11 @@ export const ManifestCreationModal: React.FC<ManifestCreationModalProps> = ({
   const handleCreate = async () => {
     if (!carrier || selectedIds.size === 0) return;
 
-    const selected = shipments.filter(s => selectedIds.has(s.id));
+    const selectedRaw = shipments.filter(s => selectedIds.has(s.id));
+    // Dedupe by tracking_number to avoid duplicate manifest items.
+    const selected = Array.from(
+      new Map(selectedRaw.map(s => [s.tracking_number, s])).values()
+    );
 
     // Pass all selected shipments (including envia_xxx / manual_xxx).
     // createManifest will upsert stub shipping_labels records for guides that
