@@ -44,14 +44,6 @@ serve(async (req) => {
       return d.toISOString().split('T')[0];
     })();
 
-    // Tighter window for guides that already left 'created' (e.g. 'in_transit'):
-    // only today/yesterday, so same-day status-flips are recovered while older,
-    // already-shipped guides don't reappear in the dialog.
-    const recentDate = (() => {
-      const d = new Date(colombiaNow.getTime() - 1 * 24 * 60 * 60 * 1000);
-      return d.toISOString().split('T')[0];
-    })();
-
     // Extract MM and YYYY from today's date (for the Envia API endpoint)
     const [yyyy, mm] = today.split('-');
 
@@ -164,9 +156,9 @@ serve(async (req) => {
           const createdDate = created.slice(0, 10);
           if (createdDate < cutoffDate) return false;
 
-          // ── Status: the API only SUPPLEMENTS 'created' portal-only guides ─────
-          // Recent 'in_transit' guides are recovered from the local DB (tighter
-          // window); the API must not re-introduce older, already-shipped ones.
+          // ── Status: only guides PENDING PICKUP belong on a manifest ───────────
+          // 'created' = label made, carrier hasn't taken it yet. 'in_transit' means
+          // the carrier already picked it up, so it must NOT appear.
           const rawStatus = s.status || s.status_id || s.status_label || s.statusLabel || '';
           const status = String(rawStatus).toLowerCase();
           if (status !== 'created') return false;
@@ -202,39 +194,32 @@ serve(async (req) => {
       console.warn(`⚠️ Envia Queries API fetch error: ${e}`);
     }
 
-    // ─── 2. Local DB — authoritative base of pending guides ───────────────────
-    // shipping_labels.status is kept fresh by envia-tracking-webhook, so the
-    // local table is the source of truth. Two windows (Colombia is UTC-5, so
-    // 00:00 local == 05:00 UTC; no upper bound needed — no future labels):
-    //   • 'created'    → last 7 days (genuinely not picked up yet).
-    //   • 'in_transit' → today/yesterday only (same-day status-flips that would
-    //     otherwise vanish; older in_transit guides have already shipped).
+    // ─── 2. Local DB — guides PENDING PICKUP (status 'created') ───────────────
+    // A manifest must list only guides the carrier has NOT picked up yet, i.e.
+    // status 'created'. (Guides flip to 'in_transit' only on a real movement
+    // event — see the envia-track / webhook fixes that stop premature flips.)
+    // Colombia is UTC-5: 00:00 local == 05:00 UTC; no upper bound (no future labels).
     let dbShipments: any[] = [];
     if (orgId) {
-      const carrierCanon = body.carrier ? canonicalCarrier(body.carrier) : null;
-      const cols = 'id, shopify_order_id, order_number, tracking_number, carrier, recipient_name, destination_city, created_at, shipment_id, status';
-
-      let qCreated = supabase
-        .from('shipping_labels').select(cols)
+      let dbQuery = supabase
+        .from('shipping_labels')
+        .select('id, shopify_order_id, order_number, tracking_number, carrier, recipient_name, destination_city, created_at, shipment_id, status')
         .eq('organization_id', orgId)
         .eq('status', 'created')
         .not('tracking_number', 'is', null)
         .gte('created_at', `${cutoffDate}T05:00:00.000Z`)
         .order('created_at', { ascending: false });
-      if (carrierCanon) qCreated = qCreated.ilike('carrier', carrierCanon);
 
-      let qTransit = supabase
-        .from('shipping_labels').select(cols)
-        .eq('organization_id', orgId)
-        .eq('status', 'in_transit')
-        .not('tracking_number', 'is', null)
-        .gte('created_at', `${recentDate}T05:00:00.000Z`)
-        .order('created_at', { ascending: false });
-      if (carrierCanon) qTransit = qTransit.ilike('carrier', carrierCanon);
+      if (body.carrier) {
+        // Case-insensitive so historical 'interRapidisimo' rows also match.
+        dbQuery = dbQuery.ilike('carrier', canonicalCarrier(body.carrier));
+      }
 
-      const [createdRes, transitRes] = await Promise.all([qCreated, qTransit]);
-      dbShipments = [...(createdRes.data || []), ...(transitRes.data || [])];
-      console.log(`📦 DB: ${(createdRes.data || []).length} created + ${(transitRes.data || []).length} in_transit (recent)`);
+      const { data, error } = await dbQuery;
+      if (!error && data) {
+        dbShipments = data;
+        console.log(`📦 DB: ${dbShipments.length} created`);
+      }
     }
 
     // ─── 3. Merge (union, deduped by tracking) ────────────────────────────────

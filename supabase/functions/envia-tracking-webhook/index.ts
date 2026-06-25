@@ -129,8 +129,10 @@ Deno.serve(async (req) => {
     const { stage, labelStatus } = mapShipmentStage(rawStatus, statusDescription);
     console.log(`📦 ${label.order_number} (${trackingNumber}) status="${rawStatus}" desc="${statusDescription}" → stage=${stage}, labelStatus=${labelStatus}`);
 
-    // 1) Mantener el status de la guía al día (no notifica). No degradar 'delivered'.
-    if (label.status !== 'delivered') {
+    // 1) Mantener el status de la guía al día (no notifica). No degradar 'delivered'
+    //    ni flipar una guía aún 'created' por un evento desconocido: stage 'otro'
+    //    = estado no reconocido (p. ej. "Generada") y no debe sacarla de 'created'.
+    if (label.status !== 'delivered' && stage !== 'otro') {
       await supabase
         .from('shipping_labels')
         .update({ status: labelStatus })

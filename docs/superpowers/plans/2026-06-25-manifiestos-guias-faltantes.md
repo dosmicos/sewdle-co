@@ -43,7 +43,7 @@ GROUP BY 1 ORDER BY 1 DESC;
 3. **Excluir manifiestos abiertos también:** hoy solo excluye `closed`/`picked_up` (permite re-crear). ¿Queremos excluir también `open` para no duplicar guías entre dos manifiestos abiertos del mismo día?
 4. **Histórico:** ¿reconciliamos las guías que ya se despacharon sin manifiesto (≈222 Coordinadora + 28 Interrapidísimo en 30 días)? ¿Crear manifiestos retroactivos o solo un reporte?
 
-> **Decisión final (implementada):** candidatas = `created` de los últimos 7 días **+** `in_transit` de hoy/ayer (recupera las que saltan de estado el mismo día sin resucitar las ya despachadas), que **no** estén en ningún manifiesto (`open`/`closed`/`picked_up`). Histórico ignorado. El operario confirma escaneando físicamente. Verificado con datos: ahora mismo hay 0 guías en estado `created` pendientes (todas saltan a `in_transit` en segundos), por lo que el filtro viejo daría ~0 candidatas.
+> **Decisión final (implementada):** el manifiesto muestra **solo `created`** (guías que la transportadora aún no recoge), como indicó el negocio. Para que eso funcione se corrige la causa raíz de que las guías salieran de `created` antes de tiempo: `envia-track` ya **no** marca `in_transit` por defecto (solo con un evento de movimiento real) y el webhook ignora eventos desconocidos (`stage 'otro'`). Histórico ignorado. ⚠️ **Forward-only:** las guías ya marcadas `in_transit` por el bug previo no se revierten; el efecto se ve en guías nuevas tras el deploy.
 
 ---
 

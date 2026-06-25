@@ -309,7 +309,7 @@ export const ManifestCreationModal: React.FC<ManifestCreationModalProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Label>
-                    Guías disponibles (últimos 7 días, pendientes de manifestar)
+                    Guías disponibles (últimos 7 días, estado: creada)
                     {!loadingShipments && shipments.length > 0 && (
                       <span className="ml-1 text-muted-foreground font-normal">
                         ({shipments.length})
