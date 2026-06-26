@@ -268,11 +268,13 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     );
   };
 
-  // Stats
-  const totalItems = items.length;
+  // Stats — las canceladas NO son paquetes efectivos: fuera del conteo y del progreso.
+  const canceledItems = items.filter(i => i.scan_status === 'canceled');
+  const totalItems = items.filter(i => i.scan_status !== 'canceled').length; // denominador efectivo
   const verifiedItems = items.filter(i => i.scan_status === 'verified').length;
   const pendingItems = items.filter(i => i.scan_status === 'pending' || i.scan_status === null);
   const progress = totalItems > 0 ? (verifiedItems / totalItems) * 100 : 0;
+  const hasCanceled = canceledItems.length > 0;
 
   const collectorNum = collectorCount.trim() === '' ? null : parseInt(collectorCount, 10);
   const collectorMismatch = collectorNum != null && !Number.isNaN(collectorNum) && collectorNum !== verifiedItems;
@@ -359,6 +361,11 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
             {hasExtras && (
               <span className="flex items-center gap-1 text-red-600">
                 <AlertTriangle className="h-4 w-4" /> {extraScans.length} extras
+              </span>
+            )}
+            {hasCanceled && (
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <XCircle className="h-4 w-4" /> {canceledItems.length} canceladas
               </span>
             )}
           </div>
@@ -637,6 +644,23 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
                     Agregar al manifiesto
                   </Button>
                 </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Canceladas — no son paquetes efectivos, no cuentan en el conteo */}
+        {hasCanceled && (
+          <div className="p-4 border rounded-lg bg-muted/30">
+            <h3 className="font-medium text-sm flex items-center gap-2 text-muted-foreground mb-2">
+              <XCircle className="h-4 w-4" />
+              Canceladas — no cuentan ({canceledItems.length})
+            </h3>
+            <div className="flex flex-wrap gap-1">
+              {canceledItems.map((item) => (
+                <Badge key={item.id} variant="outline" className="font-mono text-xs text-muted-foreground line-through">
+                  {item.tracking_number}
+                </Badge>
               ))}
             </div>
           </div>
