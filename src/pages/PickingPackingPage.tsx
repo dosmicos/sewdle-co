@@ -1403,7 +1403,7 @@ const [showItemsModal, setShowItemsModal] = useState(false);
 
       {/* Manifiestos Sheet */}
       <Sheet open={showManifestsPanel} onOpenChange={setShowManifestsPanel}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
+        <SheetContent side="right" className="w-full sm:w-[88vw] sm:max-w-[1400px] overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <ClipboardList className="w-5 h-5" />
