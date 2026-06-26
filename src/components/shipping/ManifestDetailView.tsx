@@ -169,7 +169,9 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
             : item
         ));
       } else if (result.status === 'not_found') {
-        if (!extraScans.includes(trackingNumber)) {
+        // Ignora fragmentos cortos (p. ej. el "001" residual de un código de barras
+        // envuelto); solo guarda como "extra" lo que parece una guía real.
+        if (trackingNumber.length >= 6 && !extraScans.includes(trackingNumber)) {
           setExtraScans(prev => [...prev, trackingNumber]);
           // Persistir la guía extra para que quede auditada (antes se perdía al cerrar).
           persistExtraScan(manifest.id, trackingNumber, 'gun');
@@ -195,37 +197,44 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     }
   }, [manifest.id, scanTrackingNumber, extraScans, persistExtraScan, getItemScanStatus]);
 
-  // Enter key — resolves tracking from current input and delegates to triggerScan.
-  const handleScan = useCallback(async () => {
-    const trackingNumber = scanInput.trim().toUpperCase();
-    if (!trackingNumber) return;
-    await triggerScan(trackingNumber);
-  }, [scanInput, triggerScan]);
-
-  // Instant auto-scan.
-  useEffect(() => {
-    if (scanInFlightRef.current) return;
-    const input = scanInput.trim();
-    if (!input) return;
-
-    const pendingTrackings = items
+  // Resuelve lo escaneado a una guía PENDIENTE del manifiesto.
+  // Coordinadora imprime un código de barras que ENVUELVE la guía con prefijo y
+  // nº de paquete (ej. guía 57214569909 → barcode "7"+guía+"001" = 757214569909001).
+  // Por eso, además del match exacto, buscamos la guía pendiente CONTENIDA en lo
+  // escaneado (sin asumir prefijo/sufijo fijos). También soporta sufijo de 4 dígitos.
+  const resolvePendingTracking = useCallback((raw: string): string | null => {
+    const input = raw.trim().toUpperCase();
+    if (!input) return null;
+    const pend = items
       .filter(i => i.scan_status === 'pending' || i.scan_status === null)
       .map(i => i.tracking_number.toUpperCase());
-
-    const inputUpper = input.toUpperCase();
-
-    if (pendingTrackings.includes(inputUpper)) {
-      triggerScan(inputUpper);
-      return;
+    if (pend.includes(input)) return input;                        // exacto
+    const contained = pend.filter(t => t.length >= 6 && input.includes(t));
+    if (contained.length === 1) return contained[0];               // guía envuelta en el barcode
+    if (/^\d{4}$/.test(input)) {                                    // sufijo de 4 dígitos
+      const m = pend.filter(t => t.endsWith(input));
+      if (m.length === 1) return m[0];
     }
+    return null;
+  }, [items]);
 
-    if (/^\d{4}$/.test(input)) {
-      const matches = pendingTrackings.filter(t => t.endsWith(input));
-      if (matches.length === 1) {
-        triggerScan(matches[0]);
-      }
-    }
-  }, [scanInput, items, triggerScan]);
+  // Enter key — resuelve la guía desde lo escaneado y delega en triggerScan.
+  const handleScan = useCallback(async () => {
+    const raw = scanInput.trim().toUpperCase();
+    if (!raw) return;
+    // Si resuelve a una guía pendiente, la usa; si no, intenta tal cual (caerá en
+    // not_found / extra).
+    await triggerScan(resolvePendingTracking(raw) || raw);
+  }, [scanInput, triggerScan, resolvePendingTracking]);
+
+  // Auto-scan instantáneo: dispara sin Enter cuando lo escaneado resuelve a una
+  // única guía pendiente (exacto, código de barras envuelto, o sufijo de 4 dígitos).
+  useEffect(() => {
+    if (scanInFlightRef.current) return;
+    if (!scanInput.trim()) return;
+    const resolved = resolvePendingTracking(scanInput);
+    if (resolved) triggerScan(resolved);
+  }, [scanInput, resolvePendingTracking, triggerScan]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
