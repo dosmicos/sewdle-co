@@ -1481,6 +1481,7 @@ export type Database = {
         Row: {
           created_at: string
           destination_city: string | null
+          dup_order_ref: string | null
           id: string
           manifest_id: string
           notes: string | null
@@ -1496,6 +1497,7 @@ export type Database = {
         Insert: {
           created_at?: string
           destination_city?: string | null
+          dup_order_ref?: string | null
           id?: string
           manifest_id: string
           notes?: string | null
@@ -1511,6 +1513,7 @@ export type Database = {
         Update: {
           created_at?: string
           destination_city?: string | null
+          dup_order_ref?: string | null
           id?: string
           manifest_id?: string
           notes?: string | null
