@@ -42,6 +42,7 @@ import {
 import { useShippingManifests, ShippingManifest, ManifestWithItems } from '@/hooks/useShippingManifests';
 import { ManifestCreationModal } from './ManifestCreationModal';
 import { ManifestDetailView } from './ManifestDetailView';
+import { PickupConfirmDialog } from './PickupConfirmDialog';
 import { openManifestPrintWindow } from './ManifestPrintView';
 import { CARRIER_NAMES, type CarrierCode } from '@/features/shipping/types/envia';
 import { format } from 'date-fns';
@@ -68,6 +69,8 @@ export const ShippingManifestManager: React.FC = () => {
   const [selectedManifest, setSelectedManifest] = useState<ManifestWithItems | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  // Bloqueo de "Confirmar Retiro" ante descuadre (lista de guías + justificación).
+  const [pickupBlock, setPickupBlock] = useState<{ manifestId: string; issues: string[] } | null>(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -95,8 +98,13 @@ export const ShippingManifestManager: React.FC = () => {
 
   const handleConfirmPickup = async (manifestId: string) => {
     setActionLoading(manifestId);
-    await confirmPickup(manifestId);
+    const res = await confirmPickup(manifestId);
     setActionLoading(null);
+    // Si hay descuadre, el retiro queda bloqueado: abrimos el diálogo que lista
+    // las guías exactas que faltan y exige una justificación.
+    if (!res.ok && res.blocked) {
+      setPickupBlock({ manifestId, issues: res.issues ?? [] });
+    }
   };
 
   const handleDelete = async () => {
@@ -354,6 +362,15 @@ export const ShippingManifestManager: React.FC = () => {
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onCreated={() => fetchManifests()}
+      />
+
+      {/* Pickup block (descuadre → lista de guías + justificación) */}
+      <PickupConfirmDialog
+        open={!!pickupBlock}
+        manifestId={pickupBlock?.manifestId ?? null}
+        issues={pickupBlock?.issues ?? []}
+        onOpenChange={(o) => !o && setPickupBlock(null)}
+        onConfirmed={() => { setPickupBlock(null); fetchManifests(); }}
       />
 
       {/* Delete confirmation */}

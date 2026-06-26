@@ -1439,6 +1439,44 @@ export type Database = {
         }
         Relationships: []
       }
+      manifest_extra_scans: {
+        Row: {
+          created_at: string
+          id: string
+          manifest_id: string
+          scanned_at: string | null
+          scanned_by: string | null
+          source: string
+          tracking_number: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          manifest_id: string
+          scanned_at?: string | null
+          scanned_by?: string | null
+          source?: string
+          tracking_number: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          manifest_id?: string
+          scanned_at?: string | null
+          scanned_by?: string | null
+          source?: string
+          tracking_number?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manifest_extra_scans_manifest_id_fkey"
+            columns: ["manifest_id"]
+            isOneToOne: false
+            referencedRelation: "shipping_manifests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       manifest_items: {
         Row: {
           created_at: string
@@ -3820,6 +3858,8 @@ export type Database = {
           carrier: string
           closed_at: string | null
           closed_by: string | null
+          collector_name: string | null
+          collector_reported_count: number | null
           created_at: string
           created_by: string | null
           id: string
@@ -3829,6 +3869,10 @@ export type Database = {
           organization_id: string
           pickup_confirmed_at: string | null
           pickup_confirmed_by: string | null
+          pickup_link_url: string | null
+          pickup_override_reason: string | null
+          reconciliation_data: Json | null
+          reconciliation_status: string | null
           status: string
           total_packages: number | null
           total_verified: number | null
@@ -3838,6 +3882,8 @@ export type Database = {
           carrier: string
           closed_at?: string | null
           closed_by?: string | null
+          collector_name?: string | null
+          collector_reported_count?: number | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -3847,6 +3893,10 @@ export type Database = {
           organization_id: string
           pickup_confirmed_at?: string | null
           pickup_confirmed_by?: string | null
+          pickup_link_url?: string | null
+          pickup_override_reason?: string | null
+          reconciliation_data?: Json | null
+          reconciliation_status?: string | null
           status?: string
           total_packages?: number | null
           total_verified?: number | null
@@ -3856,6 +3906,8 @@ export type Database = {
           carrier?: string
           closed_at?: string | null
           closed_by?: string | null
+          collector_name?: string | null
+          collector_reported_count?: number | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -3865,6 +3917,10 @@ export type Database = {
           organization_id?: string
           pickup_confirmed_at?: string | null
           pickup_confirmed_by?: string | null
+          pickup_link_url?: string | null
+          pickup_override_reason?: string | null
+          reconciliation_data?: Json | null
+          reconciliation_status?: string | null
           status?: string
           total_packages?: number | null
           total_verified?: number | null
