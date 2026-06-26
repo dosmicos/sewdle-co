@@ -38,6 +38,7 @@ import {
   ManifestWithItems,
   ManifestItem,
   ReconciliationData,
+  NON_EFFECTIVE_STATUSES,
 } from '@/hooks/useShippingManifests';
 import { CARRIER_NAMES, type CarrierCode } from '@/features/shipping/types/envia';
 import { cn } from '@/lib/utils';
@@ -268,13 +269,18 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     );
   };
 
-  // Stats — las canceladas NO son paquetes efectivos: fuera del conteo y del progreso.
+  // Stats — canceladas / duplicadas / en revisión NO son paquetes efectivos:
+  // fuera del conteo y del progreso.
   const canceledItems = items.filter(i => i.scan_status === 'canceled');
-  const totalItems = items.filter(i => i.scan_status !== 'canceled').length; // denominador efectivo
+  const duplicateItems = items.filter(i => i.scan_status === 'duplicate');
+  const reviewItems = items.filter(i => i.scan_status === 'review');
+  const totalItems = items.filter(i => !NON_EFFECTIVE_STATUSES.includes(i.scan_status as string)).length; // denominador efectivo
   const verifiedItems = items.filter(i => i.scan_status === 'verified').length;
   const pendingItems = items.filter(i => i.scan_status === 'pending' || i.scan_status === null);
   const progress = totalItems > 0 ? (verifiedItems / totalItems) * 100 : 0;
   const hasCanceled = canceledItems.length > 0;
+  const hasDuplicate = duplicateItems.length > 0;
+  const hasReview = reviewItems.length > 0;
 
   const collectorNum = collectorCount.trim() === '' ? null : parseInt(collectorCount, 10);
   const collectorMismatch = collectorNum != null && !Number.isNaN(collectorNum) && collectorNum !== verifiedItems;
@@ -366,6 +372,16 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
             {hasCanceled && (
               <span className="flex items-center gap-1 text-muted-foreground">
                 <XCircle className="h-4 w-4" /> {canceledItems.length} canceladas
+              </span>
+            )}
+            {hasDuplicate && (
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <XCircle className="h-4 w-4" /> {duplicateItems.length} duplicadas
+              </span>
+            )}
+            {hasReview && (
+              <span className="flex items-center gap-1 text-orange-600">
+                <AlertCircle className="h-4 w-4" /> {reviewItems.length} a revisar
               </span>
             )}
           </div>
@@ -663,6 +679,49 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
                 </Badge>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Duplicadas — el pedido ya se entregó en otra guía, no cuentan */}
+        {hasDuplicate && (
+          <div className="p-4 border rounded-lg bg-muted/30">
+            <h3 className="font-medium text-sm flex items-center gap-2 text-muted-foreground mb-2">
+              <XCircle className="h-4 w-4" />
+              Duplicadas — el pedido ya se entregó en otra guía ({duplicateItems.length})
+            </h3>
+            <div className="flex flex-wrap gap-1">
+              {duplicateItems.map((item) => (
+                <Badge key={item.id} variant="outline" className="font-mono text-xs text-muted-foreground line-through">
+                  {item.tracking_number}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Sin movimiento — revisar (posible pérdida) */}
+        {hasReview && (
+          <div className="p-4 border border-orange-200 bg-orange-50 dark:bg-orange-900/10 dark:border-orange-800 rounded-lg">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium text-sm flex items-center gap-2 text-orange-700 dark:text-orange-400">
+                <AlertCircle className="h-4 w-4" />
+                Sin movimiento — revisar / posible pérdida ({reviewItems.length})
+              </h3>
+              <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs"
+                onClick={() => copyList('Revisar', reviewItems.map(i => i.tracking_number))}>
+                <Copy className="h-3 w-3" /> Copiar
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {reviewItems.map((item) => (
+                <Badge key={item.id} variant="outline" className="font-mono text-xs border-orange-400 text-orange-700">
+                  {item.tracking_number}
+                </Badge>
+              ))}
+            </div>
+            <p className="text-xs text-orange-700/80 dark:text-orange-400/80 mt-2">
+              Estas guías llevan días sin moverse en la transportadora y su pedido no se entregó por otra guía. Verifica si se perdieron.
+            </p>
           </div>
         )}
       </div>
