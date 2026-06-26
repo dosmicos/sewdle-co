@@ -30,8 +30,9 @@ function fmtDate(dateStr: string): string {
 }
 
 export function openManifestPrintWindow(manifest: ManifestWithItems): void {
-  // Las canceladas no son paquetes efectivos: no van en el manifiesto impreso.
-  const items = manifest.items.filter(i => i.scan_status !== 'canceled');
+  // Canceladas/duplicadas/en revisión no son paquetes efectivos: fuera del impreso.
+  const NON_EFFECTIVE = ['canceled', 'duplicate', 'review'];
+  const items = manifest.items.filter(i => !NON_EFFECTIVE.includes(i.scan_status as string));
   const halfLength = Math.ceil(items.length / 2);
   const leftColumn = items.slice(0, halfLength);
   const rightColumn = items.slice(halfLength);

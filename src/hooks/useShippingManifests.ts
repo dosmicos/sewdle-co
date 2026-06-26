@@ -5,6 +5,11 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
+// Estados de manifest_items que NO cuentan como paquete efectivo del manifiesto
+// (no son paquetes que la transportadora reciba): cancelada, duplicada, en revisión.
+export const NON_EFFECTIVE_STATUSES = ['canceled', 'duplicate', 'review'];
+const NON_EFFECTIVE_PG_LIST = '("canceled","duplicate","review")';
+
 export interface ShippingManifest {
   id: string;
   organization_id: string;
@@ -526,9 +531,9 @@ export const useShippingManifests = () => {
       if (iErr) throw iErr;
 
       const verified = (itemRows || []).filter(i => i.scan_status === 'verified').length;
-      // Las canceladas no son paquetes efectivos: no cuentan como pendientes.
-      const canceled = (itemRows || []).filter(i => i.scan_status === 'canceled').length;
-      const pending = (itemRows || []).length - verified - canceled;
+      // Canceladas / duplicadas / en revisión no son paquetes efectivos: no cuentan como pendientes.
+      const nonEffective = (itemRows || []).filter(i => NON_EFFECTIVE_STATUSES.includes(i.scan_status)).length;
+      const pending = (itemRows || []).length - verified - nonEffective;
       const collectorCount = manifest?.collector_reported_count ?? null;
 
       const issues: string[] = [];
@@ -794,10 +799,10 @@ export const useShippingManifests = () => {
         .eq('tracking_number', trackingNumber);
 
       // Recalcular contadores: agregar al vuelo cambia tanto el total como lo verificado.
-      // total_packages = guías efectivas (excluye canceladas: no son paquetes reales).
+      // total_packages = guías efectivas (excluye canceladas/duplicadas/en revisión).
       const [{ count: totalCount }, { count: verifiedCount }] = await Promise.all([
         supabase.from('manifest_items').select('*', { count: 'exact', head: true })
-          .eq('manifest_id', manifestId).neq('scan_status', 'canceled'),
+          .eq('manifest_id', manifestId).not('scan_status', 'in', NON_EFFECTIVE_PG_LIST),
         supabase.from('manifest_items').select('*', { count: 'exact', head: true })
           .eq('manifest_id', manifestId).eq('scan_status', 'verified'),
       ]);
@@ -847,13 +852,13 @@ export const useShippingManifests = () => {
         return null;
       }
 
-      // Guías del manifiesto (lado nuestro). Excluimos las canceladas: no son
-      // paquetes efectivos, así que no deben salir como 🔴 "falta en la relación".
+      // Guías del manifiesto (lado nuestro). Excluimos las no-efectivas
+      // (canceladas/duplicadas/en revisión): no deben salir como 🔴 "falta en la relación".
       const { data: items, error: itemsErr } = await supabase
         .from('manifest_items')
         .select('tracking_number')
         .eq('manifest_id', manifestId)
-        .neq('scan_status', 'canceled');
+        .not('scan_status', 'in', NON_EFFECTIVE_PG_LIST);
       if (itemsErr) throw itemsErr;
 
       const mineList = (items || []).map(i => String(i.tracking_number).trim());

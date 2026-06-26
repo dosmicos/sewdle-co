@@ -113,12 +113,24 @@ export const ManifestCreationModal: React.FC<ManifestCreationModalProps> = ({
 
       // Preserve manually-added shipments
       const prevManual = shipments.filter(s => s.source === 'manual');
-      const apiShipments: EnviaShipment[] = data.data || [];
+      let apiShipments: EnviaShipment[] = data.data || [];
 
-      // NOTE: we intentionally do NOT filter out guides already in other manifests.
-      // Guides disappear naturally once their Envia status leaves 'created'
-      // (previous-day in-transit guides are excluded by the edge function filter).
-      // This allows re-creating manifests freely without being blocked by existing ones.
+      // Una guía = un manifiesto: excluir las que YA están en cualquier manifiesto.
+      // Antes una guía sin movimiento (perdida o duplicada) reaparecía como
+      // "disponible" y se re-agregaba a manifiesto tras manifiesto. RLS limita
+      // manifest_items al org actual, así que basta con traer sus tracking_numbers.
+      try {
+        const { data: manifested } = await supabase
+          .from('manifest_items')
+          .select('tracking_number');
+        if (manifested && manifested.length > 0) {
+          const manifestedSet = new Set(manifested.map((m: any) => m.tracking_number));
+          apiShipments = apiShipments.filter(s => !manifestedSet.has(s.tracking_number));
+        }
+      } catch (e) {
+        console.warn('No se pudo excluir guías ya manifestadas:', e);
+      }
+
       setShipments([...apiShipments, ...prevManual]);
       setDataSource(data.source);
 

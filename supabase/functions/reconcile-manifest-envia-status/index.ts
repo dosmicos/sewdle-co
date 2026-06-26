@@ -1,13 +1,18 @@
 // Reconcilia el estado de escaneo de los manifiestos contra el estado real de las
-// guías en Envia (Queries API):
-//   • Guías con movimiento (estado != "created", no canceladas)  → 'verified'
-//     (se entregaron a la transportadora aunque no se escanearan con la pistola).
-//   • Guías canceladas en Envia                                  → 'canceled'
-//     (no son paquetes efectivos; no cuentan en el conteo del manifiesto).
+// guías en Envia (Queries API). Para cada guía pendiente:
+//   • con movimiento (delivered/shipped/etc.)            → 'verified'
+//   • cancelada en Envia                                 → 'canceled'
+//   • en "Created" pero su PEDIDO ya se entregó en otra
+//     guía (mismo nº de pedido)                          → 'duplicate'
+//   • en "Created", sin hermana entregada y +N días sin
+//     moverse                                            → 'review' (posible pérdida)
+//   • en "Created" reciente                              → se deja pendiente
 //
-// El modo de escritura (apply) SOLO está permitido para el rol service_role
-// (lo invoca el cron con la service_role_key del vault). Para cualquier otro
-// llamante es de solo lectura: devuelve el reporte sin escribir.
+// El nº de pedido sale del campo `sender_name` de Envia ("79178 - Dosmicos sas").
+//
+// El modo de escritura (apply) SOLO está permitido para service_role (lo invoca
+// el cron con la service_role_key del vault). Para cualquier otro llamante es de
+// solo lectura: devuelve el reporte sin escribir.
 //
 // Body: { organizationId?: string, months?: string[], apply?: boolean }
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -21,14 +26,18 @@ const corsHeaders = {
 
 interface Body {
   organizationId?: string;
-  months?: string[]; // "YYYY-MM"
+  months?: string[];
   apply?: boolean;
 }
 
 // Estados que NO deben pasar a verificado (la transportadora no se la llevó).
 const CANCELED = new Set(['canceled', 'cancelled', 'cancelado', 'cancelada']);
+// Días sin movimiento (en "Created") tras los cuales una guía sin hermana
+// entregada se marca para revisar (posible pérdida).
+const STALE_DAYS = 4;
 
-// Rol del JWT que llama (Supabase ya validó la firma con verify_jwt).
+interface GuideInfo { status: string; order: string | null; createdAt: string | null; }
+
 function callerRole(req: Request): string {
   try {
     const token = (req.headers.get('Authorization') || '').replace('Bearer ', '').trim();
@@ -40,7 +49,18 @@ function callerRole(req: Request): string {
   } catch { return 'anon'; }
 }
 
-async function fetchMonthStatuses(apiKey: string, yyyy: string, mm: string, into: Map<string, string>) {
+// Pedido a partir de sender_name ("79178 - Dosmicos sas" → "79178").
+function parseOrder(senderName: any): string | null {
+  const m = String(senderName ?? '').trim().match(/^(\d{3,})/);
+  return m ? m[1] : null;
+}
+
+// Trae las guías de un mes desde Envia y llena: tracking→info y el set de pedidos
+// que YA tienen al menos una guía con movimiento (no "created", no cancelada).
+async function fetchMonth(
+  apiKey: string, yyyy: string, mm: string,
+  guides: Map<string, GuideInfo>, ordersMoved: Set<string>,
+) {
   const base = `https://queries.envia.com/guide/${mm}/${yyyy}`;
   const PAGE_SIZE = 300;
   const MAX_PAGES = 60;
@@ -52,13 +72,18 @@ async function fetchMonthStatuses(apiKey: string, yyyy: string, mm: string, into
     try { data = JSON.parse(raw); } catch { data = null; }
     if (!res.ok || !Array.isArray(data?.data)) break;
     for (const s of data.data) {
-      const tracking = String(s.tracking_number ?? s.trackingNumber ?? s.guia ?? s.guide ?? s.guideNumber ?? '').trim();
+      const tracking = String(s.tracking_number ?? '').trim();
       if (!tracking) continue;
-      const status = String(s.status ?? s.status_id ?? s.status_label ?? s.statusLabel ?? '').trim().toLowerCase();
+      const status = String(s.status ?? '').trim().toLowerCase();
       if (!status) continue;
-      const prev = into.get(tracking);
-      if (prev && prev !== 'created') continue;
-      into.set(tracking, status);
+      const order = parseOrder(s.sender_name);
+      const createdAt = s.created_at || null;
+      const moved = status !== 'created' && !CANCELED.has(status);
+      if (order && moved) ordersMoved.add(order);
+      const prev = guides.get(tracking);
+      // Conservamos el registro "movido" sobre el "created" si la guía se repite.
+      if (prev && prev.status !== 'created') continue;
+      guides.set(tracking, { status, order, createdAt });
     }
     if (data.data.length < PAGE_SIZE) break;
   }
@@ -78,17 +103,16 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
     const body: Body = req.method === 'POST' ? await req.json() : {};
     const orgId = body.organizationId || null;
-    // Escritura solo para service_role (cron). Cualquier otro → solo lectura.
     const doApply = body.apply === true && callerRole(req) === 'service_role';
 
-    // ── 1. Guías pendientes (no verificadas ni canceladas) — paginado completo ──
+    // ── 1. Items aún sin resolver (ni verificados, ni cancelados, ni dup, ni review)
     const pending: any[] = [];
     const PAGE = 1000;
     for (let from = 0; ; from += PAGE) {
       let q = supabase
         .from('manifest_items')
-        .select('id, tracking_number, scan_status, shipping_manifests!inner(id, manifest_number, manifest_date, carrier, organization_id)')
-        .not('scan_status', 'in', '("verified","canceled")')
+        .select('id, tracking_number, shipping_manifests!inner(id, manifest_date, organization_id)')
+        .not('scan_status', 'in', '("verified","canceled","duplicate","review")')
         .order('id', { ascending: true })
         .range(from, from + PAGE - 1);
       if (orgId) q = q.eq('shipping_manifests.organization_id', orgId);
@@ -102,7 +126,7 @@ serve(async (req) => {
       return json({ success: true, applied_mode: doApply, totals: { pending: 0 } });
     }
 
-    // ── 2. Meses a consultar ────────────────────────────────────────────────────
+    // ── 2. Meses a consultar ──
     let months: string[];
     if (body.months && body.months.length) {
       months = body.months;
@@ -119,56 +143,73 @@ serve(async (req) => {
       months = [...set];
     }
 
-    // ── 3. Estados desde Envia ──────────────────────────────────────────────────
-    const statusMap = new Map<string, string>();
+    // ── 3. Datos de Envia ──
+    const guides = new Map<string, GuideInfo>();
+    const ordersMoved = new Set<string>();
     for (const ym of months) {
       const [yyyy, mm] = ym.split('-');
-      await fetchMonthStatuses(ENVIA_API_KEY, yyyy, mm, statusMap);
+      await fetchMonth(ENVIA_API_KEY, yyyy, mm, guides, ordersMoved);
     }
 
-    // ── 4. Clasificar ───────────────────────────────────────────────────────────
-    const toVerifyIds: string[] = [];
-    const toCancelIds: string[] = [];
-    const affectedManifests = new Set<string>();
+    // ── 4. Clasificar ──
+    const toVerify: string[] = [];
+    const toCancel: string[] = [];
+    const toDuplicate: string[] = [];
+    const toReview: string[] = [];
+    const affected = new Set<string>();
     const statusSeen: Record<string, number> = {};
     let stillCreated = 0, unknown = 0;
+    const now = Date.now();
 
     for (const it of pending) {
       const mfId = it.shipping_manifests.id;
       const tracking = String(it.tracking_number).trim();
-      const st = statusMap.get(tracking);
-      if (st === undefined) { unknown++; continue; }
-      if (st === 'created') { stillCreated++; continue; }
+      const info = guides.get(tracking);
+      if (!info) { unknown++; continue; }
+      const st = info.status;
       statusSeen[st] = (statusSeen[st] || 0) + 1;
-      if (CANCELED.has(st)) { toCancelIds.push(it.id); affectedManifests.add(mfId); }
-      else { toVerifyIds.push(it.id); affectedManifests.add(mfId); }
+
+      if (st === 'created') {
+        const hasDeliveredSibling = info.order ? ordersMoved.has(info.order) : false;
+        if (hasDeliveredSibling) { toDuplicate.push(it.id); affected.add(mfId); continue; }
+        // ¿lleva varios días sin moverse? → revisar (posible pérdida)
+        let ageDays = Infinity;
+        if (info.createdAt) {
+          const t = Date.parse(String(info.createdAt).replace(' ', 'T'));
+          if (!Number.isNaN(t)) ageDays = (now - t) / 86400000;
+        }
+        if (ageDays >= STALE_DAYS) { toReview.push(it.id); affected.add(mfId); }
+        else { stillCreated++; }
+      } else if (CANCELED.has(st)) {
+        toCancel.push(it.id); affected.add(mfId);
+      } else {
+        toVerify.push(it.id); affected.add(mfId);
+      }
     }
 
-    // ── 5. Aplicar (solo service_role) ──────────────────────────────────────────
-    let appliedVerified = 0, appliedCanceled = 0;
+    // ── 5. Aplicar (solo service_role) ──
+    const applied = { verified: 0, canceled: 0, duplicate: 0, review: 0 };
     if (doApply) {
       const nowIso = new Date().toISOString();
-      for (let i = 0; i < toVerifyIds.length; i += 500) {
-        const chunk = toVerifyIds.slice(i, i + 500);
-        const { error } = await supabase.from('manifest_items')
-          .update({ scan_status: 'verified', scanned_at: nowIso, notes: 'Auto-verificada: con movimiento en Envia' })
-          .in('id', chunk);
-        if (error) throw error;
-        appliedVerified += chunk.length;
-      }
-      for (let i = 0; i < toCancelIds.length; i += 500) {
-        const chunk = toCancelIds.slice(i, i + 500);
-        const { error } = await supabase.from('manifest_items')
-          .update({ scan_status: 'canceled', notes: 'Cancelada en Envia' })
-          .in('id', chunk);
-        if (error) throw error;
-        appliedCanceled += chunk.length;
-      }
-      // Recalcular conteos: total_verified y total_packages (efectivas = no canceladas).
-      for (const mfId of affectedManifests) {
+      const bulk = async (ids: string[], patch: Record<string, unknown>, key: keyof typeof applied) => {
+        for (let i = 0; i < ids.length; i += 500) {
+          const chunk = ids.slice(i, i + 500);
+          const { error } = await supabase.from('manifest_items').update(patch).in('id', chunk);
+          if (error) throw error;
+          applied[key] += chunk.length;
+        }
+      };
+      await bulk(toVerify, { scan_status: 'verified', scanned_at: nowIso, notes: 'Auto-verificada: con movimiento en Envia' }, 'verified');
+      await bulk(toCancel, { scan_status: 'canceled', notes: 'Cancelada en Envia' }, 'canceled');
+      await bulk(toDuplicate, { scan_status: 'duplicate', notes: 'Duplicada: el pedido ya se entregó en otra guía' }, 'duplicate');
+      await bulk(toReview, { scan_status: 'review', notes: 'Sin movimiento — revisar (posible pérdida)' }, 'review');
+
+      // Recalcular conteos: total_verified y total_packages (efectivas).
+      // Efectivas = no canceladas, ni duplicadas, ni en revisión.
+      for (const mfId of affected) {
         const [{ count: verified }, { count: effective }] = await Promise.all([
           supabase.from('manifest_items').select('*', { count: 'exact', head: true }).eq('manifest_id', mfId).eq('scan_status', 'verified'),
-          supabase.from('manifest_items').select('*', { count: 'exact', head: true }).eq('manifest_id', mfId).neq('scan_status', 'canceled'),
+          supabase.from('manifest_items').select('*', { count: 'exact', head: true }).eq('manifest_id', mfId).not('scan_status', 'in', '("canceled","duplicate","review")'),
         ]);
         await supabase.from('shipping_manifests').update({ total_verified: verified ?? 0, total_packages: effective ?? 0 }).eq('id', mfId);
       }
@@ -180,14 +221,16 @@ serve(async (req) => {
       months,
       totals: {
         pending: pending.length,
-        would_verify: toVerifyIds.length,
-        would_cancel: toCancelIds.length,
-        applied_verified: appliedVerified,
-        applied_canceled: appliedCanceled,
-        still_created: stillCreated,
+        would_verify: toVerify.length,
+        would_cancel: toCancel.length,
+        would_duplicate: toDuplicate.length,
+        would_review: toReview.length,
+        applied,
+        still_created_fresh: stillCreated,
         unknown,
-        envia_guides_indexed: statusMap.size,
-        affected_manifests: affectedManifests.size,
+        envia_guides_indexed: guides.size,
+        orders_with_movement: ordersMoved.size,
+        affected_manifests: affected.size,
       },
       status_breakdown: statusSeen,
     });
