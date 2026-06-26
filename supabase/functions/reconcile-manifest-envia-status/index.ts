@@ -156,6 +156,9 @@ serve(async (req) => {
     const toCancel: string[] = [];
     const toDuplicate: string[] = [];
     const toReview: string[] = [];
+    // Pendientes que se quedan pendientes (created reciente): {id, order} para
+    // detectar 2+ del mismo pedido y avisar "posible duplicado" sin cancelar.
+    const pendingStay: { id: string; order: string | null }[] = [];
     const affected = new Set<string>();
     const statusSeen: Record<string, number> = {};
     let stillCreated = 0, unknown = 0;
@@ -165,7 +168,7 @@ serve(async (req) => {
       const mfId = it.shipping_manifests.id;
       const tracking = String(it.tracking_number).trim();
       const info = guides.get(tracking);
-      if (!info) { unknown++; continue; }
+      if (!info) { unknown++; pendingStay.push({ id: it.id, order: null }); continue; }
       const st = info.status;
       statusSeen[st] = (statusSeen[st] || 0) + 1;
 
@@ -179,13 +182,29 @@ serve(async (req) => {
           if (!Number.isNaN(t)) ageDays = (now - t) / 86400000;
         }
         if (ageDays >= STALE_DAYS) { toReview.push(it.id); affected.add(mfId); }
-        else { stillCreated++; }
+        else { stillCreated++; pendingStay.push({ id: it.id, order: info.order }); }
       } else if (CANCELED.has(st)) {
         toCancel.push(it.id); affected.add(mfId);
       } else {
         toVerify.push(it.id); affected.add(mfId);
       }
     }
+
+    // Aviso "posible duplicado": pendientes (sin despachar) con 2+ guías del mismo
+    // pedido. No se cancela ninguna — el operador decide. dup_order_ref = nº pedido.
+    const orderCount = new Map<string, number>();
+    for (const p of pendingStay) if (p.order) orderCount.set(p.order, (orderCount.get(p.order) || 0) + 1);
+    const dupByOrder = new Map<string, string[]>(); // pedido -> ids a marcar
+    const dupClearIds: string[] = [];               // pendientes que YA no son duplicado
+    for (const p of pendingStay) {
+      if (p.order && (orderCount.get(p.order) || 0) >= 2) {
+        if (!dupByOrder.has(p.order)) dupByOrder.set(p.order, []);
+        dupByOrder.get(p.order)!.push(p.id);
+      } else {
+        dupClearIds.push(p.id);
+      }
+    }
+    const dupWarnCount = [...dupByOrder.values()].reduce((a, b) => a + b.length, 0);
 
     // ── 5. Aplicar (solo service_role) ──
     const applied = { verified: 0, canceled: 0, duplicate: 0, review: 0 };
@@ -199,10 +218,26 @@ serve(async (req) => {
           applied[key] += chunk.length;
         }
       };
-      await bulk(toVerify, { scan_status: 'verified', scanned_at: nowIso, notes: 'Auto-verificada: con movimiento en Envia' }, 'verified');
-      await bulk(toCancel, { scan_status: 'canceled', notes: 'Cancelada en Envia' }, 'canceled');
-      await bulk(toDuplicate, { scan_status: 'duplicate', notes: 'Duplicada: el pedido ya se entregó en otra guía' }, 'duplicate');
-      await bulk(toReview, { scan_status: 'review', notes: 'Sin movimiento — revisar (posible pérdida)' }, 'review');
+      await bulk(toVerify, { scan_status: 'verified', scanned_at: nowIso, notes: 'Auto-verificada: con movimiento en Envia', dup_order_ref: null }, 'verified');
+      await bulk(toCancel, { scan_status: 'canceled', notes: 'Cancelada en Envia', dup_order_ref: null }, 'canceled');
+      await bulk(toDuplicate, { scan_status: 'duplicate', notes: 'Duplicada: el pedido ya se entregó en otra guía', dup_order_ref: null }, 'duplicate');
+      await bulk(toReview, { scan_status: 'review', notes: 'Sin movimiento — revisar (posible pérdida)', dup_order_ref: null }, 'review');
+
+      // Aviso de posible duplicado (no cambia el conteo, no cambia scan_status).
+      for (const [order, ids] of dupByOrder) {
+        for (let i = 0; i < ids.length; i += 500) {
+          const chunk = ids.slice(i, i + 500);
+          const { error } = await supabase.from('manifest_items').update({ dup_order_ref: order }).in('id', chunk);
+          if (error) throw error;
+        }
+      }
+      // Limpiar avisos obsoletos en pendientes que ya no son duplicado.
+      for (let i = 0; i < dupClearIds.length; i += 500) {
+        const chunk = dupClearIds.slice(i, i + 500);
+        if (!chunk.length) continue;
+        const { error } = await supabase.from('manifest_items').update({ dup_order_ref: null }).in('id', chunk);
+        if (error) throw error;
+      }
 
       // Recalcular conteos: total_verified y total_packages (efectivas).
       // Efectivas = no canceladas, ni duplicadas, ni en revisión.
@@ -225,6 +260,7 @@ serve(async (req) => {
         would_cancel: toCancel.length,
         would_duplicate: toDuplicate.length,
         would_review: toReview.length,
+        dup_warning: dupWarnCount,
         applied,
         still_created_fresh: stillCreated,
         unknown,

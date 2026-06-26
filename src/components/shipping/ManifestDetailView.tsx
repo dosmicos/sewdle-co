@@ -72,6 +72,7 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     fetchExtraScans,
     addScannedGuiaToManifest,
     reconcileWithCoordinadora,
+    markItemDuplicate,
   } = useShippingManifests();
 
   const [scanInput, setScanInput] = useState('');
@@ -80,6 +81,7 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   const [items, setItems] = useState<ManifestItem[]>(manifest.items);
   const [extraScans, setExtraScans] = useState<string[]>([]);
   const [addingTracking, setAddingTracking] = useState<string | null>(null);
+  const [markingDup, setMarkingDup] = useState<string | null>(null);
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [closingManifest, setClosingManifest] = useState(false);
 
@@ -235,6 +237,19 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     }
   };
 
+  // Marcar manualmente una guía como duplicada (resolver un "posible duplicado").
+  const handleMarkDuplicate = async (item: ManifestItem) => {
+    setMarkingDup(item.id);
+    const ok = await markItemDuplicate(item.id, manifest.id);
+    setMarkingDup(null);
+    if (ok) {
+      setItems(prev => prev.map(it =>
+        it.id === item.id ? { ...it, scan_status: 'duplicate', dup_order_ref: null } : it
+      ));
+      onUpdate();
+    }
+  };
+
   // Conteo del recolector — se guarda al salir del campo.
   const saveCollectorCount = () => {
     const trimmed = collectorCount.trim();
@@ -281,6 +296,16 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   const hasCanceled = canceledItems.length > 0;
   const hasDuplicate = duplicateItems.length > 0;
   const hasReview = reviewItems.length > 0;
+
+  // Posibles duplicados: pendientes con dup_order_ref (2+ guías del mismo pedido).
+  const dupWarnByOrder = pendingItems
+    .filter(i => i.dup_order_ref)
+    .reduce((acc, i) => {
+      const k = i.dup_order_ref as string;
+      (acc[k] = acc[k] || []).push(i);
+      return acc;
+    }, {} as Record<string, ManifestItem[]>);
+  const hasDupWarn = Object.keys(dupWarnByOrder).length > 0;
 
   const collectorNum = collectorCount.trim() === '' ? null : parseInt(collectorCount, 10);
   const collectorMismatch = collectorNum != null && !Number.isNaN(collectorNum) && collectorNum !== verifiedItems;
@@ -386,6 +411,49 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
             )}
           </div>
         </div>
+
+        {/* Aviso: posibles duplicados (2+ guías pendientes del mismo pedido) */}
+        {hasDupWarn && (
+          <div className="p-4 border border-amber-300 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-800 rounded-lg space-y-3">
+            <h3 className="font-medium text-sm flex items-center gap-2 text-amber-700 dark:text-amber-500">
+              <AlertTriangle className="h-4 w-4" />
+              Posible duplicado — revisa cuál entregar
+            </h3>
+            <p className="text-xs text-amber-700/80 dark:text-amber-500/80">
+              Hay varias guías pendientes del mismo pedido. No se cancela ninguna automáticamente:
+              decide cuál se entrega y marca la otra como duplicada.
+            </p>
+            <div className="space-y-3">
+              {Object.entries(dupWarnByOrder).map(([order, group]) => (
+                <div key={order} className="rounded-md border border-amber-200 dark:border-amber-800 p-2">
+                  <div className="text-xs font-medium text-amber-700 dark:text-amber-500 mb-1">
+                    Pedido #{order} — {group.length} guías
+                  </div>
+                  <div className="space-y-1">
+                    {group.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between gap-2 p-1.5 rounded bg-background/60">
+                        <div className="min-w-0">
+                          <span className="font-mono text-sm">{item.tracking_number}</span>
+                          {item.recipient_name && (
+                            <span className="text-xs text-muted-foreground"> · {item.recipient_name}</span>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline" size="sm" className="h-7 gap-1 text-xs shrink-0"
+                          onClick={() => handleMarkDuplicate(item)}
+                          disabled={markingDup === item.id}
+                        >
+                          {markingDup === item.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <XCircle className="h-3 w-3" />}
+                          Marcar duplicada
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Conteo del recolector (todas las transportadoras) */}
         <div className={cn(

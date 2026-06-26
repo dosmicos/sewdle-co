@@ -83,6 +83,8 @@ export interface ManifestItem {
   scanned_by: string | null;
   scan_status: string;
   notes: string | null;
+  // Nº de pedido cuando hay 2+ guías pendientes del mismo pedido (posible duplicado).
+  dup_order_ref: string | null;
   created_at: string;
 }
 
@@ -683,6 +685,34 @@ export const useShippingManifests = () => {
     }
   }, []);
 
+  // Marcar manualmente una guía como duplicada (el operador decide cuál de las
+  // del mismo pedido anular). Sale del conteo efectivo y se recalcula el total.
+  const markItemDuplicate = useCallback(async (itemId: string, manifestId: string) => {
+    try {
+      const { error } = await supabase
+        .from('manifest_items')
+        .update({ scan_status: 'duplicate', notes: 'Duplicada (marcada manualmente)', dup_order_ref: null })
+        .eq('id', itemId);
+      if (error) throw error;
+
+      const { count: effective } = await supabase
+        .from('manifest_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('manifest_id', manifestId)
+        .not('scan_status', 'in', NON_EFFECTIVE_PG_LIST);
+      await supabase.from('shipping_manifests')
+        .update({ total_packages: effective ?? 0 })
+        .eq('id', manifestId);
+
+      toast.success('Guía marcada como duplicada');
+      return true;
+    } catch (err: any) {
+      console.error('Error marking duplicate:', err);
+      toast.error('Error al marcar duplicada: ' + err.message);
+      return false;
+    }
+  }, []);
+
   // Registrar el conteo que reporta el recolector (todas las transportadoras).
   const recordCollectorCount = useCallback(async (
     manifestId: string,
@@ -945,6 +975,7 @@ export const useShippingManifests = () => {
     deleteManifest,
     getAvailableLabels,
     markItemMissing,
+    markItemDuplicate,
     recordCollectorCount,
     persistExtraScan,
     fetchExtraScans,
