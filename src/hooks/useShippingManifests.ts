@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
+import type { Json, TablesUpdate } from '@/integrations/supabase/types';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -19,8 +20,49 @@ export interface ShippingManifest {
   closed_at: string | null;
   pickup_confirmed_at: string | null;
   pickup_confirmed_by: string | null;
+  // Reconciliación al entregar a la transportadora
+  collector_reported_count: number | null;
+  collector_name: string | null;
+  pickup_link_url: string | null;
+  reconciliation_status: string | null; // pending | matched | mismatch | overridden
+  reconciliation_data: ReconciliationData | null;
+  pickup_override_reason: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// Guía escaneada (o reportada por la transportadora) que NO está en el manifiesto.
+export interface ManifestExtraScan {
+  id: string;
+  manifest_id: string;
+  tracking_number: string;
+  source: string; // 'gun' | 'carrier_link'
+  scanned_at: string | null;
+  scanned_by: string | null;
+  created_at: string;
+}
+
+// Resultado del cruce con la relación de recogida de la transportadora.
+export interface ReconciliationData {
+  carrier: string;
+  link_url?: string | null;
+  collector_name?: string | null;
+  total_unidades?: number | null;
+  fecha_recogida?: string | null;
+  id_recogida?: string | null;
+  // Guías en MI manifiesto que NO están en la relación de la transportadora (señal de pérdida).
+  missing_in_carrier: string[];
+  // Guías en la relación de la transportadora que NO están en mi manifiesto.
+  extra_in_carrier: string[];
+  matched: string[];
+  reconciled_at: string;
+}
+
+export interface ReconciliationResult {
+  success: boolean;
+  status: 'matched' | 'mismatch';
+  message: string;
+  data: ReconciliationData;
 }
 
 export interface ManifestItem {
@@ -63,6 +105,23 @@ interface ScanResult {
   status: 'verified' | 'already_scanned' | 'not_found' | 'wrong_manifest' | 'error';
   message: string;
   item?: ManifestItem;
+}
+
+interface ConfirmPickupResult {
+  ok: boolean;
+  blocked?: boolean;   // true = bloqueado por descuadre (requiere justificación)
+  issues?: string[];   // descripción de cada descuadre detectado
+  message?: string;
+}
+
+interface AddGuiaResult {
+  success: boolean;
+  item?: ManifestItem;
+  /** Carrier del shipping_label encontrado (para advertir si no coincide con el manifiesto). */
+  labelCarrier?: string | null;
+  /** true si la guía no existe como shipping_label en la organización. */
+  unknownLabel?: boolean;
+  message?: string;
 }
 
 export const useShippingManifests = () => {
@@ -108,7 +167,8 @@ export const useShippingManifests = () => {
       const { data, error: fetchError } = await query;
 
       if (fetchError) throw fetchError;
-      setManifests(data || []);
+      // reconciliation_data llega como Json desde la DB; lo exponemos tipado.
+      setManifests((data || []) as unknown as ShippingManifest[]);
     } catch (err: any) {
       console.error('Error fetching manifests:', err);
       setError(err.message);
@@ -139,10 +199,10 @@ export const useShippingManifests = () => {
 
       if (itemsError) throw itemsError;
 
-      const manifestWithItems: ManifestWithItems = {
+      const manifestWithItems = {
         ...manifest,
         items: items || []
-      };
+      } as unknown as ManifestWithItems;
 
       setCurrentManifest(manifestWithItems);
       return manifestWithItems;
@@ -356,19 +416,19 @@ export const useShippingManifests = () => {
 
         if (updateError) throw updateError;
 
-        // Increment total_verified counter on the manifest
-        const { data: manifestData } = await supabase
-          .from('shipping_manifests')
-          .select('total_verified')
-          .eq('id', manifestId)
-          .single();
+        // Recalcular total_verified desde el conteo real de items verificados.
+        // Es autoritativo (no read-modify-write), así evita la carrera del
+        // contador anterior sin acoplar el despliegue a un trigger de DB.
+        const { count: verifiedCount } = await supabase
+          .from('manifest_items')
+          .select('*', { count: 'exact', head: true })
+          .eq('manifest_id', manifestId)
+          .eq('scan_status', 'verified');
 
-        if (manifestData) {
-          await supabase
-            .from('shipping_manifests')
-            .update({ total_verified: (manifestData.total_verified || 0) + 1 })
-            .eq('id', manifestId);
-        }
+        await supabase
+          .from('shipping_manifests')
+          .update({ total_verified: verifiedCount ?? 0 })
+          .eq('id', manifestId);
 
         return {
           success: true,
@@ -438,32 +498,84 @@ export const useShippingManifests = () => {
     }
   }, [user?.id, fetchManifests]);
 
-  // Confirm pickup
-  const confirmPickup = useCallback(async (manifestId: string) => {
+  // Confirm pickup — GATE: bloquea ante descuadre salvo justificación registrada.
+  // Re-lee la verdad desde la DB (no confía en el estado de la UI) y, si hay
+  // guías pendientes, descuadre con el conteo del recolector, o mismatch del
+  // cruce con la transportadora, rechaza el retiro a menos que venga overrideReason.
+  const confirmPickup = useCallback(async (
+    manifestId: string,
+    opts: { overrideReason?: string } = {}
+  ): Promise<ConfirmPickupResult> => {
     if (!user?.id) {
       toast.error('Sesión no válida');
-      return false;
+      return { ok: false, message: 'Sesión no válida' };
     }
 
     try {
+      const { data: manifest, error: mErr } = await supabase
+        .from('shipping_manifests')
+        .select('total_verified, collector_reported_count, reconciliation_status')
+        .eq('id', manifestId)
+        .single();
+      if (mErr) throw mErr;
+
+      const { data: itemRows, error: iErr } = await supabase
+        .from('manifest_items')
+        .select('scan_status')
+        .eq('manifest_id', manifestId);
+      if (iErr) throw iErr;
+
+      const verified = (itemRows || []).filter(i => i.scan_status === 'verified').length;
+      const pending = (itemRows || []).length - verified;
+      const collectorCount = manifest?.collector_reported_count ?? null;
+
+      const issues: string[] = [];
+      if (pending > 0) {
+        issues.push(`Faltan ${pending} guía${pending !== 1 ? 's' : ''} por escanear`);
+      }
+      if (collectorCount != null && collectorCount !== verified) {
+        issues.push(`El recolector reporta ${collectorCount} y verificaste ${verified}`);
+      }
+      if (manifest?.reconciliation_status === 'mismatch') {
+        issues.push('El cruce con la relación de la transportadora no cuadra');
+      }
+
+      const overrideReason = opts.overrideReason?.trim();
+      if (issues.length > 0 && !overrideReason) {
+        // No persistimos nada: el retiro queda bloqueado hasta resolver o justificar.
+        return {
+          ok: false,
+          blocked: true,
+          issues,
+          message: 'Hay un descuadre. Resuelve o justifica antes de confirmar el retiro.',
+        };
+      }
+
+      const update: TablesUpdate<'shipping_manifests'> = {
+        status: 'picked_up',
+        pickup_confirmed_at: new Date().toISOString(),
+        pickup_confirmed_by: user.id,
+      };
+      if (overrideReason) {
+        update.pickup_override_reason = overrideReason;
+        if (issues.length > 0) update.reconciliation_status = 'overridden';
+      }
+
       const { error } = await supabase
         .from('shipping_manifests')
-        .update({
-          status: 'picked_up',
-          pickup_confirmed_at: new Date().toISOString(),
-          pickup_confirmed_by: user.id
-        })
+        .update(update)
         .eq('id', manifestId);
-
       if (error) throw error;
 
-      toast.success('Retiro confirmado');
+      toast.success(overrideReason && issues.length > 0
+        ? 'Retiro confirmado con justificación'
+        : 'Retiro confirmado');
       await fetchManifests();
-      return true;
+      return { ok: true };
     } catch (err: any) {
       console.error('Error confirming pickup:', err);
       toast.error('Error al confirmar retiro: ' + err.message);
-      return false;
+      return { ok: false, message: err.message };
     }
   }, [user?.id, fetchManifests]);
 
@@ -564,6 +676,251 @@ export const useShippingManifests = () => {
     }
   }, []);
 
+  // Registrar el conteo que reporta el recolector (todas las transportadoras).
+  const recordCollectorCount = useCallback(async (
+    manifestId: string,
+    count: number | null,
+    name?: string | null
+  ) => {
+    try {
+      const update: TablesUpdate<'shipping_manifests'> = { collector_reported_count: count };
+      if (name !== undefined) update.collector_name = name;
+      const { error } = await supabase
+        .from('shipping_manifests')
+        .update(update)
+        .eq('id', manifestId);
+      if (error) throw error;
+      return true;
+    } catch (err: any) {
+      console.error('Error recording collector count:', err);
+      toast.error('Error al guardar el conteo del recolector: ' + err.message);
+      return false;
+    }
+  }, []);
+
+  // Persistir una guía escaneada que NO está en el manifiesto (antes solo en estado de React).
+  const persistExtraScan = useCallback(async (
+    manifestId: string,
+    trackingNumber: string,
+    source: 'gun' | 'carrier_link' = 'gun'
+  ) => {
+    try {
+      const { error } = await supabase
+        .from('manifest_extra_scans')
+        .upsert(
+          {
+            manifest_id: manifestId,
+            tracking_number: trackingNumber,
+            source,
+            scanned_at: new Date().toISOString(),
+            scanned_by: user?.id ?? null,
+          },
+          { onConflict: 'manifest_id,tracking_number', ignoreDuplicates: true }
+        );
+      if (error) throw error;
+      return true;
+    } catch (err: any) {
+      console.error('Error persisting extra scan:', err);
+      return false;
+    }
+  }, [user?.id]);
+
+  // Cargar las guías extra persistidas de un manifiesto.
+  const fetchExtraScans = useCallback(async (manifestId: string): Promise<ManifestExtraScan[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('manifest_extra_scans')
+        .select('*')
+        .eq('manifest_id', manifestId)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data || []) as ManifestExtraScan[];
+    } catch (err: any) {
+      console.error('Error fetching extra scans:', err);
+      return [];
+    }
+  }, []);
+
+  // Agregar al vuelo una guía escaneada que no estaba en el manifiesto pero sí
+  // existe como shipping_label en la organización (objetivo: que nada entregado
+  // quede sin rastrear). Se inserta ya como 'verified' porque se acaba de escanear.
+  const addScannedGuiaToManifest = useCallback(async (
+    manifestId: string,
+    trackingNumber: string
+  ): Promise<AddGuiaResult> => {
+    if (!currentOrganization?.id || !user?.id) {
+      return { success: false, message: 'Sesión no válida' };
+    }
+    try {
+      const { data: label } = await supabase
+        .from('shipping_labels')
+        .select('id, carrier, order_number, recipient_name, destination_city, shopify_order_id')
+        .eq('organization_id', currentOrganization.id)
+        .eq('tracking_number', trackingNumber)
+        .maybeSingle();
+
+      const { data: inserted, error } = await supabase
+        .from('manifest_items')
+        .insert({
+          manifest_id: manifestId,
+          shipping_label_id: label?.id ?? null,
+          shopify_order_id: label?.shopify_order_id ?? null,
+          order_number: label?.order_number ?? trackingNumber,
+          tracking_number: trackingNumber,
+          recipient_name: label?.recipient_name ?? null,
+          destination_city: label?.destination_city ?? null,
+          scanned_at: new Date().toISOString(),
+          scanned_by: user.id,
+          scan_status: 'verified',
+        })
+        .select()
+        .single();
+
+      if (error) {
+        // 23505 = la guía ya está en el manifiesto: lo tratamos como éxito.
+        if ((error as any).code === '23505') {
+          return { success: true, labelCarrier: label?.carrier ?? null };
+        }
+        throw error;
+      }
+
+      // Si estaba registrada como "extra", ya no lo es.
+      await supabase
+        .from('manifest_extra_scans')
+        .delete()
+        .eq('manifest_id', manifestId)
+        .eq('tracking_number', trackingNumber);
+
+      // Recalcular contadores: agregar al vuelo cambia tanto el total como lo verificado.
+      const [{ count: totalCount }, { count: verifiedCount }] = await Promise.all([
+        supabase.from('manifest_items').select('*', { count: 'exact', head: true })
+          .eq('manifest_id', manifestId),
+        supabase.from('manifest_items').select('*', { count: 'exact', head: true })
+          .eq('manifest_id', manifestId).eq('scan_status', 'verified'),
+      ]);
+      await supabase
+        .from('shipping_manifests')
+        .update({ total_packages: totalCount ?? 0, total_verified: verifiedCount ?? 0 })
+        .eq('id', manifestId);
+
+      return {
+        success: true,
+        item: inserted as ManifestItem,
+        labelCarrier: label?.carrier ?? null,
+        unknownLabel: !label,
+      };
+    } catch (err: any) {
+      console.error('Error adding guia to manifest:', err);
+      return { success: false, message: err.message };
+    }
+  }, [currentOrganization?.id, user?.id]);
+
+  // Cruzar el manifiesto contra la "relación de recogida" de Coordinadora (link/tirilla).
+  // Calcula los descuadres bidireccionales, persiste el resultado y auto-rellena el
+  // conteo del recolector (= total_unidades de la relación).
+  const reconcileWithCoordinadora = useCallback(async (
+    manifestId: string,
+    urlOrToken: string
+  ): Promise<ReconciliationResult | null> => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/coordinadora-pickup-relacion`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'apikey': SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ url: urlOrToken }),
+        }
+      );
+      const payload = await res.json();
+      if (!res.ok || !payload.success) {
+        toast.error(payload.error || 'No se pudo leer la relación de Coordinadora');
+        return null;
+      }
+
+      // Guías del manifiesto (lado nuestro).
+      const { data: items, error: itemsErr } = await supabase
+        .from('manifest_items')
+        .select('tracking_number')
+        .eq('manifest_id', manifestId);
+      if (itemsErr) throw itemsErr;
+
+      const mineList = (items || []).map(i => String(i.tracking_number).trim());
+      const mineSet = new Set(mineList);
+      const carrierList: string[] = (payload.guias || []).map((g: string) => String(g).trim());
+      const carrierSet = new Set(carrierList);
+
+      const matched = mineList.filter(t => carrierSet.has(t));
+      const missing_in_carrier = mineList.filter(t => !carrierSet.has(t)); // entregué pero no la registraron
+      const extra_in_carrier = carrierList.filter(g => !mineSet.has(g));    // la registraron pero no está en mi manifiesto
+
+      const status: 'matched' | 'mismatch' =
+        missing_in_carrier.length === 0 && extra_in_carrier.length === 0 ? 'matched' : 'mismatch';
+
+      const reconciliation_data: ReconciliationData = {
+        carrier: 'coordinadora',
+        link_url: urlOrToken,
+        collector_name: payload.collector_name ?? null,
+        total_unidades: payload.total_unidades ?? carrierList.length,
+        fecha_recogida: payload.fecha_recogida ?? null,
+        id_recogida: payload.id_recogida ?? null,
+        missing_in_carrier,
+        extra_in_carrier,
+        matched,
+        reconciled_at: new Date().toISOString(),
+      };
+
+      const { error: updErr } = await supabase
+        .from('shipping_manifests')
+        .update({
+          pickup_link_url: urlOrToken,
+          collector_reported_count: payload.total_unidades ?? carrierList.length,
+          collector_name: payload.collector_name ?? null,
+          reconciliation_status: status,
+          reconciliation_data: reconciliation_data as unknown as Json,
+        })
+        .eq('id', manifestId);
+      if (updErr) throw updErr;
+
+      // Las guías que la transportadora registró pero no están en el manifiesto
+      // quedan auditadas como extras de origen 'carrier_link'.
+      if (extra_in_carrier.length > 0) {
+        await supabase
+          .from('manifest_extra_scans')
+          .upsert(
+            extra_in_carrier.map(t => ({
+              manifest_id: manifestId,
+              tracking_number: t,
+              source: 'carrier_link',
+              scanned_by: user?.id ?? null,
+            })),
+            { onConflict: 'manifest_id,tracking_number', ignoreDuplicates: true }
+          );
+      }
+
+      await fetchManifests();
+
+      return {
+        success: true,
+        status,
+        message: status === 'matched'
+          ? `Todo cuadra: ${matched.length} guías coinciden con Coordinadora`
+          : `Descuadre: ${missing_in_carrier.length} no están en la relación · ${extra_in_carrier.length} sin escanear`,
+        data: reconciliation_data,
+      };
+    } catch (err: any) {
+      console.error('Error reconciling with Coordinadora:', err);
+      toast.error('Error al cruzar con Coordinadora: ' + err.message);
+      return null;
+    }
+  }, [user?.id, fetchManifests]);
+
   return {
     manifests,
     currentManifest,
@@ -577,6 +934,11 @@ export const useShippingManifests = () => {
     confirmPickup,
     deleteManifest,
     getAvailableLabels,
-    markItemMissing
+    markItemMissing,
+    recordCollectorCount,
+    persistExtraScan,
+    fetchExtraScans,
+    addScannedGuiaToManifest,
+    reconcileWithCoordinadora,
   };
 };

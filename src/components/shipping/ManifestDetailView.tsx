@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -27,12 +28,22 @@ import {
   Calendar,
   Flag,
   Printer,
+  Link2,
+  Copy,
+  Plus,
+  User,
 } from 'lucide-react';
-import { useShippingManifests, ManifestWithItems, ManifestItem } from '@/hooks/useShippingManifests';
+import {
+  useShippingManifests,
+  ManifestWithItems,
+  ManifestItem,
+  ReconciliationData,
+} from '@/hooks/useShippingManifests';
 import { CARRIER_NAMES, type CarrierCode } from '@/features/shipping/types/envia';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { toast } from 'sonner';
 import { openManifestPrintWindow } from './ManifestPrintView';
 
 interface ManifestDetailViewProps {
@@ -52,21 +63,40 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   onBack,
   onUpdate,
 }) => {
-  const { scanTrackingNumber, closeManifest } = useShippingManifests();
-  
+  const {
+    scanTrackingNumber,
+    closeManifest,
+    recordCollectorCount,
+    persistExtraScan,
+    fetchExtraScans,
+    addScannedGuiaToManifest,
+    reconcileWithCoordinadora,
+  } = useShippingManifests();
+
   const [scanInput, setScanInput] = useState('');
   const [scanning, setScanning] = useState(false);
   const [scanHistory, setScanHistory] = useState<ScanFeedback[]>([]);
   const [items, setItems] = useState<ManifestItem[]>(manifest.items);
   const [extraScans, setExtraScans] = useState<string[]>([]);
+  const [addingTracking, setAddingTracking] = useState<string | null>(null);
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [closingManifest, setClosingManifest] = useState(false);
-  
+
+  // Conteo del recolector (todas las transportadoras)
+  const [collectorCount, setCollectorCount] = useState<string>(
+    manifest.collector_reported_count != null ? String(manifest.collector_reported_count) : ''
+  );
+  const [collectorName, setCollectorName] = useState<string>(manifest.collector_name ?? '');
+
+  // Cruce con la relación de recogida de Coordinadora
+  const isCoordinadora = manifest.carrier === 'coordinadora';
+  const [linkInput, setLinkInput] = useState<string>(manifest.pickup_link_url ?? '');
+  const [reconciling, setReconciling] = useState(false);
+  const [reconResult, setReconResult] = useState<ReconciliationData | null>(
+    (manifest.reconciliation_data as ReconciliationData) ?? null
+  );
+
   const inputRef = useRef<HTMLInputElement>(null);
-  // Ref-based in-flight guard: more reliable than `scanning` state for preventing
-  // double-execution, and avoids adding `scanning` to useCallback/useEffect deps
-  // (which caused triggerScan to get a new reference on every state change, making
-  // the auto-scan effect re-fire unnecessarily and the spinner animation glitch).
   const scanInFlightRef = useRef(false);
 
   // Auto-focus on mount
@@ -74,9 +104,15 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
+  // Cargar las guías extra ya persistidas (escaneadas con la pistola fuera del manifiesto).
+  useEffect(() => {
+    fetchExtraScans(manifest.id).then((rows) => {
+      const gun = rows.filter(r => r.source === 'gun').map(r => r.tracking_number);
+      if (gun.length) setExtraScans(prev => Array.from(new Set([...gun, ...prev])));
+    });
+  }, [manifest.id, fetchExtraScans]);
+
   // Re-focus input after each scan completes.
-  // Must live in a useEffect so it runs after React commits the DOM update
-  // that removes `disabled` from the input.
   useEffect(() => {
     if (!scanning) {
       inputRef.current?.focus();
@@ -90,8 +126,6 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
 
   // Core scan function — takes a resolved tracking number directly so
   // auto-scan can pass the full number even when input only has 4 digits.
-  // Uses scanInFlightRef (not `scanning` state) as the guard so this callback
-  // stays stable across renders and doesn't cascade unnecessary effect re-runs.
   const triggerScan = useCallback(async (trackingNumber: string) => {
     if (!trackingNumber || scanInFlightRef.current) return;
 
@@ -100,8 +134,6 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     setScanInput('');
 
     try {
-      // Race against an 8-second timeout so a hung Supabase query never
-      // leaves the UI in the permanent "scanning" state.
       const timeout = new Promise<{ success: false; status: 'error'; message: string }>(resolve =>
         setTimeout(() => resolve({
           success: false,
@@ -132,26 +164,24 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
       } else if (result.status === 'not_found') {
         if (!extraScans.includes(trackingNumber)) {
           setExtraScans(prev => [...prev, trackingNumber]);
+          // Persistir la guía extra para que quede auditada (antes se perdía al cerrar).
+          persistExtraScan(manifest.id, trackingNumber, 'gun');
         }
       }
     } finally {
       scanInFlightRef.current = false;
       setScanning(false);
     }
-  }, [manifest.id, scanTrackingNumber, extraScans]); // no `scanning` — ref handles guard
+  }, [manifest.id, scanTrackingNumber, extraScans, persistExtraScan]);
 
   // Enter key — resolves tracking from current input and delegates to triggerScan.
   const handleScan = useCallback(async () => {
     const trackingNumber = scanInput.trim().toUpperCase();
     if (!trackingNumber) return;
     await triggerScan(trackingNumber);
-  }, [scanInput, triggerScan]); // no `scanning` dep
+  }, [scanInput, triggerScan]);
 
-  // Instant auto-scan: fires without Enter when the input unambiguously
-  // identifies a pending guide (full match) or its last 4 digits (suffix match).
-  // Uses scanInFlightRef directly so `scanning` state is not a dep — this prevents
-  // triggerScan from being recreated on every scanning toggle, which was causing
-  // the effect to re-run and the spinner animation to reset mid-rotation.
+  // Instant auto-scan.
   useEffect(() => {
     if (scanInFlightRef.current) return;
     const input = scanInput.trim();
@@ -163,21 +193,18 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
 
     const inputUpper = input.toUpperCase();
 
-    // Full match → verify immediately (handles barcode scanners sending the whole number)
     if (pendingTrackings.includes(inputUpper)) {
       triggerScan(inputUpper);
       return;
     }
 
-    // Exactly 4 digits → check for unique suffix match among pending guides
     if (/^\d{4}$/.test(input)) {
       const matches = pendingTrackings.filter(t => t.endsWith(input));
       if (matches.length === 1) {
         triggerScan(matches[0]);
       }
-      // If 0 or 2+ matches: wait — user can keep typing or press Enter
     }
-  }, [scanInput, items, triggerScan]); // no `scanning` — ref handles guard
+  }, [scanInput, items, triggerScan]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -186,15 +213,71 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     }
   };
 
-  // Calculate stats
+  // Agregar al vuelo una guía escaneada que no estaba en el manifiesto.
+  const handleAddExtra = async (trackingNumber: string) => {
+    setAddingTracking(trackingNumber);
+    const res = await addScannedGuiaToManifest(manifest.id, trackingNumber);
+    setAddingTracking(null);
+    if (res.success) {
+      setExtraScans(prev => prev.filter(t => t !== trackingNumber));
+      if (res.item) {
+        setItems(prev => [...prev, res.item as ManifestItem]);
+      }
+      if (res.labelCarrier && res.labelCarrier !== manifest.carrier) {
+        toast.warning(`Ojo: la guía ${trackingNumber} es de ${res.labelCarrier}, no de ${manifest.carrier}`);
+      } else {
+        toast.success(`Guía ${trackingNumber} agregada al manifiesto`);
+      }
+      onUpdate();
+    } else {
+      toast.error(res.message || 'No se pudo agregar la guía');
+    }
+  };
+
+  // Conteo del recolector — se guarda al salir del campo.
+  const saveCollectorCount = () => {
+    const trimmed = collectorCount.trim();
+    const value = trimmed === '' ? null : parseInt(trimmed, 10);
+    if (trimmed !== '' && Number.isNaN(value as number)) return;
+    recordCollectorCount(manifest.id, value, collectorName.trim() || null);
+    onUpdate();
+  };
+
+  // Cruce con Coordinadora.
+  const handleReconcile = async () => {
+    const link = linkInput.trim();
+    if (!link) return;
+    setReconciling(true);
+    const res = await reconcileWithCoordinadora(manifest.id, link);
+    setReconciling(false);
+    if (res) {
+      setReconResult(res.data);
+      if (res.data.total_unidades != null) setCollectorCount(String(res.data.total_unidades));
+      if (res.data.collector_name) setCollectorName(res.data.collector_name);
+      if (res.status === 'matched') toast.success(res.message);
+      else toast.warning(res.message);
+      onUpdate();
+    }
+  };
+
+  const copyList = (label: string, list: string[]) => {
+    if (!list.length) return;
+    navigator.clipboard?.writeText(list.join('\n')).then(
+      () => toast.success(`${label}: ${list.length} guías copiadas`),
+      () => toast.error('No se pudo copiar'),
+    );
+  };
+
+  // Stats
   const totalItems = items.length;
   const verifiedItems = items.filter(i => i.scan_status === 'verified').length;
   const pendingItems = items.filter(i => i.scan_status === 'pending' || i.scan_status === null);
   const progress = totalItems > 0 ? (verifiedItems / totalItems) * 100 : 0;
 
-  const handleFinishScan = () => {
-    setShowFinishDialog(true);
-  };
+  const collectorNum = collectorCount.trim() === '' ? null : parseInt(collectorCount, 10);
+  const collectorMismatch = collectorNum != null && !Number.isNaN(collectorNum) && collectorNum !== verifiedItems;
+
+  const handleFinishScan = () => setShowFinishDialog(true);
 
   const handleForceClose = async () => {
     setClosingManifest(true);
@@ -215,6 +298,9 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   const isFullyVerified = verifiedItems === totalItems;
   const hasMissing = pendingItems.length > 0;
   const hasExtras = extraScans.length > 0;
+
+  const missingInCarrier = reconResult?.missing_in_carrier ?? [];
+  const extraInCarrier = reconResult?.extra_in_carrier ?? [];
 
   return (
     <div className="flex flex-col h-full">
@@ -278,10 +364,145 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
           </div>
         </div>
 
-        {/* Scan input — always available regardless of manifest status.
-            Guides may need to be verified even after a manifest is closed or
-            marked as picked_up (e.g. carrier scans out of order). The backend
-            scanTrackingNumber function has no status restriction. */}
+        {/* Conteo del recolector (todas las transportadoras) */}
+        <div className={cn(
+          'p-4 rounded-lg border space-y-3',
+          collectorMismatch ? 'border-red-300 bg-red-50 dark:bg-red-900/10' : 'bg-muted/20'
+        )}>
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <User className="h-4 w-4" />
+            Conteo del recolector
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Paquetes que reporta</Label>
+              <Input
+                type="number"
+                inputMode="numeric"
+                value={collectorCount}
+                onChange={(e) => setCollectorCount(e.target.value)}
+                onBlur={saveCollectorCount}
+                placeholder="Ej: 76"
+                className="w-28 h-9"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Nombre (opcional)</Label>
+              <Input
+                value={collectorName}
+                onChange={(e) => setCollectorName(e.target.value)}
+                onBlur={saveCollectorCount}
+                placeholder="Recolector"
+                className="w-44 h-9"
+              />
+            </div>
+            <div className="text-sm">
+              {collectorNum == null || Number.isNaN(collectorNum) ? (
+                <span className="text-muted-foreground">Escaneadas: {verifiedItems}</span>
+              ) : collectorMismatch ? (
+                <span className="text-red-600 font-medium flex items-center gap-1">
+                  <AlertTriangle className="h-4 w-4" />
+                  Descuadre: recolector {collectorNum} · escaneadas {verifiedItems}
+                </span>
+              ) : (
+                <span className="text-green-600 font-medium flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4" /> Cuadra ({verifiedItems})
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Cruce con la relación de recogida de Coordinadora */}
+        {isCoordinadora && (
+          <div className="p-4 rounded-lg border bg-muted/20 space-y-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Link2 className="h-4 w-4" />
+              Relación de recogida de Coordinadora
+            </div>
+            <div className="flex gap-2">
+              <Input
+                value={linkInput}
+                onChange={(e) => setLinkInput(e.target.value)}
+                placeholder="Pega el link de recogida (relacion-envios.coordinadora.com/…)"
+                className="text-sm"
+              />
+              <Button
+                onClick={handleReconcile}
+                disabled={!linkInput.trim() || reconciling}
+                className="shrink-0 gap-1.5"
+              >
+                {reconciling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+                Cruzar
+              </Button>
+            </div>
+
+            {reconResult && (
+              <div className="space-y-3">
+                <div className="text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1">
+                  <span>Total Coordinadora: <span className="font-medium text-foreground">{reconResult.total_unidades}</span></span>
+                  {reconResult.collector_name && <span>Recolector: {reconResult.collector_name}</span>}
+                  {reconResult.fecha_recogida && <span>Fecha: {reconResult.fecha_recogida}</span>}
+                  <span className="text-green-600">{reconResult.matched.length} coinciden</span>
+                </div>
+
+                {/* 🔴 Entregadas pero NO en la relación de Coordinadora */}
+                {missingInCarrier.length > 0 && (
+                  <div className="p-3 border border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-800 rounded-lg space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-red-700 dark:text-red-400 flex items-center gap-1.5">
+                        <AlertTriangle className="h-4 w-4" />
+                        En tu manifiesto pero NO en la relación ({missingInCarrier.length})
+                      </span>
+                      <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs"
+                        onClick={() => copyList('No registradas', missingInCarrier)}>
+                        <Copy className="h-3 w-3" /> Copiar
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {missingInCarrier.map(t => (
+                        <Badge key={t} variant="destructive" className="font-mono text-xs">{t}</Badge>
+                      ))}
+                    </div>
+                    <p className="text-xs text-red-700/80 dark:text-red-400/80">
+                      Coordinadora NO registró estas guías. Verifica que el recolector las haya recibido.
+                    </p>
+                  </div>
+                )}
+
+                {/* 🟡 En la relación pero NO en el manifiesto */}
+                {extraInCarrier.length > 0 && (
+                  <div className="p-3 border border-yellow-200 bg-yellow-50 dark:bg-yellow-900/10 dark:border-yellow-800 rounded-lg space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-yellow-700 dark:text-yellow-500 flex items-center gap-1.5">
+                        <AlertCircle className="h-4 w-4" />
+                        En la relación pero NO en tu manifiesto ({extraInCarrier.length})
+                      </span>
+                      <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs"
+                        onClick={() => copyList('Sin escanear', extraInCarrier)}>
+                        <Copy className="h-3 w-3" /> Copiar
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {extraInCarrier.map(t => (
+                        <Badge key={t} variant="outline" className="font-mono text-xs border-yellow-500 text-yellow-700">{t}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {missingInCarrier.length === 0 && extraInCarrier.length === 0 && (
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg text-green-700 dark:text-green-400 text-sm flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Todo cuadra con la relación de Coordinadora.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Scan input */}
         <div className="relative">
           <ScanLine className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
@@ -294,7 +515,6 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
             autoFocus
             disabled={scanning}
           />
-          {/* Always in DOM so animate-spin never resets mid-rotation; opacity toggles visibility */}
           <Loader2 className={cn(
             "absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 animate-spin transition-opacity duration-150",
             scanning ? "opacity-100" : "opacity-0"
@@ -392,15 +612,31 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
         {/* Extra scans warning */}
         {hasExtras && (
           <div className="p-4 border border-red-200 bg-red-50 dark:bg-red-900/10 dark:border-red-800 rounded-lg">
-            <h3 className="font-medium text-sm flex items-center gap-2 text-red-700 dark:text-red-400 mb-2">
-              <AlertTriangle className="h-4 w-4" />
-              Guías NO incluidas en el manifiesto ({extraScans.length})
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {extraScans.map((tracking, idx) => (
-                <Badge key={idx} variant="destructive" className="font-mono">
-                  {tracking}
-                </Badge>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-medium text-sm flex items-center gap-2 text-red-700 dark:text-red-400">
+                <AlertTriangle className="h-4 w-4" />
+                Guías escaneadas NO incluidas en el manifiesto ({extraScans.length})
+              </h3>
+              <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs"
+                onClick={() => copyList('Extras', extraScans)}>
+                <Copy className="h-3 w-3" /> Copiar
+              </Button>
+            </div>
+            <div className="space-y-1">
+              {extraScans.map((tracking) => (
+                <div key={tracking} className="flex items-center justify-between gap-2 p-2 rounded-md bg-background/60">
+                  <Badge variant="destructive" className="font-mono">{tracking}</Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 text-xs"
+                    onClick={() => handleAddExtra(tracking)}
+                    disabled={addingTracking === tracking}
+                  >
+                    {addingTracking === tracking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                    Agregar al manifiesto
+                  </Button>
+                </div>
               ))}
             </div>
           </div>
@@ -420,9 +656,11 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
           </Button>
           <div className="mt-2 text-center text-sm text-muted-foreground">
             {hasMissing && <span className="text-yellow-600">{pendingItems.length} guías pendientes por verificar</span>}
-            {hasMissing && hasExtras && ' • '}
+            {hasMissing && (hasExtras || collectorMismatch) && ' • '}
             {hasExtras && <span className="text-red-600">{extraScans.length} guías extras detectadas</span>}
-            {!hasMissing && !hasExtras && <span className="text-green-600">✓ Todas las guías verificadas</span>}
+            {hasExtras && collectorMismatch && ' • '}
+            {collectorMismatch && <span className="text-red-600">descuadre con el recolector</span>}
+            {!hasMissing && !hasExtras && !collectorMismatch && <span className="text-green-600">✓ Todas las guías verificadas</span>}
           </div>
         </div>
       )}
@@ -432,7 +670,7 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
         <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              {isFullyVerified ? (
+              {isFullyVerified && !collectorMismatch ? (
                 <CheckCircle2 className="h-5 w-5 text-green-600" />
               ) : (
                 <AlertTriangle className="h-5 w-5 text-yellow-600" />
@@ -445,6 +683,13 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
                   <CheckCircle2 className="h-4 w-4" />
                   <span>{verifiedItems} guías verificadas correctamente</span>
                 </div>
+
+                {collectorMismatch && (
+                  <div className="flex items-center gap-2 text-red-600">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span>El recolector reporta {collectorNum}, verificaste {verifiedItems}</span>
+                  </div>
+                )}
 
                 {hasMissing && (
                   <div className="space-y-2">
@@ -478,35 +723,28 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
                   </div>
                 )}
 
-                {isFullyVerified && !hasExtras && (
+                {isFullyVerified && !hasExtras && !collectorMismatch && (
                   <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg text-green-700 dark:text-green-400">
                     ¡Excelente! Todas las guías del manifiesto han sido verificadas correctamente.
                   </div>
                 )}
+
+                <p className="text-xs text-muted-foreground">
+                  Al cerrar, el "Confirmar Retiro" quedará bloqueado si hay descuadre, hasta resolverlo o justificarlo.
+                </p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Seguir Escaneando</AlertDialogCancel>
-            {(hasMissing || hasExtras) && (
-              <AlertDialogAction
-                onClick={handleForceClose}
-                className="bg-yellow-600 hover:bg-yellow-700"
-                disabled={closingManifest}
-              >
-                {closingManifest && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Forzar Cierre
-              </AlertDialogAction>
-            )}
-            {isFullyVerified && !hasExtras && (
-              <AlertDialogAction
-                onClick={handleForceClose}
-                disabled={closingManifest}
-              >
-                {closingManifest && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Cerrar Manifiesto
-              </AlertDialogAction>
-            )}
+            <AlertDialogAction
+              onClick={handleForceClose}
+              className={cn((hasMissing || hasExtras || collectorMismatch) && 'bg-yellow-600 hover:bg-yellow-700')}
+              disabled={closingManifest}
+            >
+              {closingManifest && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {(hasMissing || hasExtras || collectorMismatch) ? 'Cerrar de todos modos' : 'Cerrar Manifiesto'}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

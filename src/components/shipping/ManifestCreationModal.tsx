@@ -455,6 +455,19 @@ export const ManifestCreationModal: React.FC<ManifestCreationModalProps> = ({
                   {selectedIds.size} guía{selectedIds.size !== 1 ? 's' : ''} seleccionada{selectedIds.size !== 1 ? 's' : ''}
                 </p>
               )}
+
+              {/* Aviso: toda guía de la transportadora debe entrar al conteo. */}
+              {shipments.length > 0 && selectedIds.size < shipments.length && (
+                <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-500 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-md p-2">
+                  <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                  <span>
+                    {shipments.length - selectedIds.size} guía{shipments.length - selectedIds.size !== 1 ? 's' : ''} sin
+                    seleccionar quedará{shipments.length - selectedIds.size !== 1 ? 'n' : ''} fuera del manifiesto y
+                    no entrará{shipments.length - selectedIds.size !== 1 ? 'n' : ''} al conteo. Inclúyelas si se
+                    entregan a la transportadora.
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
