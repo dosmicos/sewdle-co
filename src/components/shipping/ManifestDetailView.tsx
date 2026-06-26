@@ -73,6 +73,7 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     addScannedGuiaToManifest,
     reconcileWithCoordinadora,
     markItemDuplicate,
+    getItemScanStatus,
   } = useShippingManifests();
 
   const [scanInput, setScanInput] = useState('');
@@ -142,7 +143,7 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
           success: false,
           status: 'error' as const,
           message: 'Tiempo de espera agotado. Intenta de nuevo.',
-        }), 8000)
+        }), 15000)
       );
 
       const result = await Promise.race([
@@ -158,10 +159,13 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
 
       setScanHistory(prev => [feedback, ...prev.slice(0, 49)]);
 
-      if (result.success) {
+      // 'already_scanned' = la guía SÍ quedó verificada en la base (típicamente un
+      // escaneo previo cuya respuesta se perdió por timeout). La reflejamos en
+      // verificados para que SALGA de pendientes (antes se quedaba pegada ahí).
+      if (result.success || result.status === 'already_scanned') {
         setItems(prev => prev.map(item =>
           item.tracking_number === trackingNumber
-            ? { ...item, scanned_at: new Date().toISOString(), scan_status: 'verified' }
+            ? { ...item, scanned_at: item.scanned_at || new Date().toISOString(), scan_status: 'verified' }
             : item
         ));
       } else if (result.status === 'not_found') {
@@ -170,12 +174,26 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
           // Persistir la guía extra para que quede auditada (antes se perdía al cerrar).
           persistExtraScan(manifest.id, trackingNumber, 'gun');
         }
+      } else if (result.status === 'error' && result.message.includes('Tiempo de espera')) {
+        // El timeout pudo dispararse aunque la guía SÍ se marcó en la base.
+        // Reconciliamos en segundo plano: si quedó verificada, la movemos sola
+        // (sin que tengas que reintentar).
+        void (async () => {
+          const st = await getItemScanStatus(manifest.id, trackingNumber);
+          if (st === 'verified') {
+            setItems(prev => prev.map(item =>
+              item.tracking_number === trackingNumber
+                ? { ...item, scanned_at: item.scanned_at || new Date().toISOString(), scan_status: 'verified' }
+                : item
+            ));
+          }
+        })();
       }
     } finally {
       scanInFlightRef.current = false;
       setScanning(false);
     }
-  }, [manifest.id, scanTrackingNumber, extraScans, persistExtraScan]);
+  }, [manifest.id, scanTrackingNumber, extraScans, persistExtraScan, getItemScanStatus]);
 
   // Enter key — resolves tracking from current input and delegates to triggerScan.
   const handleScan = useCallback(async () => {

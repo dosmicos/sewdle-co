@@ -423,19 +423,27 @@ export const useShippingManifests = () => {
 
         if (updateError) throw updateError;
 
-        // Recalcular total_verified desde el conteo real de items verificados.
-        // Es autoritativo (no read-modify-write), así evita la carrera del
-        // contador anterior sin acoplar el despliegue a un trigger de DB.
-        const { count: verifiedCount } = await supabase
-          .from('manifest_items')
-          .select('*', { count: 'exact', head: true })
-          .eq('manifest_id', manifestId)
-          .eq('scan_status', 'verified');
-
-        await supabase
-          .from('shipping_manifests')
-          .update({ total_verified: verifiedCount ?? 0 })
-          .eq('id', manifestId);
+        // Recalcular total_verified EN SEGUNDO PLANO (no bloquea la respuesta).
+        // En el wifi de la bodega, esperar este conteo + update extra hacía que
+        // cada escaneo tardara 4 viajes a la DB y disparara el timeout de 8s
+        // aunque la guía ya estaba marcada. El detalle calcula el progreso desde
+        // el estado local; el contador del manifiesto se actualiza igual, sin
+        // retrasar el escaneo.
+        void (async () => {
+          try {
+            const { count } = await supabase
+              .from('manifest_items')
+              .select('*', { count: 'exact', head: true })
+              .eq('manifest_id', manifestId)
+              .eq('scan_status', 'verified');
+            await supabase
+              .from('shipping_manifests')
+              .update({ total_verified: count ?? 0 })
+              .eq('id', manifestId);
+          } catch (e) {
+            console.warn('No se pudo actualizar total_verified:', e);
+          }
+        })();
 
         return {
           success: true,
@@ -682,6 +690,25 @@ export const useShippingManifests = () => {
     } catch (err: any) {
       console.error('Error marking item missing:', err);
       return false;
+    }
+  }, []);
+
+  // Estado de escaneo actual de una guía — para reconciliar la UI tras un timeout
+  // (el escaneo pudo completarse en la DB aunque la respuesta se perdiera).
+  const getItemScanStatus = useCallback(async (
+    manifestId: string,
+    trackingNumber: string
+  ): Promise<string | null> => {
+    try {
+      const { data } = await supabase
+        .from('manifest_items')
+        .select('scan_status')
+        .eq('manifest_id', manifestId)
+        .eq('tracking_number', trackingNumber)
+        .maybeSingle();
+      return (data?.scan_status as string) ?? null;
+    } catch {
+      return null;
     }
   }, []);
 
@@ -976,6 +1003,7 @@ export const useShippingManifests = () => {
     getAvailableLabels,
     markItemMissing,
     markItemDuplicate,
+    getItemScanStatus,
     recordCollectorCount,
     persistExtraScan,
     fetchExtraScans,
