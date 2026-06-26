@@ -23,7 +23,7 @@ import { PickingStatsBar } from '@/components/picking/PickingStatsBar';
 import { ParaEmpacarItemsModal } from '@/components/picking/ParaEmpacarItemsModal';
 import { FILTER_OPTIONS, FilterOption, ActiveFilter } from '@/types/picking';
 import { useShopifyTags } from '@/hooks/useShopifyTags';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ShippingManifestManager } from '@/components/shipping/ShippingManifestManager';
 import {
   Popover,
@@ -1401,20 +1401,20 @@ const [showItemsModal, setShowItemsModal] = useState(false);
         }}
       />
 
-      {/* Manifiestos Sheet */}
-      <Sheet open={showManifestsPanel} onOpenChange={setShowManifestsPanel}>
-        <SheetContent side="right" className="w-full sm:w-[88vw] sm:max-w-[1400px] overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
+      {/* Manifiestos Modal */}
+      <Dialog open={showManifestsPanel} onOpenChange={setShowManifestsPanel}>
+        <DialogContent className="w-[92vw] max-w-[1400px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
               <ClipboardList className="w-5 h-5" />
               Manifiestos de Envío
-            </SheetTitle>
-          </SheetHeader>
-          <div className="mt-6">
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-2">
             <ShippingManifestManager />
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
     </PickingPackingLayout>
   );
