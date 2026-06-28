@@ -226,11 +226,17 @@ export const useShippingManifests = () => {
   // Accepts full shipment objects (including portal-only guides with synthetic IDs).
   // For guides not in shipping_labels (envia_xxx / manual_xxx IDs), stub records are
   // inserted first so that the manifest_items FK constraint can be satisfied.
-  const createManifest = useCallback(async ({ carrier, shipments, notes }: CreateManifestParams) => {
+  const createManifest = useCallback(async ({ carrier, shipments: rawShipments, notes }: CreateManifestParams) => {
     if (!currentOrganization?.id || !user?.id) {
       toast.error('Sesión no válida');
       return null;
     }
+
+    // Dedupe by tracking_number: two rows with the same tracking would abort the
+    // whole manifest_items batch insert (unique index on manifest_id, tracking_number).
+    const shipments = Array.from(
+      new Map(rawShipments.map(s => [s.tracking_number, s])).values()
+    );
 
     setLoading(true);
     setError(null);
@@ -360,6 +366,19 @@ export const useShippingManifests = () => {
           .insert(itemsToInsert);
 
         if (itemsError) throw itemsError;
+      }
+
+      // Keep the header honest: total_packages must equal the rows actually inserted.
+      if (itemsToInsert.length !== shipments.length) {
+        await supabase
+          .from('shipping_manifests')
+          .update({ total_packages: itemsToInsert.length })
+          .eq('id', manifest.id);
+      }
+
+      const skipped = shipments.length - itemsToInsert.length;
+      if (skipped > 0) {
+        toast.warning(`${skipped} guía(s) no se pudieron resolver y no se agregaron al manifiesto`);
       }
 
       toast.success(`Manifiesto ${manifestNumber} creado con ${itemsToInsert.length} guías`);
@@ -643,11 +662,13 @@ export const useShippingManifests = () => {
         .from('shipping_labels')
         .select('id, shopify_order_id, order_number, tracking_number, carrier, recipient_name, destination_city, created_at')
         .eq('organization_id', currentOrganization.id)
+        // Only guides pending pickup (the carrier hasn't taken them yet).
         .eq('status', 'created')
         .not('tracking_number', 'is', null);
 
       if (carrier) {
-        query = query.eq('carrier', carrier);
+        // Case-insensitive so historical 'interRapidisimo' rows also match.
+        query = query.ilike('carrier', carrier);
       }
       if (dateFrom) {
         query = query.gte('created_at', dateFrom);
@@ -660,13 +681,18 @@ export const useShippingManifests = () => {
 
       if (error) throw error;
 
-      // Filter out labels already in a manifest
-      const { data: usedLabels } = await supabase
-        .from('manifest_items')
-        .select('shipping_label_id');
+      // Filter out labels already in a manifest (scoped to these labels so the
+      // query isn't capped at Supabase's default 1000-row limit).
+      const labelIds = (labels || []).map(l => l.id);
+      const { data: usedLabels } = labelIds.length
+        ? await supabase
+            .from('manifest_items')
+            .select('shipping_label_id')
+            .in('shipping_label_id', labelIds)
+        : { data: [] as { shipping_label_id: string }[] };
 
       const usedIds = new Set((usedLabels || []).map(l => l.shipping_label_id));
-      
+
       return (labels || []).filter(l => !usedIds.has(l.id));
     } catch (err: any) {
       console.error('Error fetching available labels:', err);

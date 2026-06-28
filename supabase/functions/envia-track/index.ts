@@ -123,31 +123,39 @@ serve(async (req) => {
       }
     }
 
-    // Determine overall status - use API status as primary source
+    // Resolve the tracking status.
+    //   • `status`   — for the API response/UI (may default to in_transit).
+    //   • `dbStatus` — what we PERSIST to shipping_labels. `null` means "leave the
+    //     stored status as-is", so a guide that's still 'created' is NOT
+    //     prematurely flipped to 'in_transit' just because Envia returned an
+    //     early/unknown status (e.g. "Generada"/"Admitida"). It only becomes
+    //     in_transit on a real movement event — a manifest must list only guides
+    //     the carrier has NOT picked up yet.
     let status = 'in_transit';
+    let dbStatus: string | null = null;
+
     const apiStatus = (trackingData.status || '').toLowerCase();
-    
-    if (apiStatus === 'delivered' || apiStatus.includes('deliver') || apiStatus.includes('entregad')) {
-      status = 'delivered';
-    } else if (apiStatus === 'returned' || apiStatus.includes('return') || apiStatus.includes('devuel')) {
-      status = 'returned';
-    } else if (apiStatus.includes('exception') || apiStatus.includes('problema')) {
-      status = 'exception';
-    } else if (apiStatus.includes('pending') || apiStatus.includes('pendiente')) {
-      status = 'pending';
-    } else if (apiStatus.includes('transit') || apiStatus.includes('intransit')) {
+    const lastDesc = events.length > 0
+      ? (events[events.length - 1].description || '').toLowerCase()
+      : '';
+    const blob = `${apiStatus} ${lastDesc}`;
+
+    if (/deliver|entregad/.test(blob)) {
+      status = 'delivered'; dbStatus = 'delivered';
+    } else if (/return|devuel|retorno/.test(blob)) {
+      status = 'returned'; dbStatus = 'returned';
+    } else if (/exception|problema|novedad|incidencia/.test(blob)) {
+      status = 'exception'; dbStatus = 'exception';
+    } else if (/transit|reparto|en camino|en ruta|distribu|recolectad|recogid|picked/.test(blob)) {
+      status = 'in_transit'; dbStatus = 'in_transit';
+    } else {
+      // Early/unknown ("Generada", "Admitida", empty…) — display as in_transit but
+      // do NOT persist a status change; the guide stays 'created' until it moves.
       status = 'in_transit';
-    } else if (events.length > 0) {
-      // Fallback: check last event
-      const lastDesc = (events[events.length - 1].description || '').toLowerCase();
-      if (lastDesc.includes('entregad') || lastDesc.includes('delivered')) {
-        status = 'delivered';
-      } else if (lastDesc.includes('devuel') || lastDesc.includes('returned')) {
-        status = 'returned';
-      }
+      dbStatus = null;
     }
-    
-    console.log(`📊 API status: "${trackingData.status}", resolved: "${status}", events: ${events.length}`);
+
+    console.log(`📊 API status: "${trackingData.status}", resolved: "${status}", persist: "${dbStatus ?? '(unchanged)'}", events: ${events.length}`);
 
     const response: TrackingResponse = {
       success: true,
@@ -161,18 +169,21 @@ serve(async (req) => {
       events: events
     };
 
-    // Update shipping_labels table with latest tracking status
-    const { error: updateError } = await supabase
-      .from('shipping_labels')
-      .update({ status: status })
-      .eq('tracking_number', body.tracking_number);
+    // Persist status only when we have a confident real movement/final state.
+    // (dbStatus === null → early/unknown status → leave the guide as 'created'.)
+    if (dbStatus) {
+      const { error: updateError } = await supabase
+        .from('shipping_labels')
+        .update({ status: dbStatus })
+        .eq('tracking_number', body.tracking_number);
 
-    if (updateError) {
-      console.log('⚠️ Could not update shipping_labels:', updateError.message);
+      if (updateError) {
+        console.log('⚠️ Could not update shipping_labels:', updateError.message);
+      }
     }
 
     // Sync UGC campaign status when shipment is delivered
-    if (status === 'delivered') {
+    if (dbStatus === 'delivered') {
       console.log('📦 Shipment delivered, checking for linked UGC campaigns...');
       
       const { data: label } = await supabase
