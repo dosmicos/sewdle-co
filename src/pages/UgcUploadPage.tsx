@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,7 +37,7 @@ interface TokenData {
 }
 
 const VALID_VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'avi', 'mkv', 'm4v', '3gp'];
-const VALID_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'avif'];
+const VALID_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
 const VALID_EXTENSIONS = [...VALID_VIDEO_EXTENSIONS, ...VALID_IMAGE_EXTENSIONS];
 
 const isValidFile = (file: File): boolean => {
@@ -59,9 +59,108 @@ const getMimeType = (file: File): string => {
     mp4: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm',
     avi: 'video/x-msvideo', mkv: 'video/x-matroska', m4v: 'video/x-m4v', '3gp': 'video/3gpp',
     jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
-    webp: 'image/webp', heic: 'image/heic', heif: 'image/heif', avif: 'image/avif',
+    webp: 'image/webp', heic: 'image/heic', heif: 'image/heif',
   };
   return (ext && mimeMap[ext]) || 'application/octet-stream';
+};
+
+
+const STANDARD_UPLOAD_MAX_BYTES = 100 * 1024 * 1024;
+const UGC_BUCKET = 'ugc-videos';
+
+const encodeStoragePath = (path: string) => path.split('/').map(encodeURIComponent).join('/');
+
+const getUploadErrorMessage = (err: unknown): string => {
+  if (err instanceof Error) return err.message;
+  if (typeof err === 'string') return err;
+  if (err && typeof err === 'object' && 'message' in err) {
+    return String((err as { message?: unknown }).message || '');
+  }
+  return '';
+};
+
+const getCreatorFacingUploadError = (err: unknown): string => {
+  const message = getUploadErrorMessage(err);
+  const lowerMessage = message.toLowerCase();
+
+  if (
+    lowerMessage.includes('progressevent') ||
+    lowerMessage.includes('response code: n/a') ||
+    lowerMessage.includes('failed to fetch') ||
+    lowerMessage.includes('networkerror')
+  ) {
+    return 'La conexión se cortó al subir el archivo. Revisa señal/WiFi e intenta de nuevo.';
+  }
+
+  return message || 'No pudimos subir el archivo. Intenta de nuevo con buena conexión.';
+};
+
+const directStorageUpload = async (filePath: string, file: File, contentType: string) => {
+  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/${UGC_BUCKET}/${encodeStoragePath(filePath)}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_PUBLISHABLE_KEY,
+      Authorization: `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+      'Cache-Control': '3600',
+      'Content-Type': contentType,
+      'x-upsert': 'false',
+    },
+    body: file,
+  });
+
+  if (!response.ok) {
+    let detail = '';
+    try {
+      const payload = await response.json();
+      detail = payload?.message || payload?.error || '';
+    } catch {
+      detail = await response.text().catch(() => '');
+    }
+    throw new Error(detail || `Error de almacenamiento (${response.status})`);
+  }
+};
+
+const sdkStorageUpload = async (filePath: string, file: File, contentType: string) => {
+  const { error } = await supabase.storage
+    .from(UGC_BUCKET)
+    .upload(filePath, file, { contentType, upsert: false });
+
+  if (error) throw error;
+};
+
+const uploadUgcFile = async (filePath: string, file: File, contentType: string) => {
+  // Supabase JS can route medium/large browser uploads through TUS resumable
+  // (`/storage/v1/upload/resumable`). On some creator mobile networks that
+  // initial POST fails as a ProgressEvent with no response, leaving the UGC
+  // blocked. Prefer the standard object endpoint for common UGC files and keep
+  // the SDK resumable path as fallback for very large uploads.
+  if (file.size <= STANDARD_UPLOAD_MAX_BYTES) {
+    try {
+      await directStorageUpload(filePath, file, contentType);
+      return;
+    } catch (directError) {
+      try {
+        await sdkStorageUpload(filePath, file, contentType);
+        return;
+      } catch (sdkError) {
+        const primaryMessage = getCreatorFacingUploadError(directError);
+        const fallbackMessage = getCreatorFacingUploadError(sdkError);
+        throw new Error(fallbackMessage || primaryMessage);
+      }
+    }
+  }
+
+  try {
+    await sdkStorageUpload(filePath, file, contentType);
+  } catch (sdkError) {
+    const sdkMessage = getUploadErrorMessage(sdkError);
+    try {
+      await directStorageUpload(filePath, file, contentType);
+    } catch (directError) {
+      const directMessage = getCreatorFacingUploadError(directError);
+      throw new Error(directMessage || sdkMessage);
+    }
+  }
 };
 
 const formatSize = (bytes: number) => {
@@ -143,14 +242,10 @@ const UgcUploadPage: React.FC = () => {
 
         updateItem(item.id, { progress: 30 });
 
-        const { error: uploadError } = await supabase.storage
-          .from('ugc-videos')
-          .upload(filePath, item.file, { contentType, upsert: false });
-
-        if (uploadError) throw uploadError;
+        await uploadUgcFile(filePath, item.file, contentType);
         updateItem(item.id, { progress: 70 });
 
-        const { data: urlData } = supabase.storage.from('ugc-videos').getPublicUrl(filePath);
+        const { data: urlData } = supabase.storage.from(UGC_BUCKET).getPublicUrl(filePath);
         const videoUrl = urlData.publicUrl;
 
         const { data: submitResult, error: submitError } = await supabase.rpc('ugc_submit_video', {
@@ -166,8 +261,8 @@ const UgcUploadPage: React.FC = () => {
         if (!result.success) throw new Error(result.error || 'Error al registrar video');
 
         updateItem(item.id, { status: 'success', progress: 100 });
-      } catch (err: any) {
-        updateItem(item.id, { status: 'error', progress: 0, errorMessage: err.message || 'Error al subir' });
+      } catch (err: unknown) {
+        updateItem(item.id, { status: 'error', progress: 0, errorMessage: getCreatorFacingUploadError(err) });
       }
     }
 
@@ -294,7 +389,7 @@ const UgcUploadPage: React.FC = () => {
                   <Upload className="h-8 w-8 text-gray-400 mx-auto mb-3" />
                   <p className="text-sm font-medium text-gray-700">Toca para seleccionar archivos</p>
                   <p className="text-xs text-gray-400 mt-1">o arrastra y suelta aquí</p>
-                  <p className="text-xs text-gray-400 mt-1">Videos (MP4, MOV, WebM) o Fotos (JPG, PNG, WebP) • Máx 1GB</p>
+                  <p className="text-xs text-gray-400 mt-1">Videos (MP4, MOV, WebM) o Fotos (JPG, PNG, WebP, HEIC) • Máx 1GB</p>
                   <input
                     ref={fileInputRef}
                     type="file"
