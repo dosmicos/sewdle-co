@@ -140,3 +140,33 @@ Deno.test("WhatsApp audio messages are transcribed before invoking Elsa", async 
     "audio messages must be included in the AI respondable types after transcription",
   );
 });
+
+Deno.test("WhatsApp AI auto-replies persist Meta WAMID for delivery tracking", async () => {
+  const source = await Deno.readTextFile(
+    new URL("./index.ts", import.meta.url),
+  );
+  const start = source.indexOf("// Send the text response via WhatsApp");
+  const end = source.indexOf(
+    "// Update conversation last message",
+    start,
+  );
+
+  assert(start !== -1, "WhatsApp AI send block was not found");
+  assert(end !== -1, "WhatsApp AI send block end marker was not found");
+
+  const block = source.slice(start, end);
+
+  assert(
+    source.includes("sendWhatsAppMessageWithResult") &&
+      source.includes("messageId: string | null"),
+    "WhatsApp text helper must expose the Meta message id, not only a boolean",
+  );
+  assert(
+    block.includes("const sendResult = await sendWhatsAppMessageWithResult"),
+    "AI WhatsApp path must call the helper that returns Meta's WAMID",
+  );
+  assert(
+    block.includes("external_message_id: sendResult.messageId"),
+    "AI WhatsApp DB row must save Meta's WAMID so webhook delivery/read callbacks can update it",
+  );
+});
