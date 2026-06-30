@@ -32,6 +32,7 @@ import {
   Copy,
   Plus,
   User,
+  RefreshCw,
 } from 'lucide-react';
 import {
   useShippingManifests,
@@ -74,6 +75,8 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     reconcileWithCoordinadora,
     markItemDuplicate,
     getItemScanStatus,
+    reconcileNow,
+    fetchManifestWithItems,
   } = useShippingManifests();
 
   const [scanInput, setScanInput] = useState('');
@@ -83,6 +86,7 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
   const [extraScans, setExtraScans] = useState<string[]>([]);
   const [addingTracking, setAddingTracking] = useState<string | null>(null);
   const [markingDup, setMarkingDup] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [closingManifest, setClosingManifest] = useState(false);
 
@@ -264,6 +268,21 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
     }
   };
 
+  // Actualizar: sincroniza AHORA con Envia (verifica entregadas, marca canceladas
+  // y duplicadas) y recarga el manifiesto, sin esperar al cron de las 4/5 PM.
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await reconcileNow();
+    const fresh = await fetchManifestWithItems(manifest.id);
+    if (fresh) {
+      setItems(fresh.items);
+      setReconResult((fresh.reconciliation_data as ReconciliationData) ?? reconResult);
+    }
+    setRefreshing(false);
+    onUpdate();
+    toast.success('Estado actualizado con Envia');
+  };
+
   // Marcar manualmente una guía como duplicada (resolver un "posible duplicado").
   const handleMarkDuplicate = async (item: ManifestItem) => {
     setMarkingDup(item.id);
@@ -391,6 +410,17 @@ export const ManifestDetailView: React.FC<ManifestDetailViewProps> = ({
             </span>
           </div>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          title="Sincronizar estados con Envia (verifica entregadas, marca canceladas)"
+          className="gap-1.5"
+        >
+          <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+          {refreshing ? 'Actualizando…' : 'Actualizar'}
+        </Button>
         <Button
           variant="outline"
           size="icon"

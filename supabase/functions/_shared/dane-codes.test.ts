@@ -41,3 +41,27 @@ Deno.test("lookupDaneCode still corrects single-character typos", () => {
 Deno.test("lookupDaneCode returns null instead of guessing a far match", () => {
   assertEquals(lookupDaneCode("xyzqw", "Cundinamarca"), null);
 });
+
+// Regression: "Arauca, Caldas" (corregimiento de Palestina, sin código DANE propio)
+// se resolvía al ÚNICO "Arauca" del mapa, que es la capital de Arauca (81001) → la guía
+// salía a Arauca, Arauca. Ahora un override consciente del departamento lo lleva a
+// Palestina, Caldas (17524), y el "Arauca" real (depto. Arauca) sigue intacto.
+Deno.test("lookupDaneCode maps 'Arauca, Caldas' to Palestina, not Arauca capital", () => {
+  const araucaCaldas = lookupDaneCode("Arauca", "Caldas");
+  assertEquals(araucaCaldas?.daneCode, "17524000"); // Palestina, Caldas
+  assertEquals(araucaCaldas?.source, "override");
+
+  // El Arauca real (capital del depto. Arauca) no debe verse afectado.
+  const araucaArauca = lookupDaneCode("Arauca", "Arauca");
+  assertEquals(araucaArauca?.daneCode, "81001000");
+});
+
+// Un único match por nombre cuyo departamento NO coincide con el provisto no debe
+// devolverse a ciegas (esa era la causa raíz). Sin override conocido → null (la guía
+// se rechaza arriba con DANE_DEPARTMENT_MISMATCH para que el operario corrija).
+Deno.test("lookupDaneCode does not return a single match from the wrong department", () => {
+  // 'Leticia' solo existe en Amazonas; pedirla en 'Caldas' no debe devolver Amazonas.
+  assertEquals(lookupDaneCode("Leticia", "Caldas"), null);
+  // Sin departamento, el match único sí es válido.
+  assertEquals(lookupDaneCode("Leticia")?.daneCode, "91001000");
+});

@@ -102,8 +102,33 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
     const body: Body = req.method === 'POST' ? await req.json() : {};
-    const orgId = body.organizationId || null;
-    const doApply = body.apply === true && callerRole(req) === 'service_role';
+    const role = callerRole(req);
+
+    // Apply (escritura): el cron (service_role) puede sobre todas las orgs; un
+    // usuario logueado (botón "Actualizar") puede aplicar SOLO sobre su propia
+    // organización. Cualquier otro llamante → solo lectura.
+    let doApply = false;
+    let orgId: string | null = body.organizationId || null;
+    if (body.apply === true) {
+      if (role === 'service_role') {
+        doApply = true;
+      } else if (role === 'authenticated') {
+        const token = (req.headers.get('Authorization') || '').replace('Bearer ', '').trim();
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user) {
+          const { data: membership } = await supabase
+            .from('organization_users')
+            .select('organization_id')
+            .eq('user_id', user.id)
+            .limit(1)
+            .maybeSingle();
+          if (membership?.organization_id) {
+            doApply = true;
+            orgId = membership.organization_id; // forzamos su propia org
+          }
+        }
+      }
+    }
 
     // ── 1. Items aún sin resolver (ni verificados, ni cancelados, ni dup, ni review)
     const pending: any[] = [];

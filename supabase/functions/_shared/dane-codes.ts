@@ -1168,6 +1168,36 @@ for (const [alias, official] of Object.entries(MUNICIPALITY_ALIASES)) {
   }
 }
 
+// Overrides CONSCIENTES DEL DEPARTAMENTO para localidades ambiguas: corregimientos o
+// veredas que comparten nombre con un municipio real de OTRO departamento y no tienen
+// código DANE propio. Sin esto, "Arauca, Caldas" (corregimiento de Palestina) caía en
+// el único "Arauca" del mapa, que es la capital de Arauca (81001) → la guía iba a Arauca.
+// Clave: `${normalize(ciudad)}|${normalize(departamento)}` → municipio oficial real.
+const LOCALITY_OVERRIDES: Record<string, DaneEntry> = {
+  // Arauca (corregimiento) en Caldas → Palestina, Caldas
+  'arauca|caldas': { municipality: 'Palestina', department: 'Caldas', daneCode: '17524' },
+};
+
+/**
+ * Mapa prefijo DANE (2 dígitos) → nombre de departamento, derivado de los propios
+ * DANE_ENTRIES (el prefijo de 2 dígitos identifica el departamento de forma única).
+ * Se usa para la guardia de consistencia: el departamento del DANE resuelto debe
+ * coincidir con la provincia del pedido; si no, no se genera la guía.
+ */
+export const DANE_PREFIX_TO_DEPARTMENT: Map<string, string> = new Map();
+for (const entry of DANE_ENTRIES) {
+  const prefix = entry.daneCode.slice(0, 2);
+  if (!DANE_PREFIX_TO_DEPARTMENT.has(prefix)) {
+    DANE_PREFIX_TO_DEPARTMENT.set(prefix, entry.department);
+  }
+}
+
+/** Devuelve el nombre del departamento al que pertenece un código DANE (5 u 8 dígitos), o null. */
+export function departmentForDaneCode(daneCode: string): string | null {
+  if (!daneCode || daneCode.length < 2) return null;
+  return DANE_PREFIX_TO_DEPARTMENT.get(daneCode.slice(0, 2)) ?? null;
+}
+
 function levenshtein(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
@@ -1211,26 +1241,47 @@ export function lookupDaneCode(
   department?: string,
 ): DaneLookupResult | null {
   const normalizedCity = normalize(city);
+  const normalizedDept = department ? normalize(department) : '';
+
+  const deptMatches = (e: DaneEntry): boolean => {
+    if (!normalizedDept) return false;
+    const nd = normalize(e.department);
+    return nd === normalizedDept || nd.includes(normalizedDept) || normalizedDept.includes(nd);
+  };
+
+  // 0. Override consciente del departamento (corregimientos ambiguos como Arauca/Caldas)
+  if (normalizedDept) {
+    const override = LOCALITY_OVERRIDES[`${normalizedCity}|${normalizedDept}`];
+    if (override) {
+      return { ...override, daneCode: padDaneCode(override.daneCode), source: 'override' };
+    }
+  }
 
   // 1. Exact match
   const exactMatches = DANE_CODES.get(normalizedCity);
   if (exactMatches) {
-    if (exactMatches.length === 1) {
-      return { ...exactMatches[0], daneCode: padDaneCode(exactMatches[0].daneCode), source: 'exact' };
-    }
-    // Multiple matches — try to disambiguate with department
-    if (department) {
-      const normalizedDept = normalize(department);
-      const deptMatch = exactMatches.find((e) => {
-        const nd = normalize(e.department);
-        return nd === normalizedDept || nd.includes(normalizedDept) || normalizedDept.includes(nd);
-      });
+    if (normalizedDept) {
+      // Se recibió departamento: SOLO aceptar una entrada cuyo departamento coincida.
+      // Nunca devolver un match de otro departamento a ciegas — eso despachó
+      // "Arauca, Caldas" a "Arauca, Arauca". Si ninguna coincide, caer a fuzzy
+      // (que también exige coincidencia de departamento) y, en última instancia, null.
+      const deptMatch = exactMatches.find(deptMatches);
       if (deptMatch) {
-        return { ...deptMatch, daneCode: padDaneCode(deptMatch.daneCode), source: 'exact+department' };
+        return {
+          ...deptMatch,
+          daneCode: padDaneCode(deptMatch.daneCode),
+          source: exactMatches.length === 1 ? 'exact' : 'exact+department',
+        };
       }
+      // intencional: no return aquí — seguir a fuzzy
+    } else {
+      // Sin departamento para desambiguar: match único es seguro; múltiples → el primero.
+      return {
+        ...exactMatches[0],
+        daneCode: padDaneCode(exactMatches[0].daneCode),
+        source: exactMatches.length === 1 ? 'exact' : 'exact-first',
+      };
     }
-    // Return first match if no department disambiguation possible
-    return { ...exactMatches[0], daneCode: padDaneCode(exactMatches[0].daneCode), source: 'exact-first' };
   }
 
   // 2. Fuzzy match with dynamic threshold based on input length
@@ -1241,8 +1292,6 @@ export function lookupDaneCode(
   let bestDeptDistance = maxDistance + 1;
   let bestAnyMatch: DaneEntry | null = null;
   let bestAnyDistance = maxDistance + 1;
-
-  const normalizedDept = department ? normalize(department) : '';
 
   for (const [key, entries] of DANE_CODES) {
     const distance = levenshtein(normalizedCity, key);

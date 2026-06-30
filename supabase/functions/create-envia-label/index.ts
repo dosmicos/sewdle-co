@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { lookupDaneCode } from "../_shared/dane-codes.ts";
+import { lookupDaneCode, departmentForDaneCode } from "../_shared/dane-codes.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -227,38 +227,49 @@ async function getDaneCodeFromDB(
     console.error('❌ Error in DANE lookup:', exactErr);
   }
 
-  if (exactMatches && exactMatches.length === 1) {
-    // Unique match — perfect
-    console.log(`✅ DANE found (exact, unique): "${city}" → "${exactMatches[0].dane_code}" (${exactMatches[0].municipality}, ${exactMatches[0].department})`);
-    return { daneCode: exactMatches[0].dane_code, source: 'db_exact' };
-  }
-
-  if (exactMatches && exactMatches.length > 1) {
-    // Multiple matches (duplicate municipality names) — try department to disambiguate
-    console.log(`📊 Found ${exactMatches.length} exact matches for "${city}", using department to disambiguate...`);
+  if (exactMatches && exactMatches.length >= 1) {
+    const findDeptMatch = () => exactMatches!.find((r: any) =>
+      normalizeForComparison(r.department) === normalizedDept ||
+      normalizeForComparison(r.department).includes(normalizedDept) ||
+      normalizedDept.includes(normalizeForComparison(r.department))
+    );
 
     if (normalizedDept) {
-      const deptMatch = exactMatches.find((r: any) =>
-        normalizeForComparison(r.department) === normalizedDept ||
-        normalizeForComparison(r.department).includes(normalizedDept) ||
-        normalizedDept.includes(normalizeForComparison(r.department))
-      );
+      // Se recibió departamento: exigir coincidencia. Nunca devolver una entrada de OTRO
+      // departamento a ciegas (eso despachó "Arauca, Caldas" a "Arauca, Arauca").
+      const deptMatch = findDeptMatch();
       if (deptMatch) {
         console.log(`✅ DANE found (exact + dept match): "${city}" → "${deptMatch.dane_code}" (${deptMatch.municipality}, ${deptMatch.department})`);
         return { daneCode: deptMatch.dane_code, source: 'db_exact_dept' };
       }
-    }
 
-    // Department didn't help — try AI
-    const aiResult = await resolveWithAI(city, department, exactMatches);
-    if (aiResult?.dane_code) {
-      console.log(`✅ DANE found (AI disambiguated): "${city}" → "${aiResult.dane_code}" (${aiResult.municipality}, ${aiResult.department})`);
-      return { daneCode: aiResult.dane_code, source: 'ai_disambiguation' };
-    }
+      // Varios homónimos en otros departamentos: intentar IA entre ellos.
+      if (exactMatches.length > 1) {
+        const aiResult = await resolveWithAI(city, department, exactMatches);
+        if (aiResult?.dane_code) {
+          console.log(`✅ DANE found (AI disambiguated): "${city}" → "${aiResult.dane_code}" (${aiResult.municipality}, ${aiResult.department})`);
+          return { daneCode: aiResult.dane_code, source: 'ai_disambiguation' };
+        }
+      }
 
-    // Last resort: return first match
-    console.log(`⚠️ Could not disambiguate, using first match: ${exactMatches[0].municipality}, ${exactMatches[0].department}`);
-    return { daneCode: exactMatches[0].dane_code, source: 'db_exact_first' };
+      // Ninguna entrada coincide con el departamento del pedido → NO devolver un match
+      // de otro departamento. Caer a fuzzy/Envia (y, en última instancia, error controlado).
+      console.log(`⚠️ Exact match(es) para "${city}" pero ninguno en "${department}" — se descarta y se sigue buscando`);
+    } else if (exactMatches.length === 1) {
+      // Sin departamento para desambiguar: match único es seguro.
+      console.log(`✅ DANE found (exact, unique): "${city}" → "${exactMatches[0].dane_code}" (${exactMatches[0].municipality}, ${exactMatches[0].department})`);
+      return { daneCode: exactMatches[0].dane_code, source: 'db_exact' };
+    } else {
+      // Múltiples homónimos y sin departamento: IA y, si falla, el primero.
+      console.log(`📊 Found ${exactMatches.length} exact matches for "${city}" (sin departamento), intentando IA...`);
+      const aiResult = await resolveWithAI(city, department, exactMatches);
+      if (aiResult?.dane_code) {
+        console.log(`✅ DANE found (AI disambiguated): "${city}" → "${aiResult.dane_code}" (${aiResult.municipality}, ${aiResult.department})`);
+        return { daneCode: aiResult.dane_code, source: 'ai_disambiguation' };
+      }
+      console.log(`⚠️ Could not disambiguate, using first match: ${exactMatches[0].municipality}, ${exactMatches[0].department}`);
+      return { daneCode: exactMatches[0].dane_code, source: 'db_exact_first' };
+    }
   }
 
   // ============= LAYER 2: Fuzzy match with Levenshtein =============
@@ -444,6 +455,20 @@ function getStateCode(department: string): string {
   
   // Finally, look up by department name
   return COLOMBIA_STATE_CODES[lower] || 'DC'; // Default to Bogota if unknown
+}
+
+// Variante ESTRICTA: igual que getStateCode pero devuelve null cuando el departamento
+// no se reconoce (en vez de asumir 'DC'). Se usa en la guardia de consistencia para no
+// rechazar por falsos positivos cuando la provincia/departamento es desconocida.
+function resolveStateCodeStrict(department: string): string | null {
+  const normalized = (department || '').trim();
+  if (!normalized) return null;
+  const upper = normalized.toUpperCase();
+  const lower = normalized.toLowerCase();
+  if (SHOPIFY_TO_ENVIA_CODES[upper]) return SHOPIFY_TO_ENVIA_CODES[upper];
+  const validEnviaCodes = Object.values(COLOMBIA_STATE_CODES);
+  if (upper.length === 2 && validEnviaCodes.includes(upper)) return upper;
+  return COLOMBIA_STATE_CODES[lower] ?? null;
 }
 
 // Extract district/neighborhood from address
@@ -842,6 +867,27 @@ serve(async (req) => {
     
     const destDaneCode = daneResult.daneCode;
     console.log(`✅ DANE resolved: ${destDaneCode} (source: ${daneResult.source})`);
+
+    // ===== GUARDIA DE CONSISTENCIA: el departamento del DANE debe coincidir con la
+    // provincia del pedido. Un DANE cuyo prefijo (2 dígitos) pertenece a otro
+    // departamento significa que el paquete iría a la región equivocada (ej. "Arauca,
+    // Caldas" resuelto a Arauca/Arauca, 81001). NO autogenerar en ese caso — devolver
+    // error controlado para que el operario corrija la dirección. Solo se rechaza cuando
+    // AMBOS estados se reconocen y difieren (evita falsos positivos). =====
+    const orderStateCode = resolveStateCodeStrict(body.destination_department || '');
+    const daneDepartmentName = departmentForDaneCode(destDaneCode);
+    const daneStateCode = daneDepartmentName ? resolveStateCodeStrict(daneDepartmentName) : null;
+    if (orderStateCode && daneStateCode && orderStateCode !== daneStateCode) {
+      console.error(`🚨 DANE_DEPARTMENT_MISMATCH: order=${body.order_number} city="${body.destination_city}" province="${body.destination_department}" (${orderStateCode}) ≠ DANE ${destDaneCode} → ${daneDepartmentName} (${daneStateCode}). Se rechaza la generación.`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: `El municipio "${body.destination_city}" no concuerda con el departamento "${body.destination_department}" (la guía habría ido a ${daneDepartmentName}). Verifica la dirección del pedido antes de generar la guía.`,
+          errorCode: 'DANE_DEPARTMENT_MISMATCH',
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Low-confidence resolution: the DANE was picked by FUZZY approximation
     // (not exact/alias). This is exactly how Ubaté once shipped to Sibaté.

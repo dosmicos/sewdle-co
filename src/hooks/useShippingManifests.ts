@@ -988,6 +988,38 @@ export const useShippingManifests = () => {
     }
   }, [user?.id, fetchManifests]);
 
+  // Sincronizar AHORA con Envia (botón "Actualizar"): corre la reconciliación en
+  // modo apply para la organización del usuario (verifica entregadas, marca
+  // canceladas/duplicadas, etc.), sin esperar al cron de las 4/5 PM.
+  const reconcileNow = useCallback(async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/reconcile-manifest-envia-status`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'apikey': SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ apply: true }),
+        }
+      );
+      const payload = await res.json();
+      if (!res.ok || !payload.success) {
+        toast.error(payload.error || 'No se pudo actualizar con Envia');
+        return null;
+      }
+      return payload;
+    } catch (err: any) {
+      console.error('reconcileNow error:', err);
+      toast.error('Error al actualizar con Envia: ' + err.message);
+      return null;
+    }
+  }, []);
+
   return {
     manifests,
     currentManifest,
@@ -1009,5 +1041,6 @@ export const useShippingManifests = () => {
     fetchExtraScans,
     addScannedGuiaToManifest,
     reconcileWithCoordinadora,
+    reconcileNow,
   };
 };
