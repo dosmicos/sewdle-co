@@ -4,7 +4,7 @@ import { PickingPackingLayout } from '@/components/picking/PickingPackingLayout'
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X, Users, ListChecks, ClipboardList, Truck } from 'lucide-react';
+import { Search, RefreshCw, Package, ChevronLeft, ChevronRight, Plus, X, Users, ListChecks, ClipboardList, Truck, AlertCircle } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BulkLabelGenerationModal } from '@/features/shipping/components/BulkLabelGenerationModal';
 import { MAX_BULK_LABELS } from '@/features/shipping/hooks/useBulkLabelGeneration';
@@ -123,12 +123,13 @@ const PickingPackingPage = () => {
       return option;
     });
   }, [availableTags]);
-  const { 
-    orders, 
-    loading, 
-    currentPage, 
-    totalCount, 
-    totalPages, 
+  const {
+    orders,
+    loading,
+    loadError,
+    currentPage,
+    totalCount,
+    totalPages,
     pageSize,
     fetchOrders,
     bulkUpdateOrdersByDate
@@ -219,6 +220,18 @@ const [showItemsModal, setShowItemsModal] = useState(false);
     handleRefreshListRef.current = handleRefreshList;
   });
 
+  // Debounce del refetch por Realtime: durante un empaque llegan varios eventos casi
+  // simultáneos (cambio de estado + sync de tag a Shopify + webhooks), y cada uno disparaba
+  // la consulta pesada de lista. Sin coalescer, esas consultas se encolan y algunas mueren
+  // por el statement_timeout de 8s → "se queda cargando". Colapsamos la ráfaga en un solo
+  // refetch tras 750ms de silencio.
+  const realtimeRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (realtimeRefreshTimerRef.current) clearTimeout(realtimeRefreshTimerRef.current);
+    };
+  }, []);
+
   // Supabase Realtime - Auto refresh when shopify_orders table changes
   useEffect(() => {
     if (!currentOrganization?.id) return;
@@ -228,7 +241,11 @@ const [showItemsModal, setShowItemsModal] = useState(false);
       setLastWebhookUpdate(new Date());
       // Solo auto-refresh si NO hay modal abierto (detalle o generación masiva)
       if (!selectedOrderId && !showBulkModalRef.current) {
-        handleRefreshListRef.current();
+        // Debounce: coalescer ráfagas de eventos en un único refetch.
+        if (realtimeRefreshTimerRef.current) clearTimeout(realtimeRefreshTimerRef.current);
+        realtimeRefreshTimerRef.current = setTimeout(() => {
+          handleRefreshListRef.current();
+        }, 750);
       } else {
         // Marcar que hay updates pendientes para cuando se cierre el modal
         setHasPendingUpdates(true);
@@ -732,6 +749,22 @@ const [showItemsModal, setShowItemsModal] = useState(false);
   return (
     <PickingPackingLayout>
       <div className="space-y-6">
+        {/* Banner de error de carga: el fetch de la lista falló (p. ej. timeout de 8s).
+            Antes el spinner se limpiaba en silencio y dejaba la lista vacía sin explicación.
+            Ahora ofrecemos reintentar explícitamente. */}
+        {loadError && !loading && (
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>No se pudo cargar la lista de pedidos. Puede ser una sobrecarga momentánea.</span>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleRefreshList} className="gap-1.5 shrink-0">
+              <RefreshCw className="w-4 h-4" />
+              Reintentar
+            </Button>
+          </div>
+        )}
+
         {/* Search and Filters */}
         <div className="space-y-3 md:space-y-4">
           <div className="flex flex-col md:flex-row gap-2 md:gap-4">

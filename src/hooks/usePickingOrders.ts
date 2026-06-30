@@ -100,6 +100,9 @@ export interface PickingOrder {
 export const usePickingOrders = () => {
   const [orders, setOrders] = useState<PickingOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  // True when the last fetch failed (e.g. statement timeout). Lets the UI show a
+  // "Reintentar" affordance instead of silently leaving an empty/stale list.
+  const [loadError, setLoadError] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const { currentOrganization } = useOrganization();
@@ -279,7 +282,8 @@ export const usePickingOrders = () => {
 
     try {
       setLoading(true);
-      
+      setLoadError(false);
+
       const page = filters?.page || currentPage;
       const MIN_ORDER_NUMBER = '62303';
       
@@ -511,6 +515,7 @@ export const usePickingOrders = () => {
       if (thisGeneration !== fetchGenerationRef.current) return; // stale error, ignore
       logger.error('[PickingOrders] Error fetching picking orders', error);
       toast.error('Error al cargar órdenes');
+      setLoadError(true);
       setOrders([]);
       setTotalCount(0);
     } finally {
@@ -621,8 +626,10 @@ export const usePickingOrders = () => {
         });
 
       toast.success('Estado actualizado correctamente');
-      // Fire-and-forget list refresh — modal already updates via optimistic cache
-      void fetchOrders();
+      // NO refrescamos la lista aquí: el modal ya actualiza la caché de forma optimista
+      // y Supabase Realtime dispara un refetch (con debounce) en la página. Lanzar la
+      // consulta pesada de lista justo en el camino del empaque era una causa directa del
+      // "se queda cargando" tras escanear (refetch storm contra el statement_timeout de 8s).
       return { claimed: true };
     } catch (error: any) {
       console.error('Error updating order status:', error);
@@ -1009,6 +1016,7 @@ export const usePickingOrders = () => {
   return {
     orders,
     loading,
+    loadError,
     currentPage,
     totalCount,
     pageSize,
