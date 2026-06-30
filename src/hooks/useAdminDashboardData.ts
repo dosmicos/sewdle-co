@@ -35,7 +35,7 @@ export const useAdminDashboardData = () => {
   });
   const [productionData, setProductionData] = useState<ProductionData[]>([]);
   const [workshopRanking, setWorkshopRanking] = useState<WorkshopRanking[]>([]);
-  const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>('weekly');
+  const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>('monthly');
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { activeStoreId } = useStoreContext();
@@ -85,7 +85,12 @@ export const useAdminDashboardData = () => {
       const isWeekly = viewMode === 'weekly';
       const periods = isWeekly ? 8 : 6; // Last 8 weeks or 6 months
 
-      const toDateStr = (d: Date) => d.toISOString().split('T')[0];
+      // Formatea en fecha LOCAL (YYYY-MM-DD). Antes se usaba toISOString(), que
+      // convierte a UTC y en zonas detrás de UTC (Colombia, UTC-5) corre cada
+      // límite un día atrás (p.ej. el 1 de mes "1 ene 00:00" se vuelve "31 dic"),
+      // desalineando los buckets respecto al mes calendario.
+      const toDateStr = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
       // Construir los buckets (periodos) con sus límites en formato YYYY-MM-DD.
       // Antes se hacían 2 consultas POR periodo de forma secuencial (16 round-trips,
@@ -103,11 +108,17 @@ export const useAdminDashboardData = () => {
           const weekNum = Math.ceil(endDate.getDate() / 7);
           return { start: toDateStr(startDate), end: toDateStr(endDate), label: `${month} S${weekNum}`, delivered: 0, approved: 0 };
         }
-        const targetDate = new Date();
-        targetDate.setMonth(targetDate.getMonth() - i);
-        const startDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
-        const endDate = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
-        return { start: toDateStr(startDate), end: toDateStr(endDate), label: targetDate.toLocaleDateString('es-ES', { month: 'short' }), delivered: 0, approved: 0 };
+        // Mes objetivo calculado con aritmética de índice de mes (puede ser
+        // negativo: Date lo normaliza al año anterior). NO usar setMonth() sobre
+        // la fecha de hoy: si hoy es 30 y el mes destino no tiene día 30 (p.ej.
+        // febrero), JS desborda al mes siguiente y salían meses duplicados/saltados
+        // ("ene, mar, mar, abr…" perdiendo "feb"). Al fijar el día en 1 no hay
+        // desbordamiento, y la etiqueta se toma del propio startDate.
+        const now = new Date();
+        const monthIndex = now.getMonth() - i;
+        const startDate = new Date(now.getFullYear(), monthIndex, 1);
+        const endDate = new Date(now.getFullYear(), monthIndex + 1, 0);
+        return { start: toDateStr(startDate), end: toDateStr(endDate), label: startDate.toLocaleDateString('es-ES', { month: 'short' }), delivered: 0, approved: 0 };
       });
 
       const windowStart = buckets[0].start;
