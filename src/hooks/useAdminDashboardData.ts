@@ -84,83 +84,56 @@ export const useAdminDashboardData = () => {
     try {
       const isWeekly = viewMode === 'weekly';
       const periods = isWeekly ? 8 : 6; // Last 8 weeks or 6 months
-      
-      const productionStats: ProductionData[] = [];
-      
-      if (isWeekly) {
-        // Weekly logic remains the same
-        for (let i = periods - 1; i >= 0; i--) {
+
+      const toDateStr = (d: Date) => d.toISOString().split('T')[0];
+
+      // Construir los buckets (periodos) con sus límites en formato YYYY-MM-DD.
+      // Antes se hacían 2 consultas POR periodo de forma secuencial (16 round-trips,
+      // ~220ms c/u = ~3.5s) — el cuello de botella del "Cargando datos...". La tabla
+      // delivery_items es pequeña, así que ahora traemos TODA la ventana en UNA sola
+      // consulta (ambas métricas) y agrupamos en memoria.
+      const buckets = Array.from({ length: periods }, (_, idx) => {
+        const i = periods - 1 - idx; // del más antiguo al más reciente
+        if (isWeekly) {
           const endDate = new Date();
-          endDate.setDate(endDate.getDate() - (i * 7));
-          
+          endDate.setDate(endDate.getDate() - i * 7);
           const startDate = new Date(endDate);
           startDate.setDate(startDate.getDate() - 6);
-          
-          // Get delivered units for this period
-          const { data: deliveredData } = await supabase
-            .from('delivery_items')
-            .select('quantity_delivered, deliveries!inner(delivery_date)')
-            .gte('deliveries.delivery_date', startDate.toISOString().split('T')[0])
-            .lte('deliveries.delivery_date', endDate.toISOString().split('T')[0]);
-
-          // Get approved units for this period  
-          const { data: approvedData } = await supabase
-            .from('delivery_items')
-            .select('quantity_approved, deliveries!inner(delivery_date)')
-            .gte('deliveries.delivery_date', startDate.toISOString().split('T')[0])
-            .lte('deliveries.delivery_date', endDate.toISOString().split('T')[0]);
-
-          const delivered = deliveredData?.reduce((sum, item) => sum + (item.quantity_delivered || 0), 0) || 0;
-          const approved = approvedData?.reduce((sum, item) => sum + (item.quantity_approved || 0), 0) || 0;
-
           const month = endDate.toLocaleDateString('es-ES', { month: 'short' });
           const weekNum = Math.ceil(endDate.getDate() / 7);
-          const periodLabel = `${month} S${weekNum}`;
-
-          productionStats.push({
-            period: periodLabel,
-            delivered,
-            approved
-          });
+          return { start: toDateStr(startDate), end: toDateStr(endDate), label: `${month} S${weekNum}`, delivered: 0, approved: 0 };
         }
-      } else {
-        // Monthly logic - use calendar months
-        for (let i = periods - 1; i >= 0; i--) {
-          const targetDate = new Date();
-          targetDate.setMonth(targetDate.getMonth() - i);
-          
-          // Get first and last day of this month
-          const startDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
-          const endDate = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
-          
-          // Get delivered units for this month
-          const { data: deliveredData } = await supabase
-            .from('delivery_items')
-            .select('quantity_delivered, deliveries!inner(delivery_date)')
-            .gte('deliveries.delivery_date', startDate.toISOString().split('T')[0])
-            .lte('deliveries.delivery_date', endDate.toISOString().split('T')[0]);
+        const targetDate = new Date();
+        targetDate.setMonth(targetDate.getMonth() - i);
+        const startDate = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+        const endDate = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+        return { start: toDateStr(startDate), end: toDateStr(endDate), label: targetDate.toLocaleDateString('es-ES', { month: 'short' }), delivered: 0, approved: 0 };
+      });
 
-          // Get approved units for this month
-          const { data: approvedData } = await supabase
-            .from('delivery_items')
-            .select('quantity_approved, deliveries!inner(delivery_date)')
-            .gte('deliveries.delivery_date', startDate.toISOString().split('T')[0])
-            .lte('deliveries.delivery_date', endDate.toISOString().split('T')[0]);
+      const windowStart = buckets[0].start;
+      const windowEnd = buckets[buckets.length - 1].end;
 
-          const delivered = deliveredData?.reduce((sum, item) => sum + (item.quantity_delivered || 0), 0) || 0;
-          const approved = approvedData?.reduce((sum, item) => sum + (item.quantity_approved || 0), 0) || 0;
+      // Una sola consulta para toda la ventana, ambas cantidades + la fecha para agrupar.
+      const { data, error } = await supabase
+        .from('delivery_items')
+        .select('quantity_delivered, quantity_approved, deliveries!inner(delivery_date)')
+        .gte('deliveries.delivery_date', windowStart)
+        .lte('deliveries.delivery_date', windowEnd);
 
-          const periodLabel = targetDate.toLocaleDateString('es-ES', { month: 'short' });
+      if (error) throw error;
 
-          productionStats.push({
-            period: periodLabel,
-            delivered,
-            approved
-          });
+      for (const item of (data as any[]) || []) {
+        const dateStr: string | undefined = item.deliveries?.delivery_date;
+        if (!dateStr) continue;
+        // Buckets contiguos y sin solapamiento; comparación lexicográfica de fechas ISO.
+        const bucket = buckets.find(b => dateStr >= b.start && dateStr <= b.end);
+        if (bucket) {
+          bucket.delivered += item.quantity_delivered || 0;
+          bucket.approved += item.quantity_approved || 0;
         }
       }
 
-      setProductionData(productionStats);
+      setProductionData(buckets.map(b => ({ period: b.label, delivered: b.delivered, approved: b.approved })));
 
     } catch (error) {
       console.error('Error fetching production data:', error);
