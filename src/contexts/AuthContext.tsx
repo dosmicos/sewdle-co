@@ -268,13 +268,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }, 0);
     });
 
-    // Timeout de seguridad: si no hay sesión después de 2s, marcar como no-loading
+    // Timeout de seguridad (backstop): solo para el caso en que onAuthStateChange
+    // nunca entregue un estado (red caída). El caso "sin sesión" ya lo resuelve al
+    // instante el path SIGNED_OUT/!newSession, así que esto NO retrasa el login.
+    //
+    // IMPORTANTE: no debe disparar mientras se está procesando una sesión válida.
+    // Antes eran 2s y se ejecutaba sin condición: en una pestaña nueva fría (la de
+    // impresión que abre el empaque) el bootstrap de auth (cargar JS + init Supabase +
+    // refresh de token + RPCs por red) supera 2s, el timeout ponía loading=false con
+    // user todavía null, y el guard redirigía a /auth (login) — o a /dashboard al
+    // re-entrar. Subimos a 8s y respetamos el procesamiento en curso.
     const timeoutId = setTimeout(() => {
-      setLoading(prev => {
-        // Solo cambiar si aún está loading (no hubo sesión)
-        return prev ? false : prev;
-      });
-    }, 2000);
+      if (isProcessingRef.current) return; // sesión en proceso: el finally pondrá loading=false
+      setLoading(prev => (prev ? false : prev));
+    }, 8000);
 
     return () => {
       mounted = false;
