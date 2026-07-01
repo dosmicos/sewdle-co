@@ -492,6 +492,46 @@ export function calculateOrderTotals(params: {
   };
 }
 
+// "Bordado Personalizado": existing Shopify charge product ($15.000 per garment). It
+// has no real stock (a charge SKU with negative inventory), so it must NOT go through
+// the stock-validating catalog resolver — it is appended as a direct line item and its
+// price is summed explicitly (the charge product can be filtered out of the in-context
+// catalog, which would price it at 0).
+const EMBROIDERY_PRODUCT_ID = 9170402738411;
+const EMBROIDERY_VARIANT_ID = 47129543049451;
+const EMBROIDERY_SKU = "47129543049451";
+const EMBROIDERY_UNIT_PRICE = 15000;
+const EMBROIDERY_SIGNAL =
+  /personaliz|bordad|nombre\s*(a|para)\s*(personalizar|bordar)|nombre a personalizar/;
+
+// How many garments carry embroidery. Prefer an explicit count from the model
+// (embroideryQuantity), capped at the number of garments; otherwise infer from a
+// personalization signal in the notes/name fields and default to 1 (one name, one
+// garment — the common case). $15.000 is billed per unit.
+function resolveEmbroideryQuantity(
+  payload: Record<string, any>,
+  garmentLineItems: ResolvedLineItem[],
+): number {
+  const totalGarments = garmentLineItems.reduce(
+    (sum, item) => sum + Math.max(0, Number(item.quantity || 0)),
+    0,
+  );
+  const explicit = Math.floor(
+    Number(payload.embroideryQuantity ?? payload.personalizedQuantity ?? 0),
+  );
+  if (explicit > 0) return Math.min(explicit, Math.max(1, totalGarments));
+
+  const text = normalizeCommerceText(
+    [
+      payload.notes,
+      payload.personalizationName,
+      payload.embroideryName,
+      payload.nombrePersonalizar,
+    ].filter(Boolean).join(" "),
+  );
+  return EMBROIDERY_SIGNAL.test(text) ? 1 : 0;
+}
+
 function buildPendingPaymentRequestBase(params: {
   payload: Record<string, any>;
   catalog: CommerceProduct[];
@@ -535,6 +575,23 @@ function buildPendingPaymentRequestBase(params: {
       item.quantity;
   }
   if (productTotal <= 0) return { ok: false, errors: ["productTotal"] };
+
+  // Personalization/embroidery: $15.000 per personalized garment, billed via the
+  // existing "Bordado Personalizado" Shopify product. Added as a direct line item
+  // (charge product, no real stock) and summed explicitly, so the payment link total
+  // and the Shopify order both include the embroidery charge.
+  const embroideryQuantity = resolveEmbroideryQuantity(payload, resolved.lineItems);
+  if (embroideryQuantity > 0) {
+    resolved.lineItems.push({
+      productId: EMBROIDERY_PRODUCT_ID,
+      productName: "Bordado Personalizado",
+      variantId: EMBROIDERY_VARIANT_ID,
+      variantName: "Default Title",
+      sku: EMBROIDERY_SKU,
+      quantity: embroideryQuantity,
+    });
+    productTotal += embroideryQuantity * EMBROIDERY_UNIT_PRICE;
+  }
 
   const totals = calculateOrderTotals({
     productTotal,
@@ -805,16 +862,35 @@ function prioritizeCatalogForQuery(
     .map((item) => item.product);
 }
 
+// Strip HTML + collapse whitespace from a Shopify body_html into plain text Elsa can
+// read (material, TOG, temperature, care instructions live here).
+export function plainTextFromHtml(html: string, max = 600): string {
+  return String(html || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
 export function summarizeCommerceCatalogForPrompt(
   catalog: CommerceProduct[],
   maxProducts = 80,
   query?: string,
 ) {
-  return prioritizeCatalogForQuery(catalog, query).slice(0, maxProducts).map((product) => ({
+  return prioritizeCatalogForQuery(catalog, query).slice(0, maxProducts).map((product, index) => ({
     id: product.id,
     title: product.title,
     product_type: product.product_type || "",
     tags: product.tags || "",
+    // Include the product description (material, TOG, temperature, care) for the most
+    // relevant products so Elsa can answer "what material / for what climate" from the
+    // product itself instead of escalating. Limited to the top matches to keep the
+    // prompt compact; the catalog is already sorted by relevance to the query.
+    ...(index < 14 && product.body_html
+      ? { description: plainTextFromHtml(product.body_html, 600) }
+      : {}),
     variants: (product.variants || []).map((variant) => ({
       id: variant.id,
       title: variant.title || "",
