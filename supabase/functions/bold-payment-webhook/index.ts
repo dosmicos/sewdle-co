@@ -233,11 +233,17 @@ serve(async (req) => {
       .single();
 
     if (lookupError || !pendingOrder) {
-      console.error("Pending order not found for reference:", reference, lookupError);
-      // Return 404 so Bold retries the webhook (instead of silent 200 OK)
+      // No pending order for this reference. This is EXPECTED for Bold sales that
+      // are not web orders (datáfono / payment buttons): they share this single
+      // account webhook but never have a pending_orders row. Returning 404 here made
+      // Bold retry these forever and throttle/pause delivery of the WHOLE endpoint —
+      // which silently stopped order creation after 2026-06-11. Ack with 200 so Bold
+      // treats the endpoint as healthy; the reconcile-bold-orders cron is the safety
+      // net for the rare race where a web order's pending row is written late.
+      console.log("No pending order for reference (likely non-web Bold sale), acking:", reference);
       return new Response(
-        JSON.stringify({ error: "Pending order not found", reference }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ ok: true, note: "no pending order for this reference", reference }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
