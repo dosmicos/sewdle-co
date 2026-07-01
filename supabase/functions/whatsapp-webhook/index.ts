@@ -32,6 +32,13 @@ import {
   buildPaymentLinkMissingUrlFallbackReply,
   shouldReplacePaymentLinkReplyWithoutUrl,
 } from "../_shared/payment-link-reply-guard.ts";
+import {
+  buildKnownVariantAvailabilityReply,
+  shouldReplaceAvailabilityDeferralReply,
+} from "../_shared/availability-reply-guard.ts";
+import {
+  classifyPendingAddressVerificationReply,
+} from "../_shared/address-verification-routing.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -921,21 +928,30 @@ async function generateAIResponse(
 
     const data = await response.json();
     const rawAiResponse = data.choices?.[0]?.message?.content || '';
+    let finalAiResponse = rawAiResponse;
     
     // 💬 LOG: AI response
     console.log(`💬 Respuesta de IA: ${rawAiResponse.substring(0, 200)}...`);
+
+    if (shouldReplaceAvailabilityDeferralReply(rawAiResponse, contextualSearchSource, relevantProducts)) {
+      const availabilityReply = buildKnownVariantAvailabilityReply(contextualSearchSource, relevantProducts);
+      if (availabilityReply) {
+        console.log('🔁 Replacing availability deferral with known stock reply');
+        finalAiResponse = availabilityReply;
+      }
+    }
     
     // Check if AI opted to send collection link instead of individual images
-    const noImagesRequested = rawAiResponse.includes('[NO_IMAGES]');
+    const noImagesRequested = finalAiResponse.includes('[NO_IMAGES]');
 
     // Extract product IDs from explicit tags, and fallback to matching titles
     let productIds: number[] = [];
 
     if (!noImagesRequested) {
-      productIds = extractProductIdsFromResponse(rawAiResponse);
+      productIds = extractProductIdsFromResponse(finalAiResponse);
 
       if (productIds.length === 0) {
-        const inferred = inferProductIdsFromMentionedNames(rawAiResponse, productImageMap);
+        const inferred = inferProductIdsFromMentionedNames(finalAiResponse, productImageMap);
         if (inferred.length > 0) {
           console.log('No [PRODUCT_IMAGE_ID] tags found; inferred product IDs from titles:', inferred);
           productIds = inferred;
@@ -979,7 +995,7 @@ async function generateAIResponse(
       }
     }
     
-    const cleanedResponse = cleanAIResponse(rawAiResponse);
+    const cleanedResponse = cleanAIResponse(finalAiResponse);
     
     return { 
       text: cleanedResponse, 
@@ -1362,13 +1378,15 @@ async function handleAIAutoReply(
     }
   }
 
-  // Get conversation history
+  // Get conversation history — 60 mensajes para no perder datos de checkout dados
+  // temprano (con 20, en checkouts largos el email/nombre/cédula salían de la ventana
+  // y Elsa los re-pedía). OCR/vision solo sobre los 20 más recientes para no sumar costo.
   const { data: historyMessages } = await supabase
     .from('messaging_messages')
     .select('*')
     .eq('conversation_id', conversation.id)
     .order('sent_at', { ascending: false })
-    .limit(20);
+    .limit(60);
 
   const aiConfig = channel.ai_config || {};
   const aiRuntime = resolveAiRuntime(aiConfig, { defaultProvider: 'minimax' });
@@ -1377,8 +1395,17 @@ async function handleAIAutoReply(
   const openaiApiKey = Deno.env.get('OPENAI_API_KEY') || '';
   const imageOcrCache = new Map<string, Promise<string | null>>();
 
-  const messagesForAI = await Promise.all((historyMessages || []).reverse().map(async (m: any) => {
+  const reversedHistory = (historyMessages || []).reverse();
+  const visionStartIndex = Math.max(0, reversedHistory.length - 20);
+  const messagesForAI = await Promise.all(reversedHistory.map(async (m: any, idx: number) => {
     const role = m.direction === 'inbound' ? 'user' : 'assistant';
+
+    if (idx < visionStartIndex) {
+      return {
+        role,
+        content: m.content || (m.message_type === 'image' ? '[imagen adjunta]' : ''),
+      };
+    }
 
     return {
       role,
@@ -1948,16 +1975,13 @@ serve(async (req) => {
 
                 // Check button payload first (from template quick reply buttons)
                 const buttonPayload = message.button?.payload || '';
-                const isButtonCorrect = buttonPayload === 'ADDRESS_CORRECT';
-                const isButtonWrong = buttonPayload === 'ADDRESS_WRONG';
 
-                const normalized = content.toLowerCase().trim()
-                  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const addressDecision = classifyPendingAddressVerificationReply(content, buttonPayload);
+                console.log(`[ADDR-VERIFY] Decision for pending address verification: ${addressDecision}`);
 
-                const confirmWords = ['correcto', 'correcta', 'si', 'ok', 'bien', 'esta bien', 'esta correcta', 'esta correcto', 'dale', 'listo', 'perfecto', 'claro'];
-                const isConfirmation = isButtonCorrect || confirmWords.some(w => normalized === w || normalized.startsWith(w + ' ') || normalized.startsWith(w + ',') || normalized.startsWith(w + '.'));
-
-                if (isConfirmation) {
+                if (addressDecision === 'not_address') {
+                  console.log(`↪️ Pending address verification ignored for unrelated/new-purchase message on order ${pendingAddressVerification.order_number}`);
+                } else if (addressDecision === 'confirm') {
                   console.log(`✅ Customer CONFIRMED address for order ${pendingAddressVerification.order_number}`);
                   skipAiForAddress = true;
 
@@ -2066,8 +2090,8 @@ serve(async (req) => {
                     console.error('❌ Error processing address confirmation:', err);
                   }
 
-                } else if (isButtonWrong) {
-                  // Customer clicked "Corregir Dirección" button — ask for correct address
+                } else if (addressDecision === 'request_correction') {
+                  // Customer clicked/wrote that the address is wrong — ask for correct address
                   console.log(`📝 Customer wants to correct address for order ${pendingAddressVerification.order_number}`);
                   skipAiForAddress = true;
 
@@ -2112,8 +2136,8 @@ serve(async (req) => {
                     console.error('❌ Error asking for address correction:', err);
                   }
 
-                } else {
-                  // Customer wrote something else (new address or question)
+                } else if (addressDecision === 'address_correction') {
+                  // Customer wrote a likely new/corrected address
                   console.log(`📝 Customer sent address correction for order ${pendingAddressVerification.order_number}: "${content}"`);
                   skipAiForAddress = true;
 
@@ -2603,12 +2627,14 @@ serve(async (req) => {
                 // ========== END DUPLICATE GUARD ==========
 
                 // Get conversation history for context (includes all messages accumulated during debounce)
+                // 60 mensajes para no perder datos de checkout dados temprano (con 20, en checkouts
+                // largos el email/nombre/cédula salían de la ventana y Elsa los re-pedía).
                 const { data: historyMessages } = await supabase
                   .from('messaging_messages')
                   .select('*')
                   .eq('conversation_id', conversation.id)
                   .order('sent_at', { ascending: false })
-                  .limit(20);
+                  .limit(60);
 
                 const channelAiConfig = channel.ai_config || {};
                 const aiRuntime = resolveAiRuntime(channelAiConfig);
@@ -2616,11 +2642,20 @@ serve(async (req) => {
                 console.log(`Using AI provider: ${aiRuntime.provider}, function: ${functionName}, supervised: ${aiRuntime.supervised}`);
 
                 // Build messages for the AI function — all accumulated messages are already in the DB
-                // Include OCR text + image URLs for vision analysis when available
+                // OCR/vision solo sobre los 20 más recientes; los más viejos van como texto plano.
                 const openaiApiKey = Deno.env.get('OPENAI_API_KEY') || '';
                 const imageOcrCache = new Map<string, Promise<string | null>>();
-                const messagesForAI = await Promise.all((historyMessages || []).reverse().map(async (m: any) => {
+                const reversedHistory = (historyMessages || []).reverse();
+                const visionStartIndex = Math.max(0, reversedHistory.length - 20);
+                const messagesForAI = await Promise.all(reversedHistory.map(async (m: any, idx: number) => {
                   const role = m.direction === 'inbound' ? 'user' : 'assistant';
+
+                  if (idx < visionStartIndex) {
+                    return {
+                      role,
+                      content: m.content || (m.message_type === 'image' ? '[imagen adjunta]' : ''),
+                    };
+                  }
 
                   return {
                     role,
