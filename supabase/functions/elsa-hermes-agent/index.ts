@@ -1277,6 +1277,24 @@ Total: $${
 
   if (isCodAction) {
     const codRequest = built.request as any;
+
+    // REGLA DE NEGOCIO (Julian 2026-07-01): el envío EXPRESS exige pago anticipado;
+    // PROHIBIDO crear pedido contra entrega con express, aunque el modelo lo pida.
+    const requestedShipping = String(payload?.shippingMethod || "").toLowerCase();
+    const codNotes = String(payload?.notes || "").toLowerCase();
+    if (requestedShipping.includes("express") || codNotes.includes("express")) {
+      params.result.reply =
+        "El envío express requiere pago anticipado 😊 ¿Prefieres pagar con link (tarjeta/PSE), Addi o transferencia Nequi/Daviplata? Si prefieres contra entrega, el envío iría estándar (1 a 3 días hábiles).";
+      params.result.handoff_required = false;
+      params.result.handoff_reason = "";
+      actionResults.push({
+        type: String(paymentAction.type),
+        success: false,
+        reason: "cod_blocked_express_requires_prepayment",
+      });
+      return { result: params.result, actionResults };
+    }
+
     const { data, error } = await supabase.functions.invoke(
       "create-shopify-order",
       { body: codRequest },
