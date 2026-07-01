@@ -44,6 +44,18 @@ Deno.test("elsa-hermes-agent can execute existing Shopify order modification act
   assertEquals(source.includes("Regalo"), true);
 });
 
+Deno.test("elsa-hermes-agent looks up a customer's recent order by phone/email and attaches carrier info", () => {
+  assertEquals(source.includes("findCustomerRecentOrder"), true);
+  assertEquals(source.includes("summarizeCustomerOrderForPrompt"), true);
+  assertEquals(source.includes("customer_recent_order"), true);
+  assertEquals(source.includes("shipping_labels"), true);
+  assertEquals(source.includes("conversation.external_user_id"), true);
+  // Privacy: prefer the verified WhatsApp phone (last 10 digits) over a typed email.
+  assertEquals(source.includes('ilike("customer_phone"'), true);
+  // Never surface a cancelled order as if it were active.
+  assertEquals(source.includes('is("cancelled_at", null)'), true);
+});
+
 Deno.test("elsa-hermes-agent can rewrite generic image/name-reference replies before returning to WhatsApp", () => {
   assertEquals(source.includes("../_shared/image-ocr.ts"), true);
   assertEquals(source.includes("maybeReplyWithImageScreenshotFallback"), true);

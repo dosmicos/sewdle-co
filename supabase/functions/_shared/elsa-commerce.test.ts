@@ -251,6 +251,80 @@ Deno.test("buildBoldPaymentLinkRequest builds pending-order request only with co
   assertEquals(built.request.orderData.shippingCost, 0);
 });
 
+Deno.test("buildBoldPaymentLinkRequest adds the $15.000 embroidery charge for a personalized order", () => {
+  const built = buildBoldPaymentLinkRequest({
+    payload: {
+      customerName: "Cliente Dosmicos",
+      cedula: "123456789",
+      email: "cliente@example.com",
+      phone: "573001112233",
+      address: "Calle 1 #2-3",
+      city: "Bogotá",
+      department: "Bogotá D.C.",
+      lineItems: [{ productName: "pollito", size: 4, quantity: 2 }],
+      notes: "Personalizar con nombre: Cristóbal",
+    },
+    catalog,
+    organizationId: "org-1",
+  });
+
+  assertEquals(built.ok, true);
+  if (built.ok === false) throw new Error("expected ok");
+  // 2 x 94.900 = 189.800 garments + 15.000 embroidery (1 unit inferred from notes).
+  assertEquals(built.request.amount, 204800);
+  const embroidery = built.request.orderData.lineItems.find(
+    (i: any) => i.variantId === 47129543049451,
+  );
+  assertEquals(Boolean(embroidery), true);
+  assertEquals(embroidery?.quantity, 1);
+});
+
+Deno.test("buildBoldPaymentLinkRequest bills embroidery per garment when embroideryQuantity is given", () => {
+  const built = buildBoldPaymentLinkRequest({
+    payload: {
+      customerName: "Cliente Dosmicos",
+      cedula: "123456789",
+      email: "cliente@example.com",
+      phone: "573001112233",
+      address: "Calle 1 #2-3",
+      city: "Bogotá",
+      department: "Bogotá D.C.",
+      lineItems: [{ productName: "pollito", size: 4, quantity: 2 }],
+      notes: "Personalizar ambas prendas",
+      embroideryQuantity: 2,
+    },
+    catalog,
+    organizationId: "org-1",
+  });
+
+  assertEquals(built.ok, true);
+  if (built.ok === false) throw new Error("expected ok");
+  // 189.800 garments + 2 x 15.000 embroidery = 219.800.
+  assertEquals(built.request.amount, 219800);
+});
+
+Deno.test("buildBoldPaymentLinkRequest charges no embroidery for a non-personalized order", () => {
+  const built = buildBoldPaymentLinkRequest({
+    payload: {
+      customerName: "Cliente Dosmicos",
+      cedula: "123456789",
+      email: "cliente@example.com",
+      phone: "573001112233",
+      address: "Calle 1 #2-3",
+      city: "Bogotá",
+      department: "Bogotá D.C.",
+      lineItems: [{ productName: "pollito", size: 4, quantity: 2 }],
+      notes: "Envío rápido por favor",
+    },
+    catalog,
+    organizationId: "org-1",
+  });
+
+  assertEquals(built.ok, true);
+  if (built.ok === false) throw new Error("expected ok");
+  assertEquals(built.request.amount, 189800);
+});
+
 Deno.test("buildBoldPaymentLinkRequest reports missing required order fields", () => {
   const built = buildBoldPaymentLinkRequest({
     payload: {
@@ -429,6 +503,23 @@ Deno.test("summarizeCommerceCatalogForPrompt includes product type and tags for 
 
   assertEquals(summary[0].product_type, "Sleeping Walker");
   assertEquals(summary[0].tags, "koala, amarillo, animal");
+});
+
+Deno.test("summarizeCommerceCatalogForPrompt exposes the cleaned product description (material/TOG)", () => {
+  const summary = summarizeCommerceCatalogForPrompt([
+    {
+      id: 301,
+      title: "Sleeping para Bebé Osito TOG 2.5",
+      body_html:
+        "<p>Hecho con materiales suaves.</p><ul><li>TOG 2.5 — climas fríos 14 a 20 grados</li><li>Material: flannel + forro 100% algodón</li></ul>",
+      variants: [{ id: 3001, title: "0 a 3 meses", sku: "OSITO", price: "134900", inventory_quantity: 5 }],
+    },
+  ] as any, 80, "osito");
+
+  const desc = (summary[0] as any).description as string;
+  assertEquals(desc.includes("100% algodón"), true);
+  assertEquals(desc.includes("14 a 20 grados"), true);
+  assertEquals(desc.includes("<"), false); // HTML stripped
 });
 
 Deno.test("formatShopifyOrderCreatedReply includes order number, summary and thanks", () => {

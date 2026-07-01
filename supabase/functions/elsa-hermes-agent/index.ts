@@ -628,6 +628,91 @@ function summarizeReferencedOrderForPrompt(order: ReferencedShopifyOrder) {
   };
 }
 
+// Find this customer's most recent Shopify order by their verified WhatsApp phone
+// (preferred — they can only see THEIR own order) or an email they typed in chat.
+// Attaches the active shipping label (carrier + tracking) so Elsa can tell the
+// customer which carrier the order ships with. Used when the customer asks to
+// confirm/track an order they placed elsewhere (e.g. on the website) and there is
+// no #order-number in the thread to key off.
+async function findCustomerRecentOrder(
+  supabase: any,
+  params: {
+    organizationId?: string;
+    customerPhone?: unknown;
+    customerEmail?: unknown;
+  },
+): Promise<(ReferencedShopifyOrder & { shipping?: any }) | null> {
+  if (!params.organizationId) return null;
+
+  const columns =
+    "shopify_order_id, order_number, financial_status, fulfillment_status, tags, note, shipping_address, total_price, created_at_shopify, customer_phone, customer_email, cancelled_at";
+
+  let order: any = null;
+
+  const phoneDigits = String(params.customerPhone || "").replace(/\D/g, "");
+  const last10 = phoneDigits.slice(-10);
+  if (last10.length === 10) {
+    const { data } = await supabase
+      .from("shopify_orders")
+      .select(columns)
+      .eq("organization_id", params.organizationId)
+      .ilike("customer_phone", `%${last10}`)
+      .is("cancelled_at", null)
+      .order("created_at_shopify", { ascending: false })
+      .limit(1);
+    order = data?.[0] || null;
+  }
+
+  const email = String(params.customerEmail || "").toLowerCase().trim();
+  if (!order && email) {
+    const { data } = await supabase
+      .from("shopify_orders")
+      .select(columns)
+      .eq("organization_id", params.organizationId)
+      .ilike("customer_email", email)
+      .is("cancelled_at", null)
+      .order("created_at_shopify", { ascending: false })
+      .limit(1);
+    order = data?.[0] || null;
+  }
+
+  if (!order) return null;
+
+  const withPicking = await attachPickingState(
+    supabase,
+    params.organizationId,
+    order,
+  );
+  if (!withPicking) return null;
+
+  // Active shipping label (carrier + guía) if the order has already been dispatched.
+  const { data: labels } = await supabase
+    .from("shipping_labels")
+    .select("carrier, tracking_number, status, shopify_fulfillment_status")
+    .eq("organization_id", params.organizationId)
+    .eq("shopify_order_id", order.shopify_order_id)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  return { ...withPicking, shipping: labels?.[0] || null };
+}
+
+function summarizeCustomerOrderForPrompt(
+  order: ReferencedShopifyOrder & { shipping?: any },
+) {
+  return {
+    ...summarizeReferencedOrderForPrompt(order),
+    shipping: order.shipping
+      ? {
+        carrier: order.shipping.carrier || null,
+        trackingNumber: order.shipping.tracking_number || null,
+        labelStatus: order.shipping.status || null,
+      }
+      : null,
+  };
+}
+
 async function maybeReplyWithExistingCreatedOrder(
   supabase: any,
   params: {
@@ -1521,6 +1606,36 @@ async function fetchSewdleContext(
           createdAt: latestCreatedOrder.created_at,
         },
       };
+    }
+
+    // No concrete order in context yet, but the customer may be asking to confirm or
+    // track an order they placed elsewhere (e.g. on the website). Look it up by their
+    // verified WhatsApp phone (or an email they typed) so Elsa can confirm it and give
+    // the carrier/tracking instead of escalating.
+    const alreadyHasOrderContext = Boolean(
+      (context.order_status as any)?.referenced_order ||
+        (context.order_status as any)?.latest_created_order,
+    );
+    if (!alreadyHasOrderContext && conversation?.external_user_id) {
+      const recentTextForEmail = Array.isArray(context.recent_messages)
+        ? (context.recent_messages as any[])
+          .map((m) => String(m.content || ""))
+          .join("\n")
+        : "";
+      const typedEmail = recentTextForEmail.match(
+        /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,})/,
+      )?.[1];
+      const customerOrder = await findCustomerRecentOrder(supabase, {
+        organizationId,
+        customerPhone: conversation.external_user_id,
+        customerEmail: typedEmail,
+      });
+      if (customerOrder) {
+        context.order_status = {
+          ...(context.order_status as Record<string, unknown> || {}),
+          customer_recent_order: summarizeCustomerOrderForPrompt(customerOrder),
+        };
+      }
     }
   }
 
