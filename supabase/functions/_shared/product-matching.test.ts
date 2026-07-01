@@ -367,3 +367,20 @@ Deno.test("formatProductsForContext includes options and reference clues", () =>
   assert(context.includes("Rosado"));
   assert(context.includes("Azul"));
 });
+
+Deno.test("formatProductsForContext marks zero-stock variants as agotadas", () => {
+  const context = formatProductsForContext([
+    {
+      id: 405,
+      title: "Ruana Siberiano Dosmicos",
+      variants: [
+        { title: "8 (4 - 5 años)", option1: "8 (4 - 5 años)", inventory_quantity: 0, price: "98900" },
+        { title: "12 (8 - 9 años)", option1: "12 (8 - 9 años)", inventory_quantity: 8, price: "98900" },
+      ],
+    },
+  ]);
+
+  assert(context.includes("Variantes disponibles: 12 (8 - 9 años): 8 uds"));
+  assert(context.includes("Variantes agotadas: 8 (4 - 5 años)"));
+  assert(context.includes("Si el cliente pidió una variante/talla marcada en Variantes agotadas"));
+});
