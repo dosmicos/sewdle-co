@@ -168,17 +168,10 @@ async function fetchCommerceCatalog(
   if (!organizationId) return [];
 
   try {
-    const { data: connections } = await supabase
-      .from("ai_catalog_connections")
-      .select("shopify_product_id")
-      .eq("organization_id", organizationId)
-      .eq("connected", true);
-    const connectedProductIds = new Set(
-      (connections || []).map((connection: any) =>
-        String(connection.shopify_product_id)
-      ),
-    );
-
+    // Fuente única de verdad: Elsa vende TODO producto con status=active en Shopify.
+    // (Antes filtraba por ai_catalog_connections en modo opt-in, lo que dejaba ~200
+    // productos activos invisibles y trababa el checkout de productos con stock. Para
+    // ocultar un producto de Elsa, se archiva/despublica en Shopify.)
     const { data: org } = await supabase
       .from("organizations")
       .select("shopify_credentials")
@@ -189,29 +182,38 @@ async function fetchCommerceCatalog(
     const accessToken = creds.access_token || creds.accessToken;
     if (!shopifyDomain || !accessToken) return [];
 
-    const response = await fetch(
-      `https://${shopifyDomain}/admin/api/2024-01/products.json?status=active&limit=250`,
-      {
+    // Shopify limita a 250 productos por página; paginamos con el header Link para
+    // que el catálogo COMPLETO (>250 productos) llegue a Elsa, no solo la 1ª página.
+    const products: CommerceProduct[] = [];
+    let nextUrl: string | null =
+      `https://${shopifyDomain}/admin/api/2024-01/products.json?status=active&limit=250`;
+    for (let page = 0; page < 20; page++) {
+      if (!nextUrl) break;
+      const pageUrl: string = nextUrl;
+      const response = await fetch(pageUrl, {
         headers: {
           "X-Shopify-Access-Token": accessToken,
           "Content-Type": "application/json",
         },
-      },
-    );
-    if (!response.ok) {
-      console.warn(
-        "Could not fetch Shopify catalog for Elsa commerce:",
-        response.status,
+      });
+      if (!response.ok) {
+        console.warn(
+          "Could not fetch Shopify catalog for Elsa commerce:",
+          response.status,
+        );
+        break;
+      }
+      const data = await response.json();
+      products.push(...((data.products || []) as CommerceProduct[]));
+      const linkHeader: string = response.headers.get("link") ||
+        response.headers.get("Link") || "";
+      const nextMatch: RegExpMatchArray | null = linkHeader.match(
+        /<([^>]+)>;\s*rel="next"/,
       );
-      return [];
+      nextUrl = nextMatch ? nextMatch[1] : null;
     }
 
-    const data = await response.json();
-    const products = (data.products || []) as CommerceProduct[];
-    return products.filter((product) =>
-      connectedProductIds.size === 0 ||
-      connectedProductIds.has(String(product.id))
-    );
+    return products;
   } catch (error: any) {
     console.warn("Commerce catalog fetch failed:", error?.message || error);
     return [];
@@ -625,6 +627,91 @@ function summarizeReferencedOrderForPrompt(order: ReferencedShopifyOrder) {
     tags: order.tags || null,
     totalPrice: order.total_price || null,
     shippingAddressPresent: Boolean(order.shipping_address),
+  };
+}
+
+// Find this customer's most recent Shopify order by their verified WhatsApp phone
+// (preferred — they can only see THEIR own order) or an email they typed in chat.
+// Attaches the active shipping label (carrier + tracking) so Elsa can tell the
+// customer which carrier the order ships with. Used when the customer asks to
+// confirm/track an order they placed elsewhere (e.g. on the website) and there is
+// no #order-number in the thread to key off.
+async function findCustomerRecentOrder(
+  supabase: any,
+  params: {
+    organizationId?: string;
+    customerPhone?: unknown;
+    customerEmail?: unknown;
+  },
+): Promise<(ReferencedShopifyOrder & { shipping?: any }) | null> {
+  if (!params.organizationId) return null;
+
+  const columns =
+    "shopify_order_id, order_number, financial_status, fulfillment_status, tags, note, shipping_address, total_price, created_at_shopify, customer_phone, customer_email, cancelled_at";
+
+  let order: any = null;
+
+  const phoneDigits = String(params.customerPhone || "").replace(/\D/g, "");
+  const last10 = phoneDigits.slice(-10);
+  if (last10.length === 10) {
+    const { data } = await supabase
+      .from("shopify_orders")
+      .select(columns)
+      .eq("organization_id", params.organizationId)
+      .ilike("customer_phone", `%${last10}`)
+      .is("cancelled_at", null)
+      .order("created_at_shopify", { ascending: false })
+      .limit(1);
+    order = data?.[0] || null;
+  }
+
+  const email = String(params.customerEmail || "").toLowerCase().trim();
+  if (!order && email) {
+    const { data } = await supabase
+      .from("shopify_orders")
+      .select(columns)
+      .eq("organization_id", params.organizationId)
+      .ilike("customer_email", email)
+      .is("cancelled_at", null)
+      .order("created_at_shopify", { ascending: false })
+      .limit(1);
+    order = data?.[0] || null;
+  }
+
+  if (!order) return null;
+
+  const withPicking = await attachPickingState(
+    supabase,
+    params.organizationId,
+    order,
+  );
+  if (!withPicking) return null;
+
+  // Active shipping label (carrier + guía) if the order has already been dispatched.
+  const { data: labels } = await supabase
+    .from("shipping_labels")
+    .select("carrier, tracking_number, status, shopify_fulfillment_status")
+    .eq("organization_id", params.organizationId)
+    .eq("shopify_order_id", order.shopify_order_id)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  return { ...withPicking, shipping: labels?.[0] || null };
+}
+
+function summarizeCustomerOrderForPrompt(
+  order: ReferencedShopifyOrder & { shipping?: any },
+) {
+  return {
+    ...summarizeReferencedOrderForPrompt(order),
+    shipping: order.shipping
+      ? {
+        carrier: order.shipping.carrier || null,
+        trackingNumber: order.shipping.tracking_number || null,
+        labelStatus: order.shipping.status || null,
+      }
+      : null,
   };
 }
 
@@ -1521,6 +1608,36 @@ async function fetchSewdleContext(
           createdAt: latestCreatedOrder.created_at,
         },
       };
+    }
+
+    // No concrete order in context yet, but the customer may be asking to confirm or
+    // track an order they placed elsewhere (e.g. on the website). Look it up by their
+    // verified WhatsApp phone (or an email they typed) so Elsa can confirm it and give
+    // the carrier/tracking instead of escalating.
+    const alreadyHasOrderContext = Boolean(
+      (context.order_status as any)?.referenced_order ||
+        (context.order_status as any)?.latest_created_order,
+    );
+    if (!alreadyHasOrderContext && conversation?.external_user_id) {
+      const recentTextForEmail = Array.isArray(context.recent_messages)
+        ? (context.recent_messages as any[])
+          .map((m) => String(m.content || ""))
+          .join("\n")
+        : "";
+      const typedEmail = recentTextForEmail.match(
+        /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[A-Za-z]{2,})/,
+      )?.[1];
+      const customerOrder = await findCustomerRecentOrder(supabase, {
+        organizationId,
+        customerPhone: conversation.external_user_id,
+        customerEmail: typedEmail,
+      });
+      if (customerOrder) {
+        context.order_status = {
+          ...(context.order_status as Record<string, unknown> || {}),
+          customer_recent_order: summarizeCustomerOrderForPrompt(customerOrder),
+        };
+      }
     }
   }
 
