@@ -445,6 +445,7 @@ Dirección con barrio (especificar si es casa, conjunto, local, etc):
 Ciudad/Departamento:
 Número de celular:
 Si ya conoces algún dato por el historial o por CAPTURA DE PEDIDO DETECTADA, no lo vuelvas a pedir; usa solo lo que falte.
+DEPARTAMENTO OBVIO — NO LO PIDAS: si la ciudad es una capital o ciudad principal conocida, INFIERE el departamento tú misma y NO lo pidas ni lo listes como dato faltante. Bogotá → Bogotá D.C.; Medellín → Antioquia; Cali → Valle del Cauca; Barranquilla → Atlántico; Cartagena → Bolívar; Bucaramanga → Santander; Pereira → Risaralda; Manizales → Caldas; Santa Marta → Magdalena; Cúcuta → Norte de Santander; Ibagué → Tolima; Villavicencio → Meta; Neiva → Huila; Armenia → Quindío; Popayán → Cauca; Montería → Córdoba; Sincelejo → Sucre; Valledupar → Cesar; Riohacha → La Guajira; Tunja → Boyacá; Pasto → Nariño. Solo pregunta el departamento si la ciudad es un municipio pequeño o ambiguo donde no sea evidente. Nunca digas "me falta el departamento" cuando el cliente ya dio una ciudad principal.
 Si la captura ya trae varios campos, continúa desde ahí con una sola pregunta de seguimiento, no reinicies el checkout.
 Si no está claro o completo, usa el formato completo.
 Si el contexto estructurado trae order_status.latest_created_order, significa que el pedido Shopify ya fue creado en esta conversación. En ese caso NO respondas “no tengo esa información” ni escales por falta de datos: confirma el número de pedido, da un resumen del pedido usando lineItems/totalAmount y agradece la compra.
