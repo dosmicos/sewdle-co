@@ -82,70 +82,40 @@ export const useAdminDashboardData = () => {
 
   const fetchProductionData = async () => {
     try {
+      if (!currentOrganization?.id) { setProductionData([]); return; }
+
       const isWeekly = viewMode === 'weekly';
-      const periods = isWeekly ? 8 : 6; // Last 8 weeks or 6 months
+      const periods = isWeekly ? 8 : 6; // Últimas 8 semanas o 6 meses
 
-      // Formatea en fecha LOCAL (YYYY-MM-DD). Antes se usaba toISOString(), que
-      // convierte a UTC y en zonas detrás de UTC (Colombia, UTC-5) corre cada
-      // límite un día atrás (p.ej. el 1 de mes "1 ene 00:00" se vuelve "31 dic"),
-      // desalineando los buckets respecto al mes calendario.
-      const toDateStr = (d: Date) =>
-        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-      // Construir los buckets (periodos) con sus límites en formato YYYY-MM-DD.
-      // Antes se hacían 2 consultas POR periodo de forma secuencial (16 round-trips,
-      // ~220ms c/u = ~3.5s) — el cuello de botella del "Cargando datos...". La tabla
-      // delivery_items es pequeña, así que ahora traemos TODA la ventana en UNA sola
-      // consulta (ambas métricas) y agrupamos en memoria.
-      const buckets = Array.from({ length: periods }, (_, idx) => {
-        const i = periods - 1 - idx; // del más antiguo al más reciente
-        if (isWeekly) {
-          const endDate = new Date();
-          endDate.setDate(endDate.getDate() - i * 7);
-          const startDate = new Date(endDate);
-          startDate.setDate(startDate.getDate() - 6);
-          const month = endDate.toLocaleDateString('es-ES', { month: 'short' });
-          const weekNum = Math.ceil(endDate.getDate() / 7);
-          return { start: toDateStr(startDate), end: toDateStr(endDate), label: `${month} S${weekNum}`, delivered: 0, approved: 0 };
-        }
-        // Mes objetivo calculado con aritmética de índice de mes (puede ser
-        // negativo: Date lo normaliza al año anterior). NO usar setMonth() sobre
-        // la fecha de hoy: si hoy es 30 y el mes destino no tiene día 30 (p.ej.
-        // febrero), JS desborda al mes siguiente y salían meses duplicados/saltados
-        // ("ene, mar, mar, abr…" perdiendo "feb"). Al fijar el día en 1 no hay
-        // desbordamiento, y la etiqueta se toma del propio startDate.
-        const now = new Date();
-        const monthIndex = now.getMonth() - i;
-        const startDate = new Date(now.getFullYear(), monthIndex, 1);
-        const endDate = new Date(now.getFullYear(), monthIndex + 1, 0);
-        return { start: toDateStr(startDate), end: toDateStr(endDate), label: startDate.toLocaleDateString('es-ES', { month: 'short' }), delivered: 0, approved: 0 };
+      // Sumas agregadas EN EL SERVIDOR (RPC). Antes el hook traía delivery_items al
+      // cliente y agrupaba, pero PostgREST corta en 1000 filas → con >1000 entregas
+      // en la ventana, los meses del medio salían truncados (mar/abr/may mostraban
+      // ~1/4 de lo real). El RPC devuelve los buckets ya sumados (más antiguo →
+      // más reciente); aquí solo armamos la etiqueta.
+      const { data, error } = await (supabase as any).rpc('get_admin_production_progress', {
+        p_org_id: currentOrganization.id,
+        p_store_id: activeStoreId ?? null,
+        p_mode: isWeekly ? 'weekly' : 'monthly',
+        p_periods: periods,
       });
-
-      const windowStart = buckets[0].start;
-      const windowEnd = buckets[buckets.length - 1].end;
-
-      // Una sola consulta para toda la ventana, ambas cantidades + la fecha para agrupar.
-      const { data, error } = await supabase
-        .from('delivery_items')
-        .select('quantity_delivered, quantity_approved, deliveries!inner(delivery_date)')
-        .gte('deliveries.delivery_date', windowStart)
-        .lte('deliveries.delivery_date', windowEnd);
-
       if (error) throw error;
 
-      for (const item of (data as any[]) || []) {
-        const dateStr: string | undefined = item.deliveries?.delivery_date;
-        if (!dateStr) continue;
-        // Buckets contiguos y sin solapamiento; comparación lexicográfica de fechas ISO.
-        const bucket = buckets.find(b => dateStr >= b.start && dateStr <= b.end);
-        if (bucket) {
-          bucket.delivered += item.quantity_delivered || 0;
-          bucket.approved += item.quantity_approved || 0;
+      const result: ProductionData[] = ((data as any[]) || []).map(r => {
+        // Fechas como locales (YYYY-MM-DD → medianoche local) para formatear la etiqueta.
+        const start = new Date(`${r.period_start}T00:00:00`);
+        const end = new Date(`${r.period_end}T00:00:00`);
+        let label: string;
+        if (isWeekly) {
+          const month = end.toLocaleDateString('es-ES', { month: 'short' });
+          const weekNum = Math.ceil(end.getDate() / 7);
+          label = `${month} S${weekNum}`;
+        } else {
+          label = start.toLocaleDateString('es-ES', { month: 'short' });
         }
-      }
+        return { period: label, delivered: r.delivered || 0, approved: r.approved || 0 };
+      });
 
-      setProductionData(buckets.map(b => ({ period: b.label, delivered: b.delivered, approved: b.approved })));
-
+      setProductionData(result);
     } catch (error) {
       console.error('Error fetching production data:', error);
     }
